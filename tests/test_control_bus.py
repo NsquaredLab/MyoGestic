@@ -728,3 +728,23 @@ def test_connector_finished_includes_late_stop_teardown():
         release.set()
         stopped.set()
         connector.stop()
+
+
+@pytest.mark.parametrize("with_ctx", [False, True])
+def test_control_link_warning_callback_without_recording_context(with_ctx):
+    from types import SimpleNamespace
+
+    warnings, default_warnings = [], []
+    target = _LateTarget()
+    ctx = SimpleNamespace(log=default_warnings.append, recording=False) if with_ctx else None
+    link = ControlLink(
+        load_control_map({"dofs": {"aim": "cursor.x"}}), [target], ctx=ctx, on_warn=warnings.append
+    )
+    assert link.ensure() is None
+    assert "not reachable" in warnings[0]
+    target.up = True
+    bus = link.ensure()
+    bus.push({"aim": 9.0})
+    assert len(warnings) == 2
+    assert not any("not reachable" in message for message in default_warnings)
+    link.stop()

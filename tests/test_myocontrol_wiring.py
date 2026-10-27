@@ -12,6 +12,8 @@ import runpy
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
+from time import monotonic
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -36,7 +38,10 @@ def app_module(monkeypatch):
         lambda self: myogestic.stream.StreamInfo(n_channels=9, fs=32.0),
     )
     monkeypatch.syspath_prepend(str(_APP.parent))
-    return runpy.run_path(str(_APP), run_name="__main__")
+    module = runpy.run_path(str(_APP), run_name="myocontrol_test")
+    yield module
+    module["follow_run"].stop(module["app"].ctx)
+    module["pipeline"].stop_predicting()
 
 
 class OnlyPredictProba:
@@ -606,7 +611,7 @@ def test_hand_actions_fit_one_row(
     )
     monkeypatch.setattr(type(app_module["binder"]), "poll", lambda self: None)
     if bound:
-        app_module["link"]._bus = object()
+        app_module["link"]._bus = app_module["operator"]._bus = object()
     actions = []
     button = imgui.small_button
 
@@ -969,10 +974,11 @@ def test_the_map_declares_exactly_what_the_app_pushes(app_module):
     assert pushed and set(pushed[0]) == declared, (
         f"pushed {set(pushed[0]) if pushed else set()} but the map declares {declared}"
     )
-    # Both hands are commanded every frame. Omit either and `push` rests it — the
-    # control hand would drop a frame after it was set, and the prediction hand would
-    # twitch to rest on every button press.
-    assert declared == {"prediction", "control"}
+    assert declared == {"prediction"}
+    assert set(app_module["OPERATOR_MAP"].bindings) == {"control"}
+    assert not set(app_module["CONTROL_MAP"].addresses()) & set(
+        app_module["OPERATOR_MAP"].addresses()
+    )
 
 
 def test_launching_vhi_is_what_arms_the_binder(app_module, monkeypatch, implot_frame):
@@ -994,7 +1000,7 @@ def test_launching_vhi_is_what_arms_the_binder(app_module, monkeypatch, implot_f
 
     monkeypatch.setattr(type(launcher), "running", lambda self, name: True)
     implot_frame(app_module["hand_ui"])
-    assert polled == [True], "launched the target and then did not bind to it"
+    assert polled == [True, True], "launch must bind both hands"
 
 
 def test_the_binder_never_blocks_a_frame(app_module):
@@ -1051,68 +1057,39 @@ def test_every_class_has_a_pose(app_module):
     assert set(app_module["POSES"]) == set(app_module["CLASSES"])
 
 
-def test_the_cue_survives_a_prediction_that_disagrees_with_it(app_module):
-    """The two hands are allowed to disagree — that disagreement is the point.
-
-    The operator selects Fist; the model, mid-training or simply wrong, says Rest. The
-    prediction hand must open while the control hand stays closed. Leaving `control` out
-    of the predict frame rests it instead, so it drops 31 ms after it is set and the
-    button reads as doing nothing.
-    """
-    import numpy as np
-
-    sent: list[dict] = []
-
-    class Bus:
-        def push(self, values):
-            sent.append(dict(values))
-            return values
-
-    class SaysRest:
-        def predict_proba(self, x):
-            return np.array([[0.9, 0.1]])
-
-    app_module["link"]._bus = Bus()
-    try:
-        app_module["_on_control"](app_module["CLASSES"].index("Fist"))
-        app_module["predict"](("Classification", SaysRest()), np.zeros(4))
-    finally:
-        app_module["link"]._bus = None
-
-    # One frame, from `predict`. The click only remembers: a push there would complete
-    # the frame with `prediction` at rest and twitch the other hand on every press.
-    (predicted,) = sent
-    assert predicted["control"] == app_module["POSES"]["Fist"], "the predict frame rested it"
-    assert predicted["prediction"] == app_module["POSES"]["Rest"]
+def test_the_cue_survives_a_prediction_that_disagrees_with_it(app_module, monkeypatch):
+    """Held commands and predictions have independent buses and producers."""
+    predicted, commanded = [], []
+    monkeypatch.setattr(
+        app_module["link"], "_bus", SimpleNamespace(push=lambda v: predicted.append(v) or v)
+    )
+    monkeypatch.setattr(
+        app_module["operator"], "_bus", SimpleNamespace(push=lambda v: commanded.append(v) or v)
+    )
+    monkeypatch.setitem(
+        app_module["_on_control"].__globals__, "_announce_binding", lambda bus: None
+    )
+    estimator = FollowEstimator()
+    app_module["_on_control"](app_module["CLASSES"].index("Fist"))
+    app_module["predict"](("Regression", estimator), np.zeros(4))
+    assert commanded == [{"control": 1.0}]
+    assert predicted == [{"prediction": 0.0}]
 
 
 @pytest.mark.parametrize("state", ["idle", "recording", "predicting"])
-def test_the_ui_paces_complete_held_frames_in_every_state(
-    app_module, monkeypatch, implot_frame, state
-):
-    """GUI keep-alives share prediction's rate and retain both cached hand commands."""
-    frames, now = [], [100.0]
-    namespace = app_module["myocontrol_ui"].__globals__
-
-    class Bus:
-        def push(self, values):
-            frames.append(dict(values))
-            return values
-
-    monkeypatch.setattr(ControlLink, "bus", property(lambda self: Bus()))
-    monkeypatch.setitem(namespace, "_announce_binding", lambda bus: None)
-    monkeypatch.setitem(namespace, "local_clock", lambda: now[0])
-    monkeypatch.setitem(namespace, "held_control", 1.0)
-    estimator = FollowEstimator()
-    estimator.value = 0.62
-    app_module["predict"](("Regression", estimator), np.zeros(4))
-    frames.clear()
-    ctx = app_module["app"].ctx
-    ctx.state = state
-    for offset in (0.01, 0.04, 0.05, 0.08):
-        now[0] = 100 + offset
-        implot_frame(lambda: app_module["myocontrol_ui"](ctx))
-    assert frames == [{"prediction": 0.62, "control": 1.0}] * 2
+def test_the_ui_does_not_resend_held_values(app_module, monkeypatch, implot_frame, state):
+    frames = []
+    for name in ("link", "operator"):
+        monkeypatch.setattr(
+            app_module[name], "_bus", SimpleNamespace(push=lambda v: frames.append(v) or v)
+        )
+    monkeypatch.setitem(
+        app_module["myocontrol_ui"].__globals__, "_announce_binding", lambda bus: None
+    )
+    app_module["app"].ctx.state = state
+    for _ in range(4):
+        implot_frame(lambda: app_module["myocontrol_ui"](app_module["app"].ctx))
+    assert frames == []
 
 
 def test_train_refuses_a_take_conditioned_differently_from_the_switch(app_module, tmp_path):
@@ -1181,6 +1158,18 @@ def test_hand_connect_checks_before_launch_and_stop_cancels(app_module, monkeypa
     state.poll, state.stop = poll, stop
     globals_ = app_module["hand_ui"].__globals__
     monkeypatch.setitem(globals_, "binder", state)
+    monkeypatch.setitem(
+        globals_,
+        "operator_binder",
+        SimpleNamespace(
+            busy=False,
+            finished=True,
+            last_error=None,
+            status="",
+            poll=lambda **kw: None,
+            stop=lambda **kw: None,
+        ),
+    )
     monkeypatch.setitem(globals_, "hand_processes", [("hand", ["hand"])])
     running = {"value": False}
     launched, stopped = [], []
@@ -1235,6 +1224,18 @@ def test_hand_bind_outcome_never_launches_a_second_target(
     state.poll = lambda **kwargs: True
     globals_ = app_module["hand_ui"].__globals__
     monkeypatch.setitem(globals_, "binder", state)
+    monkeypatch.setitem(
+        globals_,
+        "operator_binder",
+        SimpleNamespace(
+            busy=False,
+            finished=True,
+            last_error=None,
+            status="",
+            poll=lambda **kw: None,
+            stop=lambda **kw: None,
+        ),
+    )
     missing_install = result in ("missing", "external_without_install")
     monkeypatch.setitem(globals_, "hand_processes", [] if missing_install else [("hand", ["hand"])])
     monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
@@ -1256,7 +1257,7 @@ def test_hand_bind_outcome_never_launches_a_second_target(
     actions.clear()
     external = result.startswith("external")
     if external:
-        app_module["link"]._bus = object()
+        app_module["link"]._bus = app_module["operator"]._bus = object()
     elif result == "incompatible":
         state.last_error = ValueError("wrong map")
         state.status = "control connection failed: wrong map"
@@ -1286,6 +1287,18 @@ def test_hand_missing_install_explains_idle_and_failed_connect(
     render = app_module["hand_ui"]
     globals_ = render.__globals__
     monkeypatch.setitem(globals_, "binder", state)
+    monkeypatch.setitem(
+        globals_,
+        "operator_binder",
+        SimpleNamespace(
+            busy=False,
+            finished=True,
+            last_error=None,
+            status="",
+            poll=lambda **kw: None,
+            stop=lambda **kw: None,
+        ),
+    )
     monkeypatch.setitem(globals_, "hand_processes", [])
     monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
     monkeypatch.setattr(
@@ -1344,11 +1357,12 @@ def test_hand_rechecks_bus_after_observing_attempt_completion(app_module, monkey
 
         @property
         def finished(self):
-            app_module["link"]._bus = object()
+            app_module["link"]._bus = app_module["operator"]._bus = object()
             return True
 
     globals_ = app_module["hand_ui"].__globals__
     monkeypatch.setitem(globals_, "binder", JustFinished())
+    monkeypatch.setitem(globals_, "operator_binder", SimpleNamespace(finished=True))
     monkeypatch.setitem(globals_, "hand_processes", [("hand", ["hand"])])
     app_module["hand_attempt"]["phase"] = "checking"
     monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
@@ -2519,17 +2533,20 @@ def test_follow_run_drives_and_scores_saved_control_frames(
     now = [100.0]
     monkeypatch.setattr("mne_lsl.lsl.local_clock", lambda: now[0])
     monkeypatch.setattr("myogestic.widgets.follow.local_clock", lambda: now[0])
-    monkeypatch.setitem(app_module["predict"].__globals__, "local_clock", lambda: now[0])
     # Keep the real predict callback, recorder, delivered bus and finalizer, with a
     # deterministic clock and estimator in place of an acquisition thread.
     monkeypatch.setattr(
         pipeline, "start_predicting", lambda: setattr(app.ctx, "state", "predicting")
     )
     monkeypatch.setattr(pipeline, "stop_predicting", lambda: setattr(app.ctx, "state", "idle"))
-    bus = ControlBus(
-        ControlSet({name: Continuous(name) for name in ("prediction", "control")}), ctx=app.ctx
+    bus = ControlBus(ControlSet({"prediction": Continuous("prediction")}), ctx=app.ctx)
+    operator_bus = ControlBus(ControlSet({"control": Continuous("control")}), ctx=None)
+    monkeypatch.setattr(app_module["link"], "_bus", bus)
+    monkeypatch.setattr(app_module["operator"], "_bus", operator_bus)
+    monkeypatch.setattr(follow, "_run", lambda ctx: None)
+    monkeypatch.setitem(
+        app_module["_on_control"].__globals__, "_announce_binding", lambda bus: None
     )
-    monkeypatch.setattr(ControlLink, "bus", property(lambda self: bus))
 
     estimator = FollowEstimator()
     model = ("Regression", estimator)
@@ -2541,13 +2558,14 @@ def test_follow_run_drives_and_scores_saved_control_frames(
     frames = []
     for t in np.arange(0.05, stop, 0.05):
         now[0] = 100 + t
+        follow._step(app.ctx)
         estimator.value = follow._state.trajectory.value_at(t)
         output = app_module["predict"](model, np.zeros(4))
         frames.append(output["controls"])
         pipeline._record_tick(app, np.zeros(4), output, now[0])
-    assert max(frame["control"] for frame in frames) == 1
-    assert min(frame["control"] for frame in frames) == 0
-    assert all(frame["control"] == pytest.approx(frame["prediction"]) for frame in frames)
+    assert max(frame["prediction"] for frame in frames) == 1
+    assert min(frame["prediction"] for frame in frames) == 0
+    assert all(set(frame) == {"prediction"} for frame in frames)
     now[0] = 100 + stop
     if manual_stop:
         follow.stop(app.ctx)
@@ -2562,7 +2580,7 @@ def test_follow_run_drives_and_scores_saved_control_frames(
         assert saved.extras["pipeline"]["model"] == "model.joblib"
     row = _session_state.get_state("Sessions_sessions").sessions[0]
     assert row["follow"] and not row["selected"]
-    assert app_module["predict"](model, np.zeros(4))["controls"]["control"] == 0
+    assert set(app_module["predict"](model, np.zeros(4))["controls"]) == {"prediction"}
 
 
 class FollowEstimator:
@@ -2574,7 +2592,8 @@ class FollowEstimator:
 
 @pytest.fixture
 def silent_follow(app_module, tmp_path, monkeypatch):
-    """Run the real follow lifecycle and GUI without acquisition or a remote hand."""
+    """Real follow and prediction threads, with empty EMG and no GUI frames."""
+    from myogestic.controls import Capability
     from myogestic.stream import StreamInfo
     from myogestic.tracking import Sinusoid
 
@@ -2584,94 +2603,150 @@ def silent_follow(app_module, tmp_path, monkeypatch):
     app.ctx.participant = "P-014"
     stream = app.ctx.streams["emg"]
     stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100)
-    # No acquired window, ever: the pipeline must not call predict in this state.
     monkeypatch.setattr(stream, "get_window", lambda: (np.empty((2, 0)), np.empty(0)))
-    now = [100.0]
-    monkeypatch.setattr("mne_lsl.lsl.local_clock", lambda: now[0])
-    monkeypatch.setattr("myogestic.widgets.follow.local_clock", lambda: now[0])
-    monkeypatch.setitem(app_module["predict"].__globals__, "local_clock", lambda: now[0])
-    # Binding feedback is unrelated to output pacing and must not start an LSL inlet.
     monkeypatch.setitem(
-        app_module["myocontrol_ui"].__globals__, "_announce_binding", lambda bus: None
+        app_module["_on_control"].__globals__, "_announce_binding", lambda bus: None
     )
+
+    class Hand:
+        def capabilities(self):
+            return [
+                Capability(address, "continuous", lo=-1, hi=1, rest=0)
+                for name in ("CONTROL_MAP", "OPERATOR_MAP")
+                for address in app_module[name].addresses()
+            ]
+
+        def bind(self, controls):
+            pass
+
+        def send(self, values, changed):
+            pass
+
+        def stop(self):
+            pass
+
+    for name in ("link", "operator"):
+        monkeypatch.setattr(app_module[name], "_targets", [Hand()])
+        assert app_module[name].ensure() is not None
     pipeline.model = ("Regression", FollowEstimator())
     follow._state.trajectory = Sinusoid(move_s=1, hold_high_s=1, hold_low_s=0, lead_s=0, reps=2)
-    assert follow.start(app.ctx)
-    try:
-        yield app, pipeline, follow, now
-    finally:
-        follow.stop(app.ctx)
+    yield app, pipeline, follow
+    follow.stop(app.ctx)
 
 
-@pytest.mark.parametrize("fresh_prediction", [False, True])
-def test_follow_advances_on_gui_frames_with_empty_emg(
-    app_module, silent_follow, monkeypatch, implot_frame, fresh_prediction
-):
-    app, pipeline, follow, now = silent_follow
-    frames, predictions = [], []
+def test_follow_advances_without_emg_predict_or_gui(app_module, silent_follow, monkeypatch):
+    app, pipeline, follow = silent_follow
+    frames, predictions, ready = [], [], Event()
 
-    class Bus:
-        def push(self, values):
-            frames.append(dict(values))
-            return values
+    def push(values):
+        frames.append((monotonic(), values["control"]))
+        if len(frames) >= 8:
+            ready.set()
+        return values
 
-    monkeypatch.setattr(ControlLink, "bus", property(lambda self: Bus()))
-    expected_prediction = 0.0
-    if fresh_prediction:
-        expected_prediction = pipeline.model[1].value = 0.62
-        app_module["predict"](pipeline.model, np.zeros(4))
-        frames.clear()
+    monkeypatch.setattr(app_module["operator"], "_bus", SimpleNamespace(push=push))
     monkeypatch.setattr(pipeline, "on_predict", lambda *args: predictions.append(args))
-    levels = []
-    for offset in (0.1, 0.5, 0.9):
-        now[0] = 100 + offset
-        pipeline._predict_step(app)
-        implot_frame(lambda: app_module["myocontrol_ui"](app.ctx))
-        levels.append(follow.target[1])
-    assert predictions == []
-    assert len(frames) == 3, "empty EMG must not stop complete output frames"
-    assert levels[0] < levels[1] < levels[2]
-    assert [frame["control"] for frame in frames] == pytest.approx(levels)
-    assert all(frame["prediction"] == expected_prediction for frame in frames)
+    assert follow.start(app.ctx)
+    worker = follow._state.worker
+    assert worker.daemon and ready.wait(3)
+    follow.stop(app.ctx)
+    assert not worker.is_alive() and predictions == []
+    stamps, levels = zip(*frames[:8], strict=True)
+    assert 0.5 / 32 < np.mean(np.diff(stamps)) < 2 / 32
+    assert all(a < b for a, b in zip(levels, levels[1:], strict=False))
+    assert frames[-1][1] == 0
 
 
-def test_follow_stop_survives_an_inflight_send(
-    app_module, silent_follow, monkeypatch, implot_frame
-):
-    app, pipeline, follow, now = silent_follow
-    entered, release = Event(), Event()
+def test_follow_stop_joins_inflight_drive_before_rest(app_module, silent_follow, monkeypatch):
+    app, pipeline, follow = silent_follow
+    entered, release, stopping = Event(), Event(), Event()
     frames = []
 
-    class Bus:
-        def push(self, values):
-            frames.append(dict(values))
-            if len(frames) == 1:
-                entered.set()
-                assert release.wait(5), "test did not release the in-flight delivery"
-            return values
+    def push(values):
+        if values["control"] > 0 and not entered.is_set():
+            entered.set()
+            assert release.wait(5), "test did not release the in-flight delivery"
+        frames.append(dict(values))
+        return values
 
-    monkeypatch.setattr(ControlLink, "bus", property(lambda self: Bus()))
-    namespace = app_module["predict"].__globals__
-    monkeypatch.setitem(namespace, "held_control", 1.0)
-    pipeline.model[1].value = 0.62
-    now[0] = 100.5
+    monkeypatch.setattr(app_module["operator"], "_bus", SimpleNamespace(push=push))
+    assert follow.start(app.ctx)
+    worker = follow._state.worker
+    assert entered.wait(3)
+    # This attempted held command must not compete with the follow producer.
+    app_module["_on_control"](app_module["CLASSES"].index("Fist"))
+
+    def stop():
+        stopping.set()
+        follow.stop(app.ctx)
+
     with ThreadPoolExecutor(max_workers=1) as pool:
-        pending = pool.submit(app_module["predict"], pipeline.model, np.zeros(4))
+        pending = pool.submit(stop)
         try:
-            assert entered.wait(5)
-            assert frames[0]["control"] == pytest.approx(0.5)
-            assert namespace["held_control"] == 1.0
-            follow.stop(app.ctx)
-            assert not follow.running and not app.ctx.recording
-            now[0] = 100.6
-            # Stop and the GUI remain usable while prediction owns the ticker.
-            implot_frame(lambda: app_module["myocontrol_ui"](app.ctx))
-            assert len(frames) == 1, "the busy ticker must not start a concurrent send"
+            assert stopping.wait(1)
+            assert not Event().wait(0.05) and not pending.done()
         finally:
             release.set()
-        pending.result(timeout=5)
-    for offset in (0.7, 0.8):
-        now[0] = 100 + offset
-        implot_frame(lambda: app_module["myocontrol_ui"](app.ctx))
-    assert len(frames) == 3
-    assert all(frame == {"prediction": 0.62, "control": 0.0} for frame in frames[1:])
+        pending.result(timeout=3)
+    assert not worker.is_alive()
+    assert frames[-1] == {"control": 0.0}
+    assert not follow.running and not app.ctx.recording
+
+
+def test_follow_records_predictions_only(app_module, silent_follow, monkeypatch):
+    from myogestic.session import open_session_store
+
+    app, pipeline, follow = silent_follow
+    ready, frames = Event(), []
+    bus = app_module["operator"].bus
+    push = bus.push
+
+    def observe(values):
+        result = push(values)
+        frames.append(result)
+        if len(frames) >= 4:
+            ready.set()
+        return result
+
+    monkeypatch.setattr(app_module["operator"], "_bus", SimpleNamespace(push=observe))
+    assert follow.start(app.ctx)
+    session = app.ctx.session
+    pipeline.model[1].value = 0.62
+    app_module["predict"](pipeline.model, np.zeros(4))
+    assert ready.wait(3)
+    follow.stop(app.ctx)
+    app.stop_recording(wait=True)
+    with open_session_store(session.path) as saved:
+        assert saved.stream_info("controls").channel_names == ["prediction"]
+        values, stamps = saved.get_continuous("controls")
+        np.testing.assert_allclose(values, [[0.62]])
+        target, _ = saved.get_continuous("follow.target")
+        assert len(target) >= 4 and target[-1, 1] > target[0, 1]
+    assert app.ctx.control_space is app_module["CONTROL_MAP"]
+    assert app_module["operator"]._ctx is None and app_module["operator"]._smoothing is None
+
+
+@pytest.mark.parametrize("finish", ["stop", "deadline", "external_stop", "replacement", "cleanup"])
+def test_follow_driver_is_joined_on_every_exit(app_module, silent_follow, monkeypatch, finish):
+    app, pipeline, follow = silent_follow
+    assert follow.start(app.ctx)
+    worker = follow._state.worker
+    assert worker.is_alive()
+    if finish == "stop":
+        follow.stop(app.ctx)
+    elif finish == "cleanup":
+        app._cleanup()
+    else:
+        if finish == "deadline":
+            monkeypatch.setattr(
+                "myogestic.widgets.follow.local_clock", lambda: follow._state.started + 100
+            )
+        else:
+            app.stop_recording(wait=True)
+            if finish == "replacement":
+                app.start_recording()
+        follow.sync(app.ctx)
+        if finish == "replacement":
+            assert app.ctx.recording
+            app.stop_recording(wait=True)
+    assert not worker.is_alive() and not follow.running

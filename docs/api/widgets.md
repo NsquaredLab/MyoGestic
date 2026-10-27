@@ -255,57 +255,73 @@ for headers with and without workflow steps.
 
 ::: myogestic.tracking.score_tracking
 
-`FollowRun` owns a dedicated recorded take. Gesture chips address the supplied names;
-`tick(ctx)` returns `(gesture_index, level)` on each control update, or `None` when idle.
-`level` is a fraction in `[0, peak]`. `Sinusoid` holds relaxed, moves up with a half-cosine,
-holds at the peak, and moves down with a half-cosine, repeating after an optional lead-in.
-The shape uses the existing `PHASE_CODES` without changing the recorded vocabulary.
+`FollowRun` owns a dedicated recorded take and drives the operator hand on its own
+clock, independent of EMG, the GUI and `predict`. Supply `drive(index, level)` to
+push that hand's bus at `hz` (default 32). `level` is a fraction in `[0, peak]`;
+`target` exposes the latest `(gesture_index, level)`, or `None` when idle.
+`Sinusoid` holds relaxed, moves up with a half-cosine, holds at the peak, and
+moves down with a half-cosine, repeating after an optional lead-in.
 
-Construct the card once, call `sync` on every GUI frame (including hidden tabs), and drive
-`tick` from a [`ControlTicker`][myogestic.controls.ControlTicker] on the GUI or output
-clock, immediately before delivering each complete `{prediction, control}` frame. Cache
-the latest prediction and include it in every frame: the bus fills omitted aliases with
-rest. Keep this clock running without EMG; do not drive Follow solely from `predict`.
-Fresh predictions can request immediate delivery through the same ticker. Compute each
-frame's blended control locally, without writing it into the cache that Stop or held
-control commands update. The widget records those targets
-as `follow.target` with `gesture_index`, `level`, and `phase` channels, on the LSL clock.
-Use the app's relaxed and gesture poses with `blend_pose`. A complete hardware-free demo
-is [`examples/panels/follow_run.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/panels/follow_run.py).
+Give each hand its own `ControlLink` and map. The prediction link keeps `ctx` and
+smoothing, and `predict` pushes only prediction aliases. The operator link uses
+`ctx=None`, no smoothing, and optionally `on_warn=ctx.log`. This keeps the saved
+`controls` stream and `ctx.control_space` specific to prediction. One Connect action
+binds both links; each LSL outlet resends its latest value at 32 Hz between pushes.
+Held-pose callbacks push only the operator bus and do nothing while `follow.running`.
+
+Construct the card once and call `sync` every UI frame, including hidden tabs, to
+finish expired or interrupted takes and score them. The driver records
+`follow.target` with `gesture_index`, `level`, and `phase` channels on the LSL clock,
+using the existing `PHASE_CODES`. At the deadline it drives rest until `sync` saves
+the take. `stop` signals and joins the driver **before** `on_stop`, so the callback's
+rest push cannot be overwritten by an in-flight drive. Register `stop` for cleanup;
+keep lifecycle calls on the UI thread and GUI code out of `drive`. A drive exception
+is logged once per run and later steps continue.
+
+This hardware-free example uses two local buses; the same callbacks can read
+`link.bus` and `operator.bus` after connecting their links:
 
 <!--docs:run-->
 ```python
 from myogestic import App
-from myogestic.controls import ControlTicker
+from myogestic.controls import Continuous, ControlBus, ControlSet
 from myogestic.tracking import Sinusoid, blend_pose
 from myogestic.widgets import FollowRun
 
 app = App("Follow example")
+prediction_bus = ControlBus(ControlSet({"prediction": Continuous("prediction")}), ctx=app.ctx)
+operator_bus = ControlBus(ControlSet({"control": Continuous("control")}), ctx=None)
+relaxed = [0.0]
+poses = [[1.0], [0.6]]
+
+def drive(index, level):
+    operator_bus.push({"control": float(blend_pose(relaxed, poses[index], level)[0])})
+
+def stop_recording():
+    operator_bus.push({"control": 0.0})
+    app.stop_recording()
+
 follow = FollowRun(
     ["Fist", "Pinch"],
+    drive=drive,
+    hz=32,
     on_record=app.start_recording,
-    on_stop=app.stop_recording,
+    on_stop=stop_recording,
     trajectory=Sinusoid(move_s=2.0, hold_high_s=1.0, hold_low_s=1.0, reps=5),
 )
-relaxed = [0.0, 0.0]
-poses = [[1.0, 1.0], [1.0, 0.0]]
-ticker = ControlTicker(32)
 
-def control_tick(now):
-    target = follow.tick(app.ctx, timestamp=now)
-    if target is not None:
-        index, level = target
-        return blend_pose(relaxed, poses[index], level)
-    return None
+def hold(value):
+    if not follow.running:
+        operator_bus.push({"control": value})
 
-# On every GUI frame, including while predicting:
-# follow.sync(ctx), then ticker.run(control_tick, now=local_clock()).
-# The delivery callback sends the blended pose with the cached prediction.
-# Draw follow.ui(ctx) inside its Grid cell.
-# Before shutdown, close the take while the recording callback is still available.
+# predict pushes prediction_bus.push({"prediction": value}).
+# On every GUI frame call follow.sync(ctx), then draw follow.ui(ctx) in its Grid cell.
 app.cleanup_hooks.append(lambda _app: follow.stop(app.ctx))
-assert ticker.run(control_tick, now=0.0) is None
+assert follow.target is None
 ```
+
+A complete hardware-free demo is
+[`examples/panels/follow_run.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/panels/follow_run.py).
 
 The default score compares `follow.target.level` to the saved `controls` stream's
 `prediction` channel, so it measures delivered predictions. Both must use the same

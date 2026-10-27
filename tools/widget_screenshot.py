@@ -460,11 +460,15 @@ def render_follow_run(out: Path) -> None:
     from myogestic.widgets import FollowRun
 
     app = App("FollowRun")
-    card = FollowRun(["Fist", "Pinch"], on_record=app.start_recording, on_stop=app.stop_recording)
+    card = FollowRun(
+        ["Fist", "Pinch"],
+        drive=lambda index, level: None,
+        on_record=app.start_recording,
+        on_stop=app.stop_recording,
+    )
 
     @app.ui
     def ui(ctx):
-        card.tick(ctx)
         card.ui(ctx)
 
     app.cleanup_hooks.append(lambda _app: card.stop(app.ctx))

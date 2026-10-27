@@ -394,6 +394,7 @@ def connect_controls(
     ctx: Any = None,
     hz: float = 32.0,
     smoothing: Any = None,
+    on_warn: Callable[[str], None] | None = None,
 ) -> ControlBus | None:
     """Resolve a map against what `targets` export, and build the bus. `None` if they cannot say yet.
 
@@ -423,6 +424,9 @@ def connect_controls(
         the outcome is logged.
     hz, smoothing
         Passed to `ControlBus`.
+    on_warn
+        Warning callback, including when ``ctx=None``. Defaults to ``ctx.log``
+        when a context is supplied; overrides it when explicitly provided.
 
     Returns
     -------
@@ -432,6 +436,7 @@ def connect_controls(
     """
     from myogestic._controls_map import resolve
 
+    warn = on_warn if on_warn is not None else (None if ctx is None else ctx.log)
     merged: list[Any] = []
     for target in targets:
         fetch = getattr(target, "capabilities", None)
@@ -444,13 +449,13 @@ def connect_controls(
             # the two outcomes a caller can act on are "got a bus" and "did not". The
             # message is the useful half and it says what to do, so it is logged in full
             # rather than reduced to "not reachable".
-            if ctx is not None:
-                ctx.log(f"{type(target).__name__} refused: {exc}")
+            if warn is not None:
+                warn(f"{type(target).__name__} refused: {exc}")
             log.warning("%s refused the handshake: %s", type(target).__name__, exc)
             return None
         if got is None:
-            if ctx is not None:
-                ctx.log(f"{type(target).__name__} not reachable yet — controls stay unresolved")
+            if warn is not None:
+                warn(f"{type(target).__name__} not reachable yet — controls stay unresolved")
             return None
         merged.extend(got)
 
@@ -464,7 +469,7 @@ def connect_controls(
         targets=list(targets),
         smoothing=smoothing,
         hz=hz,
-        on_warn=None if ctx is None else ctx.log,
+        on_warn=warn,
         ctx=ctx,
     )
     if ctx is not None:
@@ -484,7 +489,7 @@ class ControlLink:
 
     Parameters
     ----------
-    control_map, targets, ctx, hz, smoothing
+    control_map, targets, ctx, hz, smoothing, on_warn
         Exactly `connect_controls`'s arguments, kept for every attempt. The targets are
         constructed **once** by the caller and reused: a failed attempt asks each target
         for its capabilities and stops there, so nothing is bound and no target is left
@@ -512,7 +517,7 @@ class ControlLink:
     useful targets may start or fail separately, give each its own map and link.
     """
 
-    __slots__ = ("_bus", "_control_map", "_ctx", "_hz", "_smoothing", "_targets")
+    __slots__ = ("_bus", "_control_map", "_ctx", "_hz", "_smoothing", "_targets", "_on_warn")
 
     def __init__(
         self,
@@ -522,12 +527,14 @@ class ControlLink:
         ctx: Any = None,
         hz: float = 32.0,
         smoothing: Any = None,
+        on_warn: Callable[[str], None] | None = None,
     ) -> None:
         self._control_map = control_map
         self._targets = list(targets)
         self._ctx = ctx
         self._hz = hz
         self._smoothing = smoothing
+        self._on_warn = on_warn
         self._bus: ControlBus | None = None
 
     @property
@@ -551,6 +558,7 @@ class ControlLink:
                 ctx=self._ctx,
                 hz=self._hz,
                 smoothing=self._smoothing,
+                on_warn=self._on_warn,
             )
         return self._bus
 

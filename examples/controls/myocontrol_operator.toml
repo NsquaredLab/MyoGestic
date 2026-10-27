@@ -1,0 +1,13 @@
+# The operator hand for myocontrol.py: no smoothing and no recording context.
+
+[dofs]
+
+# The operator's selection, on the control hand. Same shape, same units.
+control = { targets = [
+  { target = "vhi.control.pose.thumb.flexion" },
+  { target = "vhi.control.pose.thumb.abduction", weight = -1.0 },
+  { target = "vhi.control.pose.index" },
+  { target = "vhi.control.pose.middle" },
+  { target = "vhi.control.pose.ring" },
+  { target = "vhi.control.pose.little" },
+] }

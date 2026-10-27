@@ -2,11 +2,8 @@
 #   left  = your name for a model output
 #   right = a control VHI declares (it owns the kind, range and states)
 #
-# Two hands, one number: how closed. The names match the hands — `prediction` is the one
-# the model moves, `control` is the operator's. Both take the same kind of value from
-# different sources, which is the same reason one map serves a classifier and a
-# regressor. There is no entry per recorded class: `Rest` and `Fist` are values of one
-# control, not controls of their own.
+# Prediction only: the operator hand has its own link and map in
+# myocontrol_operator.toml, so either producer can push independently.
 
 [dofs]
 
@@ -21,14 +18,4 @@ prediction = { targets = [
   { target = "vhi.prediction.middle" },
   { target = "vhi.prediction.ring" },
   { target = "vhi.prediction.little" },
-] }
-
-# The operator's selection, on the control hand. Same shape, same units.
-control = { targets = [
-  { target = "vhi.control.pose.thumb.flexion" },
-  { target = "vhi.control.pose.thumb.abduction", weight = -1.0 },
-  { target = "vhi.control.pose.index" },
-  { target = "vhi.control.pose.middle" },
-  { target = "vhi.control.pose.ring" },
-  { target = "vhi.control.pose.little" },
 ] }

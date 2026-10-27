@@ -5,6 +5,9 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import asdict
+from threading import Thread
+from time import monotonic
+from typing import Any
 
 from mne_lsl.lsl import local_clock
 
@@ -24,6 +27,12 @@ class FollowRun:
     on_record, on_stop
         Start and stop callbacks, usually ``app.start_recording`` and
         ``app.stop_recording``. The app may wrap these to start/stop prediction.
+    drive
+        Called with ``(gesture_index, level)`` on a dedicated daemon thread. Push
+        the operator hand's bus here; keep it separate from prediction's bus.
+        Exceptions are logged once per run and subsequent steps keep running.
+    hz
+        Finite, positive drive rate in Hz; defaults to 32.
     trajectory
         Initial editable shape; defaults to `Sinusoid`.
     prediction_stream, prediction_channel
@@ -38,22 +47,24 @@ class FollowRun:
 
     Notes
     -----
-    Drive `tick` from a `ControlTicker` on the GUI or output clock, then send a
-    complete frame with its target and the cached prediction via the app's bus.
-    Keep that clock running without EMG; `predict` must not be its sole driver.
-    Call `sync` every UI frame, even when the card is hidden, to stop at the deadline
-    and score after saving. `ui` also calls `sync`. Call `stop` before app shutdown.
-    Neither `tick` nor `target` performs GUI work. Setup and lifecycle methods belong
-    on the UI thread. Fresh predictions may request immediate delivery through
-    the same ticker, which serialises them with GUI/output-clock deliveries.
+    The operator hand runs on its own clock, independent of EMG, the GUI and
+    `predict`. Its link uses ``ctx=None`` and no smoothing; only the prediction
+    link records ``controls``. Held-pose pushes must no-op while `running`.
+    Call `sync` every UI frame, even when hidden, to stop at the deadline and
+    score after saving. `ui` also calls `sync`. Register `stop` in the app's
+    cleanup hooks. `stop` joins the driver before `on_stop`, so that callback can
+    safely push rest. Lifecycle methods belong on the UI thread; `drive` must
+    return and must not call lifecycle methods or GUI code.
     """
 
     def __init__(
         self,
         gestures: Sequence[str],
         *,
+        drive: Callable[[int, float], Any],
         on_record: Callable[[], None],
         on_stop: Callable[[], None],
+        hz: float = 32.0,
         trajectory: Sinusoid | None = None,
         prediction_stream: str = "controls",
         prediction_channel: str | int = "prediction",
@@ -62,10 +73,13 @@ class FollowRun:
     ) -> None:
         if not gestures or any(not name.strip() for name in gestures):
             raise ValueError("gestures: supply at least one non-empty gesture name")
+        if not math.isfinite(hz) or hz <= 0:
+            raise ValueError("hz: pass a finite rate > 0")
         if not math.isfinite(max_lag_s) or max_lag_s < 0:
             raise ValueError("max_lag_s: pass finite seconds >= 0")
         if isinstance(prediction_channel, int) and prediction_channel < 0:
             raise ValueError("prediction_channel: pass a channel name or non-negative index")
+        self._drive, self._hz = drive, hz
         self.gestures = tuple(gestures)
         self._on_record, self._on_stop = on_record, on_stop
         self._stream, self._channel = prediction_stream, prediction_channel
@@ -79,7 +93,7 @@ class FollowRun:
 
     @property
     def target(self) -> tuple[int, float] | None:
-        """Latest tick's gesture index and fraction, or None outside a run."""
+        """Latest driver step's gesture index and fraction, or None outside a run."""
         return self._state.target
 
     @property
@@ -110,25 +124,22 @@ class FollowRun:
                 "max_lag_s": self._max_lag_s,
             }
             s.phase = "running"
-            self.tick(ctx, timestamp=s.started)
+            self._step(ctx)
+            s.stop_event.clear()
+            s.worker = Thread(
+                target=self._run, args=(ctx,), name=f"follow-{self._widget_id}", daemon=True
+            )
+            s.worker.start()
         return True
 
-    def tick(self, ctx: Context, *, timestamp: float | None = None) -> tuple[int, float] | None:
-        """Record and return the current target on the shared LSL clock.
-
-        Call before pushing the control frame. At and beyond the deadline the
-        target is relaxed until `sync` saves the take on the UI thread.
-        """
+    def _step(self, ctx: Context) -> tuple[int, float] | None:
+        """Record one target on the LSL clock, without holding the lock during drive."""
         s = self._state
         with s.lock:
-            now = local_clock() if timestamp is None else timestamp
-            if not math.isfinite(now):
-                raise ValueError("timestamp: pass finite seconds on the LSL clock")
+            now = local_clock()
             if not self.running or not ctx.recording or ctx.session is not s.session:
                 s.target = None
                 return None
-            if now < s.last_timestamp:
-                raise ValueError("timestamp: pass non-decreasing LSL timestamps")
             s.elapsed = max(0.0, now - s.started)
             level = s.trajectory.value_at(s.elapsed)
             s.target = (s.gesture, level)
@@ -142,6 +153,26 @@ class FollowRun:
                 s.last_timestamp = now
             return s.target
 
+    def _run(self, ctx: Context) -> None:
+        """Drive at the requested cadence without catch-up bursts after a slow push."""
+        s, warned = self._state, False
+        deadline = monotonic()
+        while not s.stop_event.is_set():
+            target = self._step(ctx)
+            if target is None:
+                return
+            try:
+                self._drive(*target)
+            except Exception as exc:
+                if not warned:
+                    ctx.log(f"Follow drive failed; continuing: {exc}")
+                    warned = True
+            deadline += 1.0 / self._hz
+            now = monotonic()
+            if deadline < now:
+                deadline = now + 1.0 / self._hz
+            s.stop_event.wait(max(0.0, deadline - now))
+
     def stop(self, ctx: Context) -> None:
         """Close this run, save its partial interval and leave other takes alone."""
         s = self._state
@@ -152,9 +183,13 @@ class FollowRun:
                 local_clock(),
                 s.started + s.trajectory.total_duration,
             )
+            s.stop_event.set()
+        # A blocked push must finish before the callback can issue the final rest.
+        if s.worker is not None:
+            s.worker.join()
+        with s.lock:
             s.phase, s.target = "saving", None
             owns = ctx.recording and ctx.session is s.session
-        # A callback may join the prediction thread: never hold its tick lock here.
         if owns:
             self._on_stop()
 

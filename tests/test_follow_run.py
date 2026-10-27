@@ -136,11 +136,14 @@ def run(tmp_path, monkeypatch):
     monkeypatch.setattr("myogestic.widgets.follow.local_clock", lambda: now[0])
     widget = FollowRun(
         ["Fist", "Pinch"],
+        drive=lambda index, level: None,
         on_record=lambda: app.start_recording(str(tmp_path)),
         on_stop=lambda: app.stop_recording(wait=True),
         trajectory=Sinusoid(move_s=1, hold_low_s=1, hold_high_s=1, lead_s=1, reps=1),
     )
-    return widget, app, now
+    monkeypatch.setattr(widget, "_run", lambda ctx: None)
+    yield widget, app, now
+    widget.stop(app.ctx)
 
 
 @pytest.mark.parametrize("stop_at", [0.5, 3.5, 5.0])
@@ -154,14 +157,14 @@ def test_record_saved_target_score_and_unticked_take(run, stop_at):
     session = app.ctx.session
     for t in np.arange(0.05, stop_at, 0.05):
         now[0] = 100 + t
-        index, level = widget.tick(app.ctx)
+        index, level = widget._step(app.ctx)
         session.append_event(
             "controls", [level, level], now[0], channel_names=["prediction", "control"]
         )
     now[0] = 100 + stop_at
     widget.stop(app.ctx)
     assert not app.ctx.recording and widget.target is None
-    assert widget.tick(app.ctx) is None
+    assert widget._step(app.ctx) is None
     with open_session_store(session.path) as saved:
         target, timestamps = saved.get_continuous("follow.target")
         assert target.shape[1] == 3 and timestamps[0] == 100
@@ -177,7 +180,7 @@ def test_deadline_hidden_card_and_take_ownership(run):
     widget, app, now = run
     assert widget.start(app.ctx)
     now[0] = 110
-    assert widget.tick(app.ctx) == (0, 0)
+    assert widget._step(app.ctx) == (0, 0)
     widget.sync(app.ctx)
     assert not widget.running and not app.ctx.recording
     app.start_recording(str(app.ctx.session.path.parent))
@@ -248,7 +251,11 @@ def test_chips_are_isolated_and_locked_during_a_run(run, imgui_frame, monkeypatc
 
     widget, app, now = run
     other = FollowRun(
-        widget.gestures, on_record=lambda: None, on_stop=lambda: None, widget_id="other"
+        widget.gestures,
+        drive=lambda index, level: None,
+        on_record=lambda: None,
+        on_stop=lambda: None,
+        widget_id="other",
     )
     real = imgui.button
 
@@ -269,7 +276,7 @@ def test_save_waits_and_missing_predictions_are_undefined(run):
     widget, app, now = run
     assert widget.start(app.ctx)
     now[0] += 2
-    widget.tick(app.ctx)
+    widget._step(app.ctx)
     widget.stop(app.ctx)
     app.ctx.pending_saves.add(widget._state.source_path)
     widget.sync(app.ctx)
@@ -277,3 +284,46 @@ def test_save_waits_and_missing_predictions_are_undefined(run):
     app.ctx.pending_saves.clear()
     widget.sync(app.ctx)
     assert widget.score == {"rmse": None, "r": None, "lag_s": None}
+
+
+@pytest.mark.parametrize("hz", [0, -1, float("nan"), float("inf"), -float("inf")])
+def test_follow_rate_must_be_finite_and_positive(hz):
+    with pytest.raises(ValueError, match="hz"):
+        FollowRun(
+            ["Fist"],
+            drive=lambda index, level: None,
+            on_record=lambda: None,
+            on_stop=lambda: None,
+            hz=hz,
+        )
+
+
+def test_drive_failure_logs_once_and_keeps_running(tmp_path, monkeypatch):
+    from threading import Event
+
+    monkeypatch.setattr("myogestic._browser.IS_BROWSER", True)
+    app, attempts, ready = App("drive failure"), [], Event()
+
+    def drive(index, level):
+        attempts.append((index, level))
+        if len(attempts) == 4:
+            ready.set()
+        raise RuntimeError("offline hand")
+
+    messages = []
+    monkeypatch.setattr(type(app.ctx), "log", lambda self, text: messages.append(text))
+    widget = FollowRun(
+        ["Fist"],
+        drive=drive,
+        hz=64,
+        on_record=lambda: app.start_recording(str(tmp_path)),
+        on_stop=lambda: app.stop_recording(wait=True),
+    )
+    try:
+        assert widget.start(app.ctx)
+        assert ready.wait(3)
+    finally:
+        widget.stop(app.ctx)
+    assert len(attempts) >= 4
+    assert len([text for text in messages if "Follow drive failed" in text]) == 1
+    assert not widget._state.worker.is_alive()

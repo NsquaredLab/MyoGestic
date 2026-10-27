@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from threading import RLock
+from threading import Event, RLock, Thread
 
 import numpy as np
 
@@ -24,6 +24,8 @@ class FollowState:
     target: tuple[int, float] | None = None
     score: dict[str, float | None] | None = None
     last_timestamp: float = -float("inf")
+    stop_event: Event = field(default_factory=Event)
+    worker: Thread | None = None
     lock: RLock = field(default_factory=RLock)
 
 

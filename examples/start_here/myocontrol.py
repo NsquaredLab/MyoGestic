@@ -28,7 +28,6 @@ from myogestic.controls import (
     ControlBus,
     ControlLink,
     ControlLinkConnector,
-    ControlTicker,
     load_control_map,
 )
 from myogestic.ml import Pipeline, load_pickle, save_pickle
@@ -80,7 +79,7 @@ from myogestic.widgets.panels.recording import TakeStatus
 # signal is fed 200 ms at predict time or it sees a distribution it never met.
 WINDOW_MS = 200
 HOP_MS = 100
-# One rate for prediction, the output ticker, the smoother and the control bus. Let them drift and
+# One rate for prediction, the smoother and the control bus. Let them drift and
 # the post-processor's time constants are tuned for a timebase nothing runs on.
 PREDICT_HZ = 32
 # The names are yours: nothing downstream matches them against VHI's vocabulary. They
@@ -108,6 +107,10 @@ vhi = virtual_hand()
 CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "myocontrol.toml"
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
+with (pathlib.Path(__file__).parents[1] / "controls" / "myocontrol_operator.toml").open(
+    "rb"
+) as handle:
+    OPERATOR_MAP = load_control_map(tomllib.load(handle))
 
 output_filter = PostProcessor(hz=PREDICT_HZ, compact=True)
 vhi_control = vhi.control_client()
@@ -125,13 +128,14 @@ link = ControlLink(
     smoothing=output_filter,
     hz=PREDICT_HZ,
 )
+operator = ControlLink(
+    OPERATOR_MAP,
+    [RemoteTarget(client=vhi_control, interface=vhi)],
+    ctx=None,
+    on_warn=app.ctx.log,
+)
 # A dict, so the UI callback writes it without `global`. Read only by `train`.
 training_mode = {"index": 0}
-#: Explicit operator commands, never overwritten by a frame's follow blend.
-held_control = 0.0
-#: Keep both hands alive even when acquisition or model inference stalls.
-last_prediction = 0.0
-control_ticker = ControlTicker(PREDICT_HZ)
 features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
     default=["RMS", "MAV"],
@@ -244,34 +248,18 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
         value = min(max(float(est.predict(feats.reshape(1, -1))[0]), 0.0), 1.0)
         out = {"class": int(value >= 0.5), "proba": [1.0 - value, value]}
 
-    sent = _push_controls(prediction=value)
-    if sent is not None:
-        out["controls"] = sent
+    bus = link.bus
+    if bus is not None:
+        out["controls"] = bus.push({"prediction": value})
     return out
 
 
-def _push_controls(*, prediction: float | None = None) -> dict | None:
-    """Send complete frames on the output clock, independently of EMG availability."""
-    global last_prediction
-    if prediction is not None:
-        # Retain fresh predictions even when another delivery owns the ticker.
-        last_prediction = prediction
-
-    def send(now: float) -> dict | None:
-        target = follow_run.tick(app.ctx, timestamp=now)
-        control = held_control
-        if target is not None:
-            index, level = target
-            # A derived frame must never overwrite a concurrent Stop/held command.
-            control = float(blend_pose([POSES["Rest"]], [POSES[FOLLOW_GESTURES[index]]], level)[0])
-        # Never ensure() here: connecting blocks on an RPC. Every alias is required
-        # because push() completes missing values to rest, including prediction.
-        bus = link.bus
-        if bus is not None:
-            return bus.push({"prediction": last_prediction, "control": control})
-        return None
-
-    return control_ticker.run(send, now=local_clock(), immediate=prediction is not None)
+def _drive_follow(index: int, level: float) -> None:
+    """Push the operator hand from FollowRun's clock, independently of prediction."""
+    bus = operator.bus
+    if bus is not None:
+        value = float(blend_pose([POSES["Rest"]], [POSES[FOLLOW_GESTURES[index]]], level)[0])
+        bus.push({"control": value})
 
 
 layout = Layout(
@@ -417,6 +405,7 @@ processes = ProcessLauncher(hand_processes)
 # VHI takes seconds to boot and `ensure()` blocks, so this retries in the background —
 # rate-limited and single-flight, safe to poll every frame.
 binder = ControlLinkConnector(link)
+operator_binder = ControlLinkConnector(operator)
 hand_attempt = {"phase": "idle"}
 sessions = SessionManager("sessions", class_names=CLASSES)
 prediction = PredictionLabel(pipeline, CLASSES, show_probability=True)
@@ -676,13 +665,13 @@ def _start_follow_recording() -> None:
 
 def _stop_follow_recording() -> None:
     """Save before stopping prediction and restore the relaxed manual target."""
-    global held_control
-    held_control = POSES["Rest"]
+    _on_control(CLASSES.index("Rest"))
     _stop_drive()
 
 
 follow_run = FollowRun(
     FOLLOW_GESTURES,
+    drive=_drive_follow,
     on_record=_start_follow_recording,
     on_stop=_stop_follow_recording,
 )
@@ -698,29 +687,25 @@ def _bind() -> ControlBus | None:
     """
     try:
         bus = link.ensure()
+        operator_bus = operator.ensure()
     except ValueError as exc:
         app.ctx.log(f"Control map does not fit this VHI: {exc}")
         return None
-    if bus is None:
+    if bus is None or operator_bus is None:
         app.ctx.log("VHI is not answering — launch it in Connect, or press Bind now.")
     _announce_binding(bus)
     return bus
 
 
 def _on_control(index: int) -> None:
-    """Put the selected class on the control hand.
-
-    Remembering is the whole job: the shared output ticker sends it with the cached
-    prediction on the next GUI frame, including while predicting.
-
-    It does bind, though. A UI handler is where that is affordable — `predict` must never
-    call it — and binding on first press is what lets the buttons work without visiting
-    the Connect step.
-    """
-    global held_control
-    held_control = POSES[CLASSES[index]]
-    # `_bind` logs why when it cannot, so a press that moves nothing always says so.
+    """Push a held pose on change; FollowRun owns the operator bus while running."""
+    if follow_run.running:
+        return
+    # Binding is allowed in a UI handler, never in predict or the follow driver.
     _bind()
+    bus = operator.bus
+    if bus is not None:
+        bus.push({"control": POSES[CLASSES[index]]})
 
 
 recording = RecordingControls(
@@ -1425,21 +1410,22 @@ def hand_ui() -> None:
     The operator's Connect arms the background binder. Stop cancels the attempt;
     a replacement connector waits for late cleanup before it can bind again.
     """
-    global binder
-    bound = link.bus is not None
+    global binder, operator_binder
+    bound = link.bus is not None and operator.bus is not None
     running = processes.running(vhi.name)
     phase = hand_attempt["phase"]
-    if phase == "stopping" and binder.finished:
+    if phase == "stopping" and binder.finished and operator_binder.finished:
         binder = ControlLinkConnector(link)
+        operator_binder = ControlLinkConnector(operator)
         phase = "stopped" if running else "idle"
-        bound = link.bus is not None
+        bound = link.bus is not None and operator.bus is not None
     if phase == "idle" and running and not bound:
         phase = "launched"
-    if phase == "checking" and binder.finished:
+    if phase == "checking" and binder.finished and operator_binder.finished:
         # The connection may have completed since this frame began.
-        bound = link.bus is not None
+        bound = link.bus is not None and operator.bus is not None
         if not bound:
-            if binder.last_error is not None:
+            if binder.last_error is not None or operator_binder.last_error is not None:
                 # A responding but incompatible target must not spawn another.
                 phase = "failed"
             elif running:
@@ -1450,8 +1436,11 @@ def hand_ui() -> None:
                 phase = "launched"
             else:
                 phase = "failed"
-    if phase == "launched" and not bound and not binder.busy:
-        binder.poll()
+    if phase == "launched" and not bound:
+        if not binder.busy:
+            binder.poll()
+        if not operator_binder.busy:
+            operator_binder.poll()
     if bound and phase != "stopping":
         phase = "bound"
     hand_attempt["phase"] = phase
@@ -1464,8 +1453,9 @@ def hand_ui() -> None:
         tone, detail = WARNING, binder.status or "Launched · waiting for the hand…"
     elif phase == "failed":
         tone = DANGER
-        detail = binder.status if binder.last_error is not None else "no Virtual Hand answered"
-        if not hand_processes and binder.last_error is None:
+        failed = binder if binder.last_error is not None else operator_binder
+        detail = failed.status if failed.last_error is not None else "no Virtual Hand answered"
+        if not hand_processes and failed.last_error is None:
             detail += " · not installed here"
     else:
         tone, detail = IDLE, "Not running" if hand_processes else "not installed here"
@@ -1477,7 +1467,8 @@ def hand_ui() -> None:
         action = "Retry" if phase == "failed" else "Connect"
     mapping = "\n".join(
         f"{alias} → {', '.join(target.address for target in binding.targets)} · {ALIAS_ROLES.get(alias, UNDRIVEN)}"
-        for alias, binding in CONTROL_MAP.bindings.items()
+        for mapping in (CONTROL_MAP, OPERATOR_MAP)
+        for alias, binding in mapping.bindings.items()
     )
     hint = f"{vhi.install_hint.strip()}\n\n" if not hand_processes else ""
     style = imgui.get_style()
@@ -1503,12 +1494,15 @@ def hand_ui() -> None:
             imgui.begin_disabled(phase == "stopping")
             if imgui.small_button(action) and phase != "stopping":
                 if action == "Stop":
+                    follow_run.stop(app.ctx)
                     binder.stop(timeout_s=0.0)
+                    operator_binder.stop(timeout_s=0.0)
                     if running:
                         processes.stop(vhi.name)
                     hand_attempt["phase"] = "stopping"
                 else:
                     binder.poll(force=True)
+                    operator_binder.poll(force=True)
                     hand_attempt["phase"] = "checking"
             imgui.end_disabled()
             if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
@@ -1584,17 +1578,16 @@ def myocontrol_ui(ctx: Context) -> None:
     with layout["status"]:
         status.ui(ctx)
 
-    # GUI frames sustain both hands even when EMG or inference stops producing.
-    # Fresh predictions use this same ticker, so deliveries never overlap.
     _announce_binding(link.bus)
-    _push_controls()
 
 
 def main() -> None:
     try:
         app.run()
     finally:
-        link.stop()
+        follow_run.stop(app.ctx)
+        binder.stop()
+        operator_binder.stop()
         vhi_control.stop()
 
 
