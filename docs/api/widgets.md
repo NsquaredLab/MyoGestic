@@ -97,7 +97,7 @@ See [Track a force target](../how-to/track-a-force-target.md) for the whole loop
 
 What a subject is asked to follow. `myogestic.tracking` is plain data — no ImGui, nothing that talks to a device — so the same trajectory can be evaluated in a test, in an offline script and by whatever draws it, with no second implementation to drift. `TrackingTask` forwards every edit to the [`TargetSource`][myogestic.sources.TargetSource] it was handed, so what is drawn and what is recorded cannot diverge.
 
-`Trajectory` is the structural protocol the two shapes satisfy by having its three members, not by inheriting anything. They differ in unit and in what they are for: `Trapezoid` is percent of MVC for [isometric force tracking](../how-to/track-a-force-target.md); `Pursuit` is signed `[-1, +1]` control units for [proportional-control training](../how-to/record-for-proportional-control.md), and it exists because a block cueing only Down / Rest / Up asks for three distinct target values, so what a fit produces between them comes from the estimator rather than from the recording — for the tree ensembles shipped here, nothing at all.
+`Trajectory` is the structural protocol these shapes satisfy by having its three members, not by inheriting anything. They differ in unit and in what they are for: `Trapezoid` is percent of MVC for [isometric force tracking](../how-to/track-a-force-target.md); `Pursuit` is signed `[-1, +1]` control units for [proportional-control training](../how-to/record-for-proportional-control.md), and it exists because a block cueing only Down / Rest / Up asks for three distinct target values, so what a fit produces between them comes from the estimator rather than from the recording — for the tree ensembles shipped here, nothing at all.
 
 ::: myogestic.tracking.Trajectory
 
@@ -244,3 +244,112 @@ for headers with and without workflow steps.
 ::: myogestic.widgets.vhi.palette.VhiStateSnapshot
 
 ::: myogestic.widgets.vhi.palette.request_vhi_state_refresh
+
+## Follow the control hand
+
+::: myogestic.widgets.FollowRun
+
+::: myogestic.tracking.Sinusoid
+
+::: myogestic.tracking.blend_pose
+
+::: myogestic.tracking.score_tracking
+
+`FollowRun` owns a dedicated recorded take and drives the operator hand on its own
+clock, independent of EMG, the GUI and `predict`. Supply `operator=`, ordered
+`aliases=`, gesture-keyed `poses=`, and `rest=` to push blended pose vectors at `hz`
+(default 32). Every gesture must have a finite pose vector with one value per alias;
+construction validates these shapes. Alternatively, supply `drive(index, level)` for
+custom delivery. Exactly one of `operator` and `drive` is required.
+
+`level` is a fraction in `[0, peak]`; `target` exposes the latest
+`(gesture_index, level)`, or `None` when idle. `Sinusoid` holds relaxed, moves up with
+a half-cosine, holds at the peak, and moves down with a half-cosine, repeating after
+an optional lead-in.
+
+Give each hand its own `ControlLink` and map. The prediction link keeps `ctx` and
+smoothing, and `predict` pushes only prediction aliases. The operator link uses
+`ctx=app.ctx, record_as="controls.operator"` and no smoothing. Its delivered frames
+and map are saved separately as `controls.operator` and
+`meta.control_spaces["controls.operator"]`; prediction keeps `controls` and
+`meta.control_space`. One `ControlLinkConnector(link, operator)` binds both.
+Use `binder.ensure_now()` for synchronous UI binding and `binder.poll()` for
+background attempts; `binder.connected` means both hands are ready.
+
+Call `follow.hold(pose)` for manual gestures, or `follow.hold()` for rest. It returns
+what the operator bus delivered, including clipping, or `None` while running or
+unbound. Neither `hold` nor the driver binds a link. Each LSL outlet resends its latest
+value at 32 Hz between pushes.
+
+Construct the card once and call `sync` every UI frame, including hidden tabs, to
+finish expired or interrupted takes and score them. The driver records
+`follow.target` with `gesture_index`, `level`, and `phase` channels on the LSL clock,
+using the existing `PHASE_CODES`. At the deadline it drives rest until `sync` saves
+the take. `stop` signals and joins the driver, then pushes rest in operator mode
+**before** `on_stop`, including after an external recording stop. A `drive=` callback
+retains responsibility for its own rest push. Register `stop` for cleanup; keep
+lifecycle calls on the UI thread and GUI code out of `drive`. A drive exception is
+logged once per run and later steps continue.
+
+This hardware-free example uses a local target with two independently mapped links:
+
+<!--docs:run-->
+```python
+from myogestic import App
+from myogestic.controls import Capability, ControlLink, ControlLinkConnector, load_control_map
+from myogestic.widgets import FollowRun
+
+class Hand:
+    def capabilities(self):
+        return [Capability("hand.grasp", "continuous", lo=0, hi=1, rest=0)]
+
+    def bind(self, controls):
+        pass
+
+    def send(self, values, changed):
+        self.pose = values
+
+    def stop(self):
+        pass
+
+app = App("Follow example")
+link = ControlLink(load_control_map({"dofs": {"prediction": "hand.grasp"}}), [Hand()], ctx=app.ctx)
+operator = ControlLink(
+    load_control_map({"dofs": {"control": "hand.grasp"}}), [Hand()],
+    ctx=app.ctx, record_as="controls.operator",
+)
+binder = ControlLinkConnector(link, operator)
+poses = {"Fist": [1.0], "Pinch": [0.6]}
+follow = FollowRun(
+    ["Fist", "Pinch"], operator=operator, aliases=("control",), poses=poses, rest=[0.0],
+    on_record=app.start_recording, on_stop=app.stop_recording,
+)
+assert binder.ensure_now() is link.bus and binder.connected
+assert follow.hold(poses["Pinch"]) == {"control": 0.6}
+
+# predict pushes link.bus.push({"prediction": value}) when link.bus is bound.
+# Every GUI frame calls follow.sync(ctx), then draws follow.ui(ctx) in its Grid cell.
+app.cleanup_hooks.append(lambda _app: follow.stop(app.ctx))
+assert follow.target is None
+binder.stop()  # Teardown order: follow.stop(app.ctx), binder.stop(), transport.stop().
+```
+
+A complete hardware-free demo is
+[`examples/panels/follow_run.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/panels/follow_run.py).
+
+The default score compares `follow.target.level` to the saved `controls` stream's
+`prediction` channel, so it measures delivered predictions. Both must use the same
+fractional units. For a pose-vector app, project the delivered prediction onto its chosen
+gesture, record that scalar using `Session.append_event`, and pass its stream name and
+channel to `FollowRun(prediction_stream=..., prediction_channel=...)`. No device, model,
+or VHI connection is required by the widget itself. Myocontrol wraps the recording
+callbacks to start and stop prediction using the existing Drive gates.
+
+Stopping early scores only the recorded part after the lead-in. The saved take carries
+`extras.follow`, is labelled **Follow** in Takes, and remains unticked for training by
+default. Saving finishes before the widget reopens the take to score it. RMSE and Pearson r
+are measured without a lag correction; lag maximises normalised cross-correlation within
+`max_lag_s` (default ±1 second), at 10 ms resolution. Positive lag means prediction trails
+the control target. No overlapping samples gives undefined metrics; a constant signal has
+an RMSE but no correlation or lag, displayed as a dash. A periodic run can have repeated
+correlation peaks, so choose a search window shorter than a cycle.

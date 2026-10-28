@@ -5,7 +5,7 @@ same trajectory can be evaluated in a test, in an offline script, and by whateve
 it on screen — one definition, no second implementation to drift.
 
 Task time is seconds since the block started. Levels carry the unit of the thing being
-tracked, and there are two:
+tracked, and there are three:
 
 - `Trapezoid` is **percent of MVC**, which is what `Calibration.normalise` turns a raw
   force sample into, so a target and a live reading are directly comparable without
@@ -14,14 +14,20 @@ tracked, and there are two:
   output already lives on. It moves a cursor rather than naming a force, so there is no
   physical maximum to express it as a fraction of.
 
-`Trajectory` is what the two have in common and all that anything streaming one needs.
+- `Sinusoid` is a **fraction in [0, 1]** of an app-defined gesture for following runs.
+
+`Trajectory` is what the shapes have in common and all that anything streaming one needs.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Protocol
+
+import numpy as np
+from numpy.typing import ArrayLike
 
 _SEGMENTS = ("rest_s", "ramp_up_s", "hold_s", "ramp_down_s", "recover_s")
 
@@ -430,3 +436,198 @@ class Calibration:
         if span == 0.0:
             return 0.0
         return 100.0 * (x - self.zero) / span
+
+
+@dataclass(frozen=True, slots=True)
+class Sinusoid:
+    """Relaxed hold, half-cosine rise, peak hold and half-cosine return.
+
+    Parameters
+    ----------
+    move_s
+        Positive seconds for each smooth movement.
+    hold_high_s, hold_low_s
+        Non-negative seconds at the peak and relaxed endpoints.
+    peak
+        Fraction of the gesture, between zero and one.
+    reps
+        Positive integer number of cycles.
+    lead_s
+        Non-negative relaxed preparation time before the first cycle.
+    """
+
+    move_s: float = 2.0
+    hold_high_s: float = 2.0
+    hold_low_s: float = 2.0
+    peak: float = 1.0
+    reps: int = 5
+    lead_s: float = 3.0
+
+    def __post_init__(self) -> None:
+        for name in ("move_s", "hold_high_s", "hold_low_s", "lead_s"):
+            value = getattr(self, name)
+            if not math.isfinite(value) or value < 0 or (name == "move_s" and value == 0):
+                raise ValueError(
+                    f"{name}: pass finite seconds {'> 0' if name == 'move_s' else '>= 0'}"
+                )
+        if not math.isfinite(self.peak) or not 0 <= self.peak <= 1:
+            raise ValueError("peak: pass a finite fraction between 0 and 1")
+        if isinstance(self.reps, bool) or not isinstance(self.reps, int) or self.reps < 1:
+            raise ValueError("reps: pass a positive integer")
+        if not math.isfinite(self.total_duration):
+            raise ValueError("durations and reps: pass a finite total run duration")
+
+    @property
+    def duration(self) -> float:
+        """Seconds per cycle, excluding the lead-in."""
+        return self.hold_low_s + 2 * self.move_s + self.hold_high_s
+
+    @property
+    def total_duration(self) -> float:
+        """Seconds for the lead-in and all cycles."""
+        return self.lead_s + self.reps * self.duration
+
+    def value_at(self, t: float) -> float:
+        """Fraction of the gesture at `t` seconds; zero outside the run."""
+        return self._at(t)[1]
+
+    def phase_at(self, t: float) -> str:
+        """Existing phase name at `t`; lead-in and low holds use ``rest``."""
+        return self._at(t)[0]
+
+    def _at(self, t: float) -> tuple[str, float]:
+        if math.isnan(t):
+            raise ValueError("t: pass a time in seconds, not NaN")
+        if t < self.lead_s:
+            return "rest", 0.0
+        if t >= self.total_duration:
+            return "done", 0.0
+        u = (t - self.lead_s) % self.duration
+        if u < self.hold_low_s:
+            return "rest", 0.0
+        u -= self.hold_low_s
+        if u < self.move_s:
+            return "ramp_up", self.peak * (1 - math.cos(math.pi * u / self.move_s)) / 2
+        u -= self.move_s
+        if u < self.hold_high_s:
+            return "hold", self.peak
+        u -= self.hold_high_s
+        return "ramp_down", self.peak * (1 + math.cos(math.pi * u / self.move_s)) / 2
+
+
+def blend_pose(relaxed: ArrayLike, gesture: ArrayLike, level: float) -> np.ndarray:
+    """Blend equally shaped finite pose vectors by a fraction in [0, 1].
+
+    Parameters
+    ----------
+    relaxed, gesture
+        One-dimensional pose vectors in the app's own control units.
+    level
+        Fraction of the gesture. Values outside [0, 1] are rejected.
+    """
+    a, b = np.asarray(relaxed, dtype=float), np.asarray(gesture, dtype=float)
+    if a.ndim != 1 or a.shape != b.shape or not a.size:
+        raise ValueError("relaxed and gesture: pass non-empty pose vectors of the same shape")
+    if not np.isfinite(a).all() or not np.isfinite(b).all():
+        raise ValueError("relaxed and gesture: pass finite pose values")
+    if not math.isfinite(level) or not 0 <= level <= 1:
+        raise ValueError("level: pass a finite fraction between 0 and 1")
+    return a + level * (b - a)
+
+
+def score_tracking(
+    t_target: ArrayLike,
+    target: ArrayLike,
+    t_pred: ArrayLike,
+    pred: ArrayLike,
+    *,
+    start_s: float | None = None,
+    end_s: float | None = None,
+    max_lag_s: float = 1.0,
+    step_s: float = 0.01,
+) -> dict[str, float | None]:
+    """Score scalar tracking on a common uniform time grid without extrapolation.
+
+    Parameters
+    ----------
+    t_target, t_pred
+        Strictly increasing finite timestamps in the same clock domain.
+    target, pred
+        Scalar levels paired with those timestamps. Non-finite levels are discarded.
+    start_s, end_s
+        Inclusive run bounds on that clock. Set start to run start plus lead-in;
+        samples outside these bounds never contribute, including to lag estimation.
+        Defaults to the common recorded interval.
+    max_lag_s
+        Non-negative search radius for normalised cross-correlation.
+    step_s
+        Positive interpolation step in seconds, also the lag resolution.
+
+    Returns
+    -------
+    dict
+        ``rmse`` and Pearson ``r`` at zero lag, plus ``lag_s`` at the largest
+        normalised cross-correlation (positive means prediction follows target).
+        A lag needs at least three samples and half the common interval in overlap;
+        ties prefer the smallest absolute lag. Undefined metrics are ``None``.
+        Constant signals can have an RMSE but no correlation or lag.
+    """
+    if not math.isfinite(max_lag_s) or max_lag_s < 0:
+        raise ValueError("max_lag_s: pass a finite search radius >= 0")
+    if not math.isfinite(step_s) or step_s <= 0:
+        raise ValueError("step_s: pass a finite sampling step > 0")
+    for bound in (start_s, end_s):
+        if bound is not None and not math.isfinite(bound):
+            raise ValueError("start_s and end_s: pass finite timestamps or None")
+    if start_s is not None and end_s is not None and start_s > end_s:
+        raise ValueError("end_s: pass a timestamp at or after start_s")
+
+    def samples(times: ArrayLike, values: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
+        t, y = np.asarray(times, dtype=float), np.asarray(values, dtype=float)
+        if t.ndim != 1 or t.shape != y.shape:
+            raise ValueError("timestamps and levels: pass equally sized one-dimensional arrays")
+        if not np.isfinite(t).all() or np.any(np.diff(t) <= 0):
+            raise ValueError("timestamps: pass finite, strictly increasing seconds")
+        keep = np.isfinite(y)
+        if start_s is not None:
+            keep &= t >= start_s
+        if end_s is not None:
+            keep &= t <= end_s
+        return t[keep], y[keep]
+
+    tt, y = samples(t_target, target)
+    tp, p = samples(t_pred, pred)
+    result: dict[str, float | None] = {"rmse": None, "r": None, "lag_s": None}
+    if not len(tt) or not len(tp):
+        return result
+    lo, hi = max(tt[0], tp[0]), min(tt[-1], tp[-1])
+    if hi < lo:
+        return result
+    grid = lo + np.arange(int((hi - lo) / step_s) + 1) * step_s
+    a, b = np.interp(grid, tt, y), np.interp(grid, tp, p)
+    result["rmse"] = float(np.sqrt(np.mean((a - b) ** 2)))
+
+    def correlation(x: np.ndarray, y: np.ndarray) -> float | None:
+        if len(x) < 2 or np.ptp(x) <= 1e-12 or np.ptp(y) <= 1e-12:
+            return None
+        return float(np.clip(np.corrcoef(x, y)[0, 1], -1, 1))
+
+    result["r"] = correlation(a, b)
+    if result["r"] is None:
+        return result
+    limit = min(int(max_lag_s / step_s), len(grid) // 2)
+    best = -math.inf
+    for shift in sorted(range(-limit, limit + 1), key=abs):
+        x, y = (
+            (a[:-shift], b[shift:])
+            if shift > 0
+            else (a[-shift:], b[:shift])
+            if shift < 0
+            else (a, b)
+        )
+        if len(x) < 3:
+            continue
+        r = correlation(x, y)
+        if r is not None and r > best + 1e-12:
+            best, result["lag_s"] = r, shift * step_s
+    return result

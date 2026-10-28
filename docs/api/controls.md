@@ -212,10 +212,25 @@ bus = connect_controls(control_map, [target])  # None while the far side is unre
 ```
 
 An application that launches its own target binds before that target exists, so it
-holds a [`ControlLink`][myogestic.controls.ControlLink] instead and calls `ensure()` from
-each handler that needs the hand. A UI loop that should reconnect automatically wraps the
-link in [`ControlLinkConnector`][myogestic.controls.ControlLinkConnector] and calls
-`poll()`; the blocking capability request then runs in one rate-limited background worker.
+holds a [`ControlLink`][myogestic.controls.ControlLink] instead. A UI loop wraps one or
+more links in [`ControlLinkConnector`][myogestic.controls.ControlLinkConnector] and
+calls `poll()`; the blocking capability requests run in one rate-limited background
+worker. Use `ensure_now()` for a synchronous UI attempt through the same connector,
+so a button cannot race its worker. Prediction only reads `link.bus`.
+
+`ControlLinkConnector(link, operator)` ensures unbound links in order and stops at
+the first unavailable target or exception. Already bound links stay usable; the next
+attempt retries only unbound links. `connected` is true when all links are bound,
+`ensure_now()` returns the first link's bus only then, and `last_error` reports an
+exception. `stop()` tears down every link, including any bus that resolves after stop.
+
+`ControlBus`, `connect_controls`, and `ControlLink` accept `record_as="controls"`.
+Give a second independent link `ctx=app.ctx, record_as="controls.operator"` to save
+its frames under a separate stream name. The default map stays in `ctx.control_space`
+and `meta.control_space`; named maps go in `ctx.control_spaces` and the optional
+`meta.control_spaces` mapping. Each saved map can be read with `read_control_space`.
+Two different map objects recording under the same name raise `ValueError`; the same
+map can rebind after a stop. Single-link metadata stays unchanged, at schema 3.
 
 The client is **required**: every address, range and state comes from that answer. A
 target that answers but reports an older `vocabulary_version` is refused by name, since it

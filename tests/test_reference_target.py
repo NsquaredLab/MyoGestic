@@ -35,10 +35,10 @@ def test_a_control_bus_drives_the_reference_target(target_module):
     from myogestic.remote import RemoteTarget
     from myogestic.vhi import virtual_hand
 
-    rig = target_module.ReferenceTarget(port=50099)
-    rig.serve()
+    rig = target_module.ReferenceTarget(port=0)
+    port = rig.serve()
     try:
-        vhi = virtual_hand(grpc_port=50099)
+        vhi = virtual_hand(grpc_port=port)
         client = vhi.control_client()
         # Two addresses, and on this target that is two streams — one per control,
         # named for the control.
@@ -88,10 +88,10 @@ def test_a_target_reporting_an_older_vocabulary_is_refused_by_name(target_module
             manifest.vocabulary_version = "1"
             return manifest
 
-    rig = Antique(port=50098)
-    rig.serve()
+    rig = Antique(port=0)
+    port = rig.serve()
     try:
-        client = virtual_hand(grpc_port=50098).control_client()
+        client = virtual_hand(grpc_port=port).control_client()
         try:
             with pytest.raises(ValueError) as excinfo:
                 client.capabilities()
@@ -173,10 +173,10 @@ def test_two_discrete_controls_are_told_apart_by_address(target_module):
             need is exactly the LSL contention the default suite must not carry."""
             self._stop.wait()
 
-    rig = TwoModes(port=50097)
-    rig.serve()
+    rig = TwoModes(port=0)
+    port = rig.serve()
     try:
-        vhi = virtual_hand(grpc_port=50097)
+        vhi = virtual_hand(grpc_port=port)
         client = vhi.control_client()
         try:
             # Aliases deliberately unlike the addresses: whatever reaches the target had

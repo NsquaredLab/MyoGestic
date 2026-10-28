@@ -68,13 +68,17 @@ class ReferenceTarget(pb2_grpc.RemoteControlServicer):
 
     # --- lifecycle ------------------------------------------------------------
 
-    def serve(self) -> None:
-        """Start the gRPC server and the inlet reader."""
+    def serve(self) -> int:
+        """Start the gRPC server and inlet reader, returning the bound port.
+
+        Pass port 0 to the constructor to let gRPC choose an available port.
+        """
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
         pb2_grpc.add_RemoteControlServicer_to_server(self, self._server)
-        self._server.add_insecure_port(f"127.0.0.1:{self._port}")
+        port = self._server.add_insecure_port(f"127.0.0.1:{self._port}")
         self._server.start()
         threading.Thread(target=self._read, name="reference-inlet", daemon=True).start()
+        return port
 
     def stop(self) -> None:
         self._stop.set()
