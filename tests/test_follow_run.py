@@ -176,6 +176,123 @@ def test_record_saved_target_score_and_unticked_take(run, stop_at):
     assert row["follow"] and row["drive"] and not row["selected"]
 
 
+def test_external_stop_saves_actual_follow_end_and_score_window(run, monkeypatch):
+    from myogestic.session import open_session_store
+    from myogestic.widgets import _follow_state
+
+    widget, app, now = run
+    assert widget.start(app.ctx)
+    session = app.ctx.session
+    for timestamp in np.linspace(100.05, 103.5, 70):
+        now[0] = timestamp
+        _, level = widget._step(app.ctx)
+        session.append_event("controls", [level], timestamp, channel_names=["prediction"])
+    app.stop_recording(wait=True)
+    assert widget.running  # Finalization must not depend on the next UI frame.
+    with open_session_store(session.path) as saved:
+        assert saved.extras["follow"]["ended"] == 103.5
+        _, timestamps = saved.get_continuous("follow.target")
+        assert timestamps[-1] == 103.5
+
+    bounds = []
+
+    def score(*args, **kwargs):
+        bounds.append((kwargs["start_s"], kwargs["end_s"]))
+        return score_tracking(*args, **kwargs)
+
+    monkeypatch.setattr(_follow_state, "score_tracking", score)
+    now[0] = 104.5
+    widget.sync(app.ctx)
+    assert bounds == [(101.0, 103.5)]
+    assert widget.score == pytest.approx({"rmse": 0, "r": 1, "lag_s": 0})
+    assert session.extras["follow"]["ended"] == 103.5
+
+
+@pytest.mark.parametrize(
+    "last_target, expected_end", [(103.5, 103.5), (110.0, 105.0), (None, 104.0)]
+)
+def test_external_stop_uses_last_target_or_finalize_clock(
+    run, monkeypatch, last_target, expected_end
+):
+    from myogestic.session import open_session_store
+
+    widget, app, now = run
+    if last_target is None:
+        monkeypatch.setattr(widget, "_step", lambda ctx: None)
+    assert widget.start(app.ctx)
+    if last_target is not None:
+        now[0] = last_target
+        widget._step(app.ctx)
+    now[0] = 104.0 if last_target is None else last_target + 1
+    app.stop_recording(wait=True)
+    with open_session_store(app.ctx.session.path) as saved:
+        assert saved.extras["follow"]["ended"] == expected_end
+
+
+def test_external_stop_finalizes_after_sync_without_extending_end(run, monkeypatch):
+    from threading import Event, current_thread
+
+    from myogestic.session import open_session_store
+
+    widget, app, now = run
+    entered, release = Event(), Event()
+    finalizers = []
+
+    def pause_finalize(session):
+        finalizers.append(current_thread())
+        entered.set()
+        assert release.wait(3)
+
+    app.finalize_hooks.append(pause_finalize)
+    monkeypatch.setattr("myogestic._browser.IS_BROWSER", False)
+    assert widget.start(app.ctx)
+    session = app.ctx.session
+    now[0] = 103.5
+    widget._step(app.ctx)
+    app.stop_recording()
+    try:
+        assert entered.wait(1)
+        now[0] = 104.5
+        widget.sync(app.ctx)
+        assert not widget.running and widget.score is None
+    finally:
+        release.set()
+        for thread in finalizers:
+            thread.join(3)
+            assert not thread.is_alive()
+    with open_session_store(session.path) as saved:
+        assert saved.extras["follow"]["ended"] == 103.5
+    widget.sync(app.ctx)
+    assert app.finalize_hooks == [pause_finalize]
+
+
+@pytest.mark.parametrize("settle_first", [False, True])
+def test_follow_finalize_hook_leaves_other_takes_alone_and_does_not_accumulate(run, settle_first):
+    from myogestic.session import open_session_store
+
+    widget, app, now = run
+    hooks = list(app.finalize_hooks)
+    for _ in range(2):
+        assert widget.start(app.ctx)
+        assert len(app.finalize_hooks) == len(hooks) + 1
+        assert not widget.start(app.ctx)
+        assert len(app.finalize_hooks) == len(hooks) + 1
+        now[0] += 0.5
+        widget._step(app.ctx)
+        app.stop_recording(wait=True)
+        if settle_first:
+            widget.sync(app.ctx)
+            assert app.finalize_hooks == hooks
+
+        app.start_recording(str(app.ctx.session.path.parent))
+        other = app.ctx.session
+        app.stop_recording(wait=True)
+        with open_session_store(other.path) as saved:
+            assert "follow" not in saved.extras
+        widget.sync(app.ctx)
+        assert app.finalize_hooks == hooks
+
+
 def test_deadline_hidden_card_and_take_ownership(run):
     widget, app, now = run
     assert widget.start(app.ctx)

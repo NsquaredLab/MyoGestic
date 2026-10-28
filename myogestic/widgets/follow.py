@@ -14,6 +14,7 @@ from numpy.typing import ArrayLike
 
 from myogestic.controls import ControlLink
 from myogestic.core import Context
+from myogestic.session import Session
 from myogestic.sources.target import PHASE_CODES
 from myogestic.tracking import Sinusoid, blend_pose
 from myogestic.widgets._follow_state import FollowState, score_take
@@ -116,6 +117,7 @@ class FollowRun:
         self._stream, self._channel = prediction_stream, prediction_channel
         self._max_lag_s, self._widget_id = max_lag_s, widget_id
         self._state = FollowState(trajectory or Sinusoid())
+        self._finalize_hooks: list[Callable[[Session], None]] | None = None
 
     @property
     def running(self) -> bool:
@@ -161,6 +163,7 @@ class FollowRun:
         with s.lock:
             s.session, s.started = ctx.session, local_clock()
             s.source_path = s.session.path.resolve()
+            s.ended = None
             s.elapsed, s.score, s.last_timestamp = 0.0, None, -math.inf
             s.session.extras["follow"] = {
                 "gestures": list(self.gestures),
@@ -173,6 +176,8 @@ class FollowRun:
                 "max_lag_s": self._max_lag_s,
             }
             s.phase = "running"
+            self._finalize_hooks = ctx.finalize_hooks
+            self._finalize_hooks.append(self._on_finalize)
             self._step(ctx)
             s.stop_event.clear()
             s.worker = Thread(
@@ -222,16 +227,32 @@ class FollowRun:
                 deadline = now + 1.0 / self._hz
             s.stop_event.wait(max(0.0, deadline - now))
 
+    def _on_finalize(self, session: Session) -> None:
+        """Stamp this take's end before metadata is saved, without joining the driver."""
+        s = self._state
+        with s.lock:
+            if session is not s.session:
+                return
+            # A normal Stop already chose its exact time, possibly between samples.
+            if s.ended is None:
+                s.ended = s.last_timestamp if math.isfinite(s.last_timestamp) else local_clock()
+            meta = session.extras["follow"]
+            s.ended = meta["ended"] = min(
+                meta["ended"], s.ended, s.started + s.trajectory.total_duration
+            )
+
     def stop(self, ctx: Context) -> None:
         """Close this run, save its partial interval and leave other takes alone."""
         s = self._state
         with s.lock:
             if not self.running:
                 return
-            s.session.extras["follow"]["ended"] = min(
-                local_clock(),
-                s.started + s.trajectory.total_duration,
-            )
+            if ctx.recording and ctx.session is s.session:
+                s.ended = s.session.extras["follow"]["ended"] = min(
+                    s.session.extras["follow"]["ended"],
+                    local_clock(),
+                    s.started + s.trajectory.total_duration,
+                )
             s.stop_event.set()
         # A blocked push must finish before the final rest is delivered.
         if s.worker is not None:
@@ -253,6 +274,9 @@ class FollowRun:
         ):
             self.stop(ctx)
         if s.phase == "saving" and s.source_path not in ctx.pending_saves:
+            if self._finalize_hooks is not None:
+                self._finalize_hooks.remove(self._on_finalize)
+                self._finalize_hooks = None
             try:
                 s.score = score_take(s.session.path)
                 s.phase = "results"

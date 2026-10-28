@@ -115,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Follow runs stopped by another panel save their actual target end before metadata is written, so saved-take scoring uses the interrupted interval and later takes remain unaffected.
 - `FollowRun(drive=..., hz=32)` drives the operator hand on its own clock, independent of EMG, the GUI and `predict`; Stop joins the driver before restoring rest. Myocontrol uses separate prediction and operator links so `controls` records predictions only.
 - App shutdown waits for pending recording saves, including takes stopped by cleanup hooks, before stopping streams; unfinished saves are logged after a 30-second timeout.
 - A take selected while saving remains selected and trainable after its folder becomes an archive; scans skip incomplete saves.

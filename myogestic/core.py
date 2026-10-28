@@ -202,6 +202,9 @@ class Context:
     pending_saves
         Source folders still being finalized. Nonempty until every pending
         pack has registered its saved take or reported failure.
+    finalize_hooks
+        The owning `App.finalize_hooks` list, also available to widgets that
+        receive only a context. Hooks run after freeze and before metadata is saved.
     participant
         Pseudonymised ID used to label new recordings; empty when none is set.
     require_participant
@@ -253,6 +256,7 @@ class Context:
     notifications: list[Notification] = field(default_factory=list)
     participant: str = ""
     require_participant: bool = False
+    finalize_hooks: list[Callable[[Session], None]] = field(default_factory=list, repr=False)
     # A Stop during a countdown is still a cancellation, even though capture has
     # not begun and state remains idle. Widgets observe this without callbacks.
     _recording_stop_revision: int = field(default=0, init=False, repr=False)
@@ -369,7 +373,7 @@ class App:
         #: `Session.freeze` and before ``meta.json`` is written — so a hook can add to
         #: ``session.extras`` or drop a file into ``session.path``. `myogestic.ml.Pipeline`
         #: saves the running model here. Not called on `discard_recording`.
-        self.finalize_hooks: list[Callable[[Session], None]] = []
+        self.finalize_hooks: list[Callable[[Session], None]] = self.ctx.finalize_hooks
         self._popout_specs: list[tuple[str, Callable[[], None], bool, bool, bool | None]] = []
 
     def streams(self, *streams: Stream) -> None:

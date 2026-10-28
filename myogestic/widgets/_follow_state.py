@@ -18,6 +18,7 @@ class FollowState:
     gesture: int = 0
     phase: str = "idle"
     started: float = 0.0
+    ended: float | None = None
     elapsed: float = 0.0
     session: Session | None = None
     source_path: Path | None = None
