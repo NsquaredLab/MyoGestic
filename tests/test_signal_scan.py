@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from imgui_bundle import hello_imgui, imgui
+from imgui_bundle import icons_fontawesome_6 as fa
 
 from myogestic import Context, _scale, _theme
 from myogestic.sources import LSLSource
@@ -154,8 +155,11 @@ def test_carousel_and_one_connect_are_centred_and_fit(scan_ui, width, scale, sca
         (step,) = _named(items, "##emg_next")
         (connect,) = _named(items, "##emg_reconnect")
         assert connect.fill == tuple(PRIMARY_FILL)
-        # The label names the stream, ellipsized in a narrow cell.
-        assert "Connect scan" in connect.label
+        # The label names the stream, ellipsized in a narrow cell. How much fits depends
+        # on the font (DejaVu on Linux is wider than SF), so check the shape, not a length.
+        shown, full = connect.label.split("##")[0], f"{fa.ICON_FA_PLUG}  Connect scan-test"
+        assert shown == full or (shown.endswith("…") and full.startswith(shown[:-1])), shown
+        assert "Connect" in shown
         assert [item for item in items if item.kind == "button" and "Connect" in item.label] == [
             connect
         ]
