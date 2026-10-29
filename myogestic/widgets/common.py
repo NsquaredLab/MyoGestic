@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 
 import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
@@ -495,6 +496,152 @@ def segmented(widget_id: str, options: list[str], selected: int) -> int:
         imgui.pop_style_color(4)
     imgui.pop_style_var()
     return result
+
+
+@dataclass(frozen=True)
+class CarouselItem:
+    """One card of a [`carousel`][]: a title over a one-line mono detail.
+
+    ``tag`` is a muted note after the title, such as "this app's"; ``tone``
+    colours the detail, which is muted by default.
+    """
+
+    title: str
+    detail: str = ""
+    tag: str = ""
+    tone: imgui.ImVec4 | None = None
+
+
+def carousel(
+    widget_id: str,
+    items: Sequence[CarouselItem],
+    index: int,
+    *,
+    can_look: bool = False,
+    noun: str = "item",
+    width: float | None = None,
+) -> tuple[int, bool]:
+    """Pick one of a few found things, a card at a time: ‹ card ›, then dots and refresh.
+
+    For a choice whose card is what the action beneath it uses — a stream, a
+    bracelet — so that action can name it: **Connect Galvani**, never a bare
+    Connect beside a list. Stepping past the last card asks to look for more, and
+    so does the refresh icon; nothing looks on its own. Dots and ``n / N`` appear
+    once there is more than one card.
+
+    Parameters
+    ----------
+    widget_id
+        ImGui identity: the arrows are ``##<id>_prev`` / ``##<id>_next`` and the
+        refresh ``##<id>_rescan``.
+    items
+        The cards. Pass a placeholder card for "nothing found yet".
+    index
+        The card shown this frame.
+    can_look
+        Whether looking for more is possible now — false while a scan runs.
+    noun
+        What the cards are, for the tooltips ("Next bracelet").
+    width
+        Width in pixels from the cursor; the available width by default.
+
+    Returns
+    -------
+    tuple[int, bool]
+        The card to show next, and whether the refresh icon was pressed. An index
+        one past the last card means › was pressed there: look for more, and show
+        the next card once it arrives.
+    """
+    items = list(items) or [CarouselItem("—")]
+    index = min(max(index, 0), len(items) - 1)
+    style = imgui.get_style()
+    width = imgui.get_content_region_avail().x if width is None else width
+    left = imgui.get_cursor_pos_x()
+    card_h = 2 * imgui.get_text_line_height() + ui_px(14)
+    gap = style.item_spacing.x * 0.5
+    arrow_w = ui_px(28)
+    card_w = max(1.0, width - 2 * (arrow_w + gap))
+
+    imgui.begin_disabled(index == 0)
+    if imgui.button(f"{fa.ICON_FA_CHEVRON_LEFT}##{widget_id}_prev", imgui.ImVec2(arrow_w, card_h)):
+        index -= 1
+    imgui.end_disabled()
+    imgui.set_item_tooltip(f"Previous {noun}")
+    imgui.same_line(0, gap)
+    origin = imgui.get_cursor_screen_pos()
+    imgui.dummy(imgui.ImVec2(card_w, card_h))
+    _carousel_card(items[index], origin, card_w, card_h)
+    imgui.same_line(0, gap)
+    more = index < len(items) - 1
+    imgui.begin_disabled(not more and not can_look)
+    if imgui.button(f"{fa.ICON_FA_CHEVRON_RIGHT}##{widget_id}_next", imgui.ImVec2(arrow_w, card_h)):
+        index += 1
+    imgui.end_disabled()
+    imgui.set_item_tooltip(f"Next {noun}" if more else f"Look for another {noun}")
+
+    # Dots, n / N, and refresh, centred under the card.
+    count = len(items)
+    dot, spacing = ui_px(3), ui_px(10)
+    position = f"{min(index, count - 1) + 1} / {count}" if count > 1 else ""
+    refresh_w = imgui.calc_text_size(fa.ICON_FA_ARROWS_ROTATE).x + 2 * style.frame_padding.x
+    dots_w = (count - 1) * spacing + 2 * dot if count > 1 else 0.0
+    text_w = imgui.calc_text_size(position).x if position else 0.0
+    row_w = dots_w + (spacing + text_w if position else 0.0) + spacing + refresh_w
+    imgui.set_cursor_pos_x(left + max((width - row_w) * 0.5, 0.0))
+    row = imgui.get_cursor_screen_pos()
+    middle = row.y + imgui.get_frame_height() * 0.5
+    draw = imgui.get_window_draw_list()
+    for i in range(count if count > 1 else 0):
+        # The current dot in full text colour, the rest at a third of the muted one.
+        color = (
+            imgui.get_color_u32(imgui.Col_.text)
+            if i == index
+            else imgui.get_color_u32(imgui.Col_.text_disabled, 0.35)
+        )
+        draw.add_circle_filled(imgui.ImVec2(row.x + dot + i * spacing, middle), dot, color)
+    imgui.dummy(imgui.ImVec2(dots_w, imgui.get_frame_height()))
+    if position:
+        imgui.same_line(0, spacing)
+        imgui.align_text_to_frame_padding()
+        imgui.text_colored(muted(), position)
+    imgui.same_line(0, spacing)
+    imgui.begin_disabled(not can_look)
+    refresh = imgui.button(f"{fa.ICON_FA_ARROWS_ROTATE}##{widget_id}_rescan")
+    imgui.end_disabled()
+    imgui.set_item_tooltip("Look again")
+    return index, refresh
+
+
+def _carousel_card(item: CarouselItem, origin: imgui.ImVec2, width: float, height: float) -> None:
+    """The card on show: its title and tag over its mono detail, raised and outlined."""
+    style = imgui.get_style()
+    draw = imgui.get_window_draw_list()
+    lo, hi = origin, imgui.ImVec2(origin.x + width, origin.y + height)
+    draw.add_rect_filled(lo, hi, imgui.get_color_u32(imgui.Col_.frame_bg), style.frame_rounding)
+    draw.add_rect(lo, hi, imgui.get_color_u32(hairline()), style.frame_rounding)
+    room = width - 2 * style.frame_padding.x
+    tag = f"  {item.tag}" if item.tag else ""
+    title = fit_text(item.title, max(1.0, room - imgui.calc_text_size(tag).x))
+    line = imgui.get_text_line_height()
+    top = lo.y + (height - (2 * line + ui_px(3) if item.detail else line)) * 0.5
+    title_w, tag_w = imgui.calc_text_size(title).x, imgui.calc_text_size(tag).x
+    x = lo.x + (width - title_w - tag_w) * 0.5
+    draw.add_text(imgui.ImVec2(x, top), imgui.get_color_u32(imgui.Col_.text), title)
+    if tag:
+        draw.add_text(imgui.ImVec2(x + title_w, top), imgui.get_color_u32(muted()), tag)
+    if item.detail:
+        font = mono_font() or imgui.get_font()
+        imgui.push_font(font, style.font_size_base)
+        detail = fit_text(item.detail, room)
+        detail_w = imgui.calc_text_size(detail).x
+        imgui.pop_font()
+        draw.add_text(
+            font,
+            imgui.get_font_size(),
+            imgui.ImVec2(lo.x + (width - detail_w) * 0.5, top + line + ui_px(3)),
+            imgui.get_color_u32(item.tone if item.tone is not None else muted()),
+            detail,
+        )
 
 
 #: Every band of `format_age` is this many characters, so the read-out holds a
