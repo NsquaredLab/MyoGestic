@@ -53,6 +53,12 @@ ON_PILL_TEXT = imgui.ImVec4(0.93, 0.95, 0.98, 1.0)
 # Forward actions keep readable white text on the same blue in both themes.
 PRIMARY_FILL = imgui.ImVec4(0 / 255, 98 / 255, 204 / 255, 1.0)
 ON_PRIMARY_TEXT = imgui.ImVec4(1.0, 1.0, 1.0, 1.0)
+# Record and its Stop: simpetru-figstyle's bright red (`REDS[2]`, #d80032), which keeps
+# white text at 5.3:1; `DANGER` itself manages only 3.4:1 under white.
+RECORD_FILL = imgui.ImVec4(216 / 255, 0 / 255, 50 / 255, 1.0)
+# The warm-up count on the light theme, where `WARNING` is 1.6:1 on its own tint:
+# simpetru-figstyle's darkest orange (`LIBRARY["emg_manifolds"]`, #d06708), 2.9:1.
+COUNT_WARMUP_ON_LIGHT = imgui.ImVec4(208 / 255, 103 / 255, 8 / 255, 1.0)
 
 
 def ui_px(n: float) -> float:
@@ -244,14 +250,7 @@ def tinted_row(tone: imgui.ImVec4 | None = None, *, height: float | None = None)
         one frame high, with scaled padding and rounded corners.
     """
     style = imgui.get_style()
-    surface = style.color_(imgui.Col_.frame_bg)
-    if tone is not None:
-        surface = imgui.ImVec4(
-            surface.x * 0.88 + tone.x * 0.12,
-            surface.y * 0.88 + tone.y * 0.12,
-            surface.z * 0.88 + tone.z * 0.12,
-            1.0,
-        )
+    surface = style.color_(imgui.Col_.frame_bg) if tone is None else _tinted(tone)
     origin = imgui.get_cursor_screen_pos()
     cursor = imgui.get_cursor_pos()
     width = imgui.get_content_region_avail().x
@@ -275,6 +274,95 @@ def tinted_row(tone: imgui.ImVec4 | None = None, *, height: float | None = None)
         imgui.end_group()
 
 
+def _tinted(tone: imgui.ImVec4) -> imgui.ImVec4:
+    """The theme's control surface with 12 % of ``tone`` mixed in, opaque."""
+    surface = imgui.get_style().color_(imgui.Col_.frame_bg)
+    return imgui.ImVec4(
+        surface.x * 0.88 + tone.x * 0.12,
+        surface.y * 0.88 + tone.y * 0.12,
+        surface.z * 0.88 + tone.z * 0.12,
+        1.0,
+    )
+
+
+def _lighten(color: imgui.ImVec4, amount: float) -> imgui.ImVec4:
+    """Move ``color`` toward white by ``amount``, keeping its alpha."""
+    return imgui.ImVec4(
+        color.x + (1.0 - color.x) * amount,
+        color.y + (1.0 - color.y) * amount,
+        color.z + (1.0 - color.z) * amount,
+        color.w,
+    )
+
+
+@contextmanager
+def action_row(label: str, tone: imgui.ImVec4, *, height: float) -> Iterator[tuple[bool, float]]:
+    """A `tinted_row` that is itself the button: the whole row is the click target.
+
+    For a state whose one action ends that state — Stop while recording, Cancel during
+    a warm-up — drawn where the control that started it was, so the second click lands
+    where the first one did. The row keeps `tinted_row`'s surface and gains a ``tone``
+    border plus the usual hover and press steps. Draw only text inside it, the action's
+    name included: the row already owns the click.
+
+    Parameters
+    ----------
+    label
+        ImGui label for the row's button, normally ID-only (``"##stop"``).
+    tone
+        Semantic colour of the state, for the tint and the border.
+    height
+        Row height in scaled pixels.
+
+    Yields
+    ------
+    tuple[bool, float]
+        Whether the row was clicked this frame, and the inner width for its text.
+    """
+    cursor = imgui.get_cursor_pos()
+    width = imgui.get_content_region_avail().x
+    surface = _tinted(tone)
+    imgui.push_style_color(imgui.Col_.button, surface)
+    imgui.push_style_color(imgui.Col_.button_hovered, _lighten(surface, 0.06))
+    imgui.push_style_color(imgui.Col_.button_active, _lighten(surface, 0.10))
+    imgui.push_style_color(imgui.Col_.border, tone)
+    imgui.push_style_var(imgui.StyleVar_.frame_border_size, ui_px(2))
+    try:
+        clicked = imgui.button(label, imgui.ImVec2(width, height))
+    finally:
+        imgui.pop_style_var()
+        imgui.pop_style_color(4)
+    pad = ui_px(4)
+    imgui.set_cursor_pos(cursor)
+    imgui.begin_group()
+    imgui.indent(pad)
+    imgui.set_cursor_pos_y(cursor.y + pad)
+    try:
+        yield clicked, max(1.0, width - 2 * pad)
+    finally:
+        imgui.unindent(pad)
+        imgui.set_cursor_pos(imgui.ImVec2(cursor.x, cursor.y + height))
+        imgui.dummy(imgui.ImVec2(width, 0))
+        imgui.end_group()
+
+
+@contextmanager
+def solid_fill(fill: imgui.ImVec4) -> Iterator[None]:
+    """Give the buttons drawn inside one solid ``fill`` with white text.
+
+    Hover and press lighten the fill by 6 % and 10 %, the same steps for every
+    filled action, so they all answer the pointer alike.
+    """
+    imgui.push_style_color(imgui.Col_.text, ON_PRIMARY_TEXT)
+    imgui.push_style_color(imgui.Col_.button, fill)
+    imgui.push_style_color(imgui.Col_.button_hovered, _lighten(fill, 0.06))
+    imgui.push_style_color(imgui.Col_.button_active, _lighten(fill, 0.10))
+    try:
+        yield
+    finally:
+        imgui.pop_style_color(4)
+
+
 def primary_button(label: str, size: tuple[float, float] = (0, 0)) -> bool:
     """Draw the primary forward action with white text on a blue fill.
 
@@ -291,22 +379,8 @@ def primary_button(label: str, size: tuple[float, float] = (0, 0)) -> bool:
     bool
         Whether the button was clicked this frame.
     """
-    imgui.push_style_color(imgui.Col_.text, ON_PRIMARY_TEXT)
-    imgui.push_style_color(imgui.Col_.button, PRIMARY_FILL)
-    for slot, amount in ((imgui.Col_.button_hovered, 0.06), (imgui.Col_.button_active, 0.10)):
-        imgui.push_style_color(
-            slot,
-            imgui.ImVec4(
-                PRIMARY_FILL.x + (1.0 - PRIMARY_FILL.x) * amount,
-                PRIMARY_FILL.y + (1.0 - PRIMARY_FILL.y) * amount,
-                PRIMARY_FILL.z + (1.0 - PRIMARY_FILL.z) * amount,
-                PRIMARY_FILL.w,
-            ),
-        )
-    try:
+    with solid_fill(PRIMARY_FILL):
         return imgui.button(label, imgui.ImVec2(*size))
-    finally:
-        imgui.pop_style_color(4)
 
 
 def destructive_button(label: str, *, tooltip: str = "") -> bool:

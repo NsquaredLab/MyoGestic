@@ -86,6 +86,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Stop sits where Record was: in `RecordingControls` and `RecordButton` the whole
+  recording row is the Stop button (and, during a warm-up, Cancel), in Record's exact
+  rectangle, instead of a small default-grey button at its right edge. A timed take's row
+  leads with the whole seconds left, in the same face as the warm-up count (no longer the
+  serif display face); the saved row reads like the others — **Saved · gesture** over the
+  time in mono, early stops first. The lock caption moved below the row so starting a take
+  no longer pushes Stop down. Record and the Stop label use `RECORD_FILL`,
+  simpetru-figstyle's bright red #d80032 (white text 5.3:1; `DANGER` gave 3.4:1). On the
+  light theme the countdown takes figstyle's darker shades, red #d80032 (3.9:1) and orange
+  #d06708 (2.9:1), where the status tones read 2.5:1 and 1.6:1 on their own tints. New
+  `action_row` and `solid_fill` helpers in `widgets/common.py`.
 - `RecordingControls` and `RecordButton` offer Record while predicting and Stop under any
   state with a take open; `RecordButton` freezes the session at the Stop click, so rows
   produced over the naming dialog are not part of the take. The ML Predict button starts
