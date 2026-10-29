@@ -86,6 +86,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The signal viewers' empty state is a carousel with one Connect. The stream on its card
+  is the one Connect attaches, and the button says so (**Connect TestEMG32**), starting
+  on the app's own stream; ‹ › step through the other streams of its kind, and stepping
+  past the last one is what looks for more (nothing scans on its own). This replaces a
+  Connect beside an unexplained Scan whose results came with a second Connect that did
+  something else. A failure reads **Couldn't connect** over the error's first sentence,
+  the full text on hover. `SignalViewer(stream_type=…)` and
+  `RawSignalViewer(stream_type=…)` choose the LSL type offered; by default it is the type
+  of the app's own stream, and with no type known, MyoGestic's control outlets and
+  marker streams are left out. `LSLSource.discover()` results gain a ``type`` key, and
+  their ``info`` reads ``32 ch · 2048 Hz · EMG``.
 - Stop sits where Record was: in `RecordingControls` and `RecordButton` the whole
   recording row is the Stop button (and, during a warm-up, Cancel), in Record's exact
   rectangle, instead of a small default-grey button at its right edge. A timed take's row

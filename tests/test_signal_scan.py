@@ -6,12 +6,11 @@ from types import SimpleNamespace
 
 import pytest
 from imgui_bundle import hello_imgui, imgui
-from imgui_bundle import icons_fontawesome_6 as fa
 
 from myogestic import Context, _scale, _theme
 from myogestic.sources import LSLSource
 from myogestic.stream import Stream, StreamInfo
-from myogestic.widgets.common import PRIMARY_FILL, muted, ui_px
+from myogestic.widgets.common import PRIMARY_FILL
 from myogestic.widgets.signals import _scan
 from myogestic.widgets.signals._controls import render_controls
 from myogestic.widgets.signals._state import ViewerState
@@ -125,10 +124,8 @@ def scan_ui(imgui_frame, monkeypatch):
     return ui
 
 
-def _actions(items):
-    (connect,) = [item for item in items if item.label.endswith("##emg_reconnect")]
-    (scan,) = [item for item in items if "Scan" in item.label]
-    return connect, scan
+def _named(items, suffix):
+    return [item for item in items if item.label.endswith(suffix)]
 
 
 def _assert_centered(items, bounds):
@@ -136,74 +133,107 @@ def _assert_centered(items, bounds):
     assert center == pytest.approx((bounds[0] + bounds[2]) / 2, abs=1)
 
 
-def _assert_action_layout(items, bounds):
-    connect, scan = _actions(items)
-    pair_width = sum(item.hi[0] - item.lo[0] for item in (connect, scan))
-    pair_width += imgui.get_style().item_spacing.x
-    scan_top = scan.lo[1]
-    if scan.kind == "text_colored":
-        scan_top -= imgui.get_style().frame_padding.y
-    if pair_width <= bounds[2] - bounds[0]:
-        assert scan_top == pytest.approx(connect.lo[1], abs=1)
-        assert scan.lo[0] >= connect.hi[0]
-        _assert_centered([connect, scan], bounds)
-    else:
-        assert scan_top >= connect.hi[1]
-        _assert_centered([connect], bounds)
-        _assert_centered([scan], bounds)
-
-
 @pytest.mark.parametrize("scale", [1, 2])
 @pytest.mark.parametrize("width", [320, 640])
-def test_empty_state_actions_share_a_centered_row_or_wrap(scan_ui, width, scale):
+@pytest.mark.parametrize("scanned", [False, True])
+def test_carousel_and_one_connect_are_centred_and_fit(scan_ui, width, scale, scanned):
+    """‹ card › over one primary Connect that names the stream, inside the cell."""
+    if scanned:
+        scan_ui.state.scanned = True
+        scan_ui.state.results = [
+            {"name": "scan-test", "info": "8 ch · 2048 Hz · EMG", "type": "EMG"},
+            {
+                "name": "An outlet with a long name " * 5,
+                "info": "64 ch · 2048 Hz · EMG",
+                "type": "EMG",
+            },
+        ]
     view = scan_ui.render(width, scale)
     for items in view.frames:
-        _assert_action_layout(items, view.bounds)
-        connect, scan = _actions(items)
+        (prev,) = _named(items, "##emg_prev")
+        (step,) = _named(items, "##emg_next")
+        (connect,) = _named(items, "##emg_reconnect")
         assert connect.fill == tuple(PRIMARY_FILL)
-        assert scan.fill != connect.fill
-        assert scan.label.startswith(f"{fa.ICON_FA_ARROWS_ROTATE}  Scan")
-    assert "Look for other outlets" in view.tooltips
-
-
-@pytest.mark.parametrize("scale", [1, 2])
-@pytest.mark.parametrize("width", [320, 1200])
-@pytest.mark.parametrize("busy", [False, True])
-def test_results_center_directly_below_actions_and_fit(scan_ui, width, scale, busy):
-    scan_ui.state.busy = busy
-    scan_ui.state.results = [{"name": "An outlet with a long name " * 5, "info": "64 channels"}]
-    view = scan_ui.render(width, scale)
-    for items in view.frames:
-        (combo,) = [item for item in items if item.kind == "combo"]
-        (connect,) = [item for item in items if item.label == "Connect##emg"]
-        actions = _actions(items)
-        assert combo.lo[1] == pytest.approx(connect.lo[1], abs=1)
-        # An aligned status occupies a full frame, including bottom padding.
-        bottom = max(
-            item.hi[1] + (imgui.get_style().frame_padding.y if item.kind == "text_colored" else 0)
-            for item in actions
-        )
-        assert combo.lo[1] == pytest.approx(bottom + imgui.get_style().item_spacing.y, abs=1)
-        _assert_centered([combo, connect], view.bounds)
-        if width == 1200:
-            assert combo.hi[0] - combo.lo[0] == pytest.approx(ui_px(300), abs=1)
+        # The label names the stream, ellipsized in a narrow cell.
+        assert "Connect scan" in connect.label
+        assert [item for item in items if item.kind == "button" and "Connect" in item.label] == [
+            connect
+        ]
+        assert prev.lo[1] == pytest.approx(step.lo[1], abs=1)
+        assert connect.lo[1] > prev.hi[1]
+        _assert_centered([prev, step], view.bounds)
+        _assert_centered([connect], view.bounds)
         for item in items:
             assert view.bounds[0] - 1 <= item.lo[0] <= item.hi[0] <= view.bounds[2] + 1, item.label
-            assert view.bounds[1] - 1 <= item.lo[1] <= item.hi[1] <= view.bounds[3] + 1, item.label
-    assert view.scroll == (0, 0)
+    assert view.scroll[0] == 0
 
 
-@pytest.mark.parametrize("scale", [1, 2])
-@pytest.mark.parametrize("width", [320, 640])
-def test_scanning_stays_in_the_action_group_with_muted_status(scan_ui, width, scale):
-    scan_ui.state.busy = True
-    view = scan_ui.render(width, scale)
-    connect, status = _actions(view.items)
-    assert status.label == "Scanning…"
-    assert status.kind == "text_colored"
-    assert status.color == tuple(muted())
-    assert not any(item.kind == "button" and "Scan" in item.label for item in view.items)
-    _assert_action_layout([connect, status], view.bounds)
+def test_stepping_past_the_last_stream_scans_then_shows_the_next(scan_ui, monkeypatch):
+    """› past the app's stream looks for others and lands on the next one of its kind."""
+    results = [
+        {"name": "scan-test", "info": "8 ch", "type": "EMG"},
+        {"name": "VHI.thumb_curl", "info": "1 ch", "type": "Control"},
+        {"name": "Second", "info": "16 ch", "type": "EMG"},
+    ]
+    monkeypatch.setattr(scan_ui.stream._source, "discover", lambda: results)
+    connections = []
+    monkeypatch.setattr(scan_ui.stream, "reconnect", lambda name=None: connections.append(name))
+    view = scan_ui.render(frames=1)
+    assert not scan_ui.jobs, "nothing scans until somebody asks"
+    scan_ui.click = _named(view.items, "##emg_next")[0].label
+    scan_ui.render(frames=1)
+    assert scan_ui.state.busy
+    scan_ui.jobs.pop()()
+    view = scan_ui.render(frames=1)
+    assert scan_ui.state.shown == "Second", "the Control outlet is not a stream to view"
+    (connect,) = _named(view.items, "##emg_reconnect")
+    assert "Connect Second" in connect.label
+    scan_ui.click = connect.label
+    scan_ui.render(frames=1)
+    scan_ui.jobs.pop()()
+    assert connections == ["Second"]
+    scan_ui.click = _named(view.items, "##emg_prev")[0].label
+    scan_ui.render(frames=1)
+    view = scan_ui.render(frames=1)
+    (connect,) = _named(view.items, "##emg_reconnect")
+    assert "Connect scan-test" in connect.label
+    scan_ui.click = connect.label
+    scan_ui.render(frames=1)
+    scan_ui.jobs.pop()()
+    assert connections == ["Second", None], "the app's own stream reattaches its own source"
+
+
+@pytest.mark.parametrize(
+    ("stream_type", "found", "expected"),
+    [
+        # The app's stream was found as EMG: only EMG streams follow it.
+        (None, ["a:Control", "b:EMG", "scan-test:EMG", "m:Markers", "c:EMG"], ["b", "c"]),
+        # An explicit type wins over the inferred one.
+        ("Control", ["a:Control", "b:EMG", "scan-test:EMG"], ["a"]),
+        # The app's stream is missing, so no type: everything but control and markers.
+        (None, ["a:Control", "b:EMG", "m:Markers", "u:"], ["b", "u"]),
+    ],
+    ids=["inferred", "explicit", "unknown"],
+)
+def test_the_carousel_offers_the_apps_stream_then_one_kind(stream_type, found, expected):
+    results = []
+    for entry in found:
+        name, kind = entry.split(":")
+        results.append({"name": name, "info": ""} | ({"type": kind} if kind else {}))
+    stream = Stream("emg", source=LSLSource("scan-test"), window_ms=1000)
+    items, own = _scan._carousel(stream, _scan._ScanState(results=results), stream_type)
+    assert own == "scan-test"
+    assert [item["name"] for item in items] == ["scan-test", *expected]
+
+
+def test_a_failure_shows_its_first_sentence_and_keeps_the_rest_on_hover(scan_ui):
+    error = "LSL stream 'scan-test' not found. Available streams: ['a', 'b', 'c']"
+    scan_ui.stream.last_error = error
+    view = scan_ui.render(frames=1)
+    assert any(item.label == "LSL stream 'scan-test' not found." for item in view.items)
+    assert error in view.tooltips
+    (connect,) = _named(view.items, "##emg_reconnect")
+    assert "Try again" in connect.label
 
 
 @pytest.mark.parametrize("scale", [1, 2])
@@ -220,30 +250,6 @@ def test_connected_retarget_still_draws_scan_and_results(scan_ui, width, scale, 
     for item in view.items:
         if "Scan" in item.label or item.label in ("##scan_emg", "Connect##emg"):
             assert view.bounds[0] - 1 <= item.lo[0] <= item.hi[0] <= view.bounds[2] + 1
-
-
-def test_scan_and_selected_connection_keep_their_behavior(scan_ui, monkeypatch):
-    results = [{"name": "First", "info": "8 ch"}, {"name": "Second", "info": "16 ch"}]
-    monkeypatch.setattr(scan_ui.stream._source, "discover", lambda: results)
-    connections = []
-    monkeypatch.setattr(scan_ui.stream, "reconnect", lambda name=None: connections.append(name))
-    view = scan_ui.render()
-    scan_ui.click = _actions(view.items)[1].label
-    scan_ui.render(frames=1)
-    assert scan_ui.state.busy
-    scan_ui.jobs.pop()()
-    assert not scan_ui.state.busy
-    assert scan_ui.state.results == results
-    scan_ui.selection = 1
-    scan_ui.click = "Connect##emg"
-    scan_ui.render(frames=1)
-    scan_ui.jobs.pop()()
-    assert connections == ["Second"]
-    assert scan_ui.state.results == []
-    scan_ui.click = _actions(scan_ui.items)[0].label
-    scan_ui.render(frames=1)
-    scan_ui.jobs.pop()()
-    assert connections == ["Second", None]
 
 
 def test_show_connect_false_hides_all_discovery_controls(scan_ui):
