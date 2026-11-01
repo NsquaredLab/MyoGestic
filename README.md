@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/widgets/signal_viewer.png" alt="The signal viewer streaming four EMG channels" width="820">
+  <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/gifs/pong.gif" alt="examples/start_here/pong.py mid-rally: a model trained in the app turns a synthetic wrist's EMG into the paddle command" width="820">
 </p>
 
 MyoGestic is a compact Python framework that turns a short script into a live
@@ -115,22 +115,22 @@ Each widget is one public function or class with typed arguments, placed on a
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/widgets/recording_controls.png" alt="recording_controls with four gestures and a Record button" width="400"><br>
-      <code>recording_controls</code><br>Pick a gesture and record a take.
+      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/gifs/signal_viewer.gif" alt="signal_viewer scrolling eight channels of recorded EMG as the hand rests, makes a fist and flexes the thumb" width="400"><br>
+      <code>signal_viewer</code><br>Recorded EMG, eight channels on one shared range.
     </td>
     <td align="center" width="50%">
-      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/widgets/pipeline_panel.png" alt="pipeline_panel with Train and Predict" width="400"><br>
-      <code>pipeline_panel</code><br>Train the model, then predict.
+      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/gifs/recording_controls.gif" alt="recording_controls selecting Fist and recording a timed take after a countdown" width="400"><br>
+      <code>recording_controls</code><br>Pick a gesture and record a timed take.
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
-      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/widgets/prediction_label.png" alt="prediction_label showing Fist at 82 percent" width="400"><br>
+      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/gifs/prediction_label.gif" alt="prediction_label moving through five gestures with their probabilities" width="400"><br>
       <code>prediction_label</code><br>The live prediction and each class's probability.
     </td>
     <td align="center" width="50%">
-      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/widgets/VhiMovementPanel.png" alt="VhiMovementPanel with twelve hand movements" width="400"><br>
-      <code>VhiMovementPanel</code><br>Send movements to the Virtual Hand.
+      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/gifs/FollowRun.gif" alt="FollowRun running repetitions of a fist with a progress bar" width="400"><br>
+      <code>FollowRun</code><br>Repetitions that follow the control hand.
     </td>
   </tr>
 </table>

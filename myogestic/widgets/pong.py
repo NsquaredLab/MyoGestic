@@ -767,7 +767,9 @@ class PongTask:
         gap = ui_px(8) if meter_w else 0.0
         size = imgui.ImVec2(max(avail.x - meter_w - gap, ui_px(1)), height)
         # An invisible button rather than a `dummy`: both reserve the rect, but `dummy`
-        # registers with id 0 and cannot answer `is_item_hovered`.
+        # registers with id 0 and cannot answer `is_item_hovered`. It allows overlap, or
+        # as the first item under the mouse it takes the click from Serve drawn on top.
+        imgui.set_next_item_allow_overlap()
         imgui.invisible_button("##pong_court", imgui.ImVec2(avail.x, height))
 
         def at(x: float, y: float) -> imgui.ImVec2:
