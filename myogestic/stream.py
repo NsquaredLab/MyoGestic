@@ -429,6 +429,11 @@ class Stream:
                 self.info = info
                 # Re-init buffers for a potentially different channel count/fs.
                 self._allocate_buffers()
+                # Connected now, not at the first chunk. A recording started right after
+                # this call includes the stream, and a take that checks its streams each
+                # frame would otherwise read the gap before that chunk as a lost stream
+                # and stop itself.
+                self.status = "connected"
             return True
         finally:
             self._connect_lock.release()

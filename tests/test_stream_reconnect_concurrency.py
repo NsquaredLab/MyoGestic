@@ -96,6 +96,20 @@ def test_a_completed_reconnect_still_publishes_its_geometry():
     assert stream._connected is True
 
 
+def test_a_reconnected_stream_is_connected_before_its_first_chunk():
+    """Pong's cursor block reconnects its stream and records at once.
+
+    `RecordingControls` checks each recorded stream's status every frame; a stream left
+    ``"disconnected"`` until its first chunk ended that take after one frame.
+    """
+    source = _BlockingSource()
+    source.release.set()
+    stream = Stream("target", source=source, window_ms=100)
+
+    assert stream.reconnect() is True
+    assert stream.status == "connected"
+
+
 def test_a_refused_attempt_leaves_the_running_connection_alone():
     source = _BlockingSource()
     source.release.set()
