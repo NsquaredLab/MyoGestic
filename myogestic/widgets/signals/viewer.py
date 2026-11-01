@@ -90,6 +90,12 @@ class SignalViewer:
 
         Left on by default: an app that is just `App` + `Stream` + a viewer has
         no other way to attach, and nothing attaches on its own.
+    stream_type
+        The LSL type (``"EMG"``, ``"EEG"`` …) of the other streams the empty state
+        offers next to the app's own. ``None`` (default) takes the type the scan
+        reports for the app's stream, and offers every stream when it cannot tell.
+        Set it when the network carries many outlets of other kinds — a Virtual
+        Hand link publishes one per control — so stepping does not wade through them.
     show_controls
         Whether the panel's chrome — toolbar, popups and footer —
         starts expanded (default ``True``). The header's ``⌃⌃`` button toggles it
@@ -147,6 +153,7 @@ class SignalViewer:
         channel_height: float = 0.0,
         show_diagnostics: bool = False,
         show_connect: bool = True,
+        stream_type: str | None = None,
         selectable: bool = False,
         exclude: Iterable[str] = (),
         scale_mode: str = "auto",
@@ -170,6 +177,7 @@ class SignalViewer:
         self._show_controls = show_controls
         self._show_title = show_title
         self._show_connect = show_connect
+        self._stream_type = stream_type
         self._size = size
         self._n_pixels = n_pixels
         self._channel_height = channel_height
@@ -231,7 +239,12 @@ class SignalViewer:
             imgui.text(f"{active_stream}: not found")
             return
         if not connected:
-            _disconnected_ui(active_stream, stream, show_connect=self._show_connect)
+            _disconnected_ui(
+                active_stream,
+                stream,
+                show_connect=self._show_connect,
+                stream_type=self._stream_type,
+            )
             return
         if not scope:
             imgui.text_disabled(f"{active_stream}: no channels in scope (stream has {n_channels})")

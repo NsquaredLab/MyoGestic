@@ -86,6 +86,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The signal viewers' empty state is a carousel with one Connect. The stream on its card
+  is the one Connect attaches, and the button says so (**Connect TestEMG32**), starting
+  on the app's own stream; ‹ › step through the other streams of its kind, and stepping
+  past the last one is what looks for more (nothing scans on its own). This replaces a
+  Connect beside an unexplained Scan whose results came with a second Connect that did
+  something else. A failure reads **Couldn't connect** over the error's first sentence,
+  the full text on hover. `SignalViewer(stream_type=…)` and
+  `RawSignalViewer(stream_type=…)` choose the LSL type offered; by default it is the type
+  of the app's own stream, and with no type known, MyoGestic's control outlets and
+  marker streams are left out. `LSLSource.discover()` results gain a ``type`` key, and
+  their ``info`` reads ``32 ch · 2048 Hz · EMG``.
+- Stop sits where Record was: in `RecordingControls` and `RecordButton` the whole
+  recording row is the Stop button (and, during a warm-up, Cancel), in Record's exact
+  rectangle, instead of a small default-grey button at its right edge. A timed take's row
+  leads with the whole seconds left, in the same face as the warm-up count (no longer the
+  serif display face); the saved row reads like the others — **Saved · gesture** over the
+  time in mono, early stops first. The lock caption moved below the row so starting a take
+  no longer pushes Stop down. Record and the Stop label use `RECORD_FILL`,
+  simpetru-figstyle's bright red #d80032 (white text 5.3:1; `DANGER` gave 3.4:1). On the
+  light theme the countdown takes figstyle's darker shades, red #d80032 (3.9:1) and orange
+  #d06708 (2.9:1), where the status tones read 2.5:1 and 1.6:1 on their own tints. New
+  `action_row` and `solid_fill` helpers in `widgets/common.py`.
 - `RecordingControls` and `RecordButton` offer Record while predicting and Stop under any
   state with a take open; `RecordButton` freezes the session at the Stop click, so rows
   produced over the naming dialog are not part of the take. The ML Predict button starts

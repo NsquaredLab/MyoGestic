@@ -9,14 +9,15 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic._theme import display_font
 from myogestic.core import RECORDABLE_STATES
 from myogestic.widgets.common import (
+    COUNT_WARMUP_ON_LIGHT,
     DANGER,
-    ON_PRIMARY_TEXT,
     PALETTE,
+    RECORD_FILL,
     SUCCESS,
     WARNING,
+    action_row,
     mono_text,
     muted,
     panel_header,
@@ -28,12 +29,12 @@ from myogestic.widgets.common import (
     ui_px,
 )
 
-from .recording import _record_button
+from .recording import _record_button, _stop_pill, _stop_pill_width
 
 if TYPE_CHECKING:
     from myogestic.core import RECORDABLE_STATES, Context
 
-    from .recording import RecordingControls
+    from .recording import RecordingControls, TakeStatus
 
 
 def _clock(seconds: float) -> str:
@@ -172,15 +173,116 @@ def _gesture_tiles(ctx: Context, controls: RecordingControls) -> None:
             if selected:
                 pop_selected()
             imgui.end_disabled()
-    if locked:
-        caption = (
-            "Cancel the warm-up to change gestures."
-            if controls.take.phase == "warmup"
-            else "Stop the recording to change gestures."
+
+
+def _lock_caption(controls: RecordingControls) -> None:
+    """Say how to unlock the gestures, under the action that does it.
+
+    Below the action row rather than the tiles: a caption appearing above the row would
+    push Stop down from where Record was at the start of every take.
+    """
+    if not (controls.take.timed and controls.take.phase in ("warmup", "recording")):
+        return
+    caption = (
+        "Cancel the warm-up to change gestures."
+        if controls.take.phase == "warmup"
+        else "Stop the recording to change gestures."
+    )
+    imgui.push_text_wrap_pos(0.0)
+    imgui.text_colored(muted(), caption)
+    imgui.pop_text_wrap_pos()
+
+
+def _count_color(warmup: bool) -> imgui.ImVec4:
+    """The countdown digit's colour, readable on its own row tint in either theme.
+
+    The status tones are made for a dark surface: on the light theme's pale tints a
+    `DANGER` digit is 2.5:1 and a `WARNING` one 1.6:1, so it takes simpetru-figstyle's
+    darker shades there (3.9:1 and 2.9:1). The theme is read from its canvas, the way
+    `muted` reads the text colour.
+    """
+    canvas = imgui.get_style().color_(imgui.Col_.window_bg)
+    if canvas.x + canvas.y + canvas.z < 1.5:
+        return WARNING if warmup else DANGER
+    return COUNT_WARMUP_ON_LIGHT if warmup else RECORD_FILL
+
+
+def _take_detail(take: TakeStatus) -> str:
+    """The take's numbers, for the row's mono line."""
+    if take.phase == "warmup":
+        return "nothing recorded yet"
+    if take.phase == "saved":
+        if take.length_s is not None and take.elapsed_s < take.length_s:
+            # Qualifier first, so a narrow step truncates the numbers, not the news.
+            return f"stopped early · {_clock(take.elapsed_s)} of {_clock(take.length_s)}"
+        return f"{_clock(take.elapsed_s)} recorded"
+    if take.timed:
+        return f"{_clock(take.elapsed_s)} / {_clock(take.length_s)}"
+    return f"{_clock(take.elapsed_s)} elapsed"
+
+
+def _take_row(take: TakeStatus, inner: float, height: float, action: str) -> None:
+    """One take state: glyph, title and mono numbers, and the action's name on the right.
+
+    The glyph is the count you guide by: whole seconds to go while a warm-up or a timed
+    take counts down, a dot for an open-ended take, a check once it is saved.
+    """
+    warmup, saved = take.phase == "warmup", take.phase == "saved"
+    left, top = imgui.get_cursor_pos()
+    right = left + inner
+    action_w = (
+        0.0
+        if not action
+        else imgui.calc_text_size(action).x
+        if warmup
+        else _stop_pill_width(action)
+    )
+    text_right = right - action_w - ui_px(8)
+    middle = top + (height - ui_px(8)) / 2  # the row's vertical centre
+    # One glyph column for every state, so the titles line up as a take moves on.
+    imgui.push_font(None, imgui.get_style().font_size_base * 2.2)
+    column = imgui.calc_text_size("0").x
+    if warmup or (take.phase == "recording" and take.timed):
+        left_s = take.warmup_left_s if warmup else take.length_s - take.elapsed_s
+        digit = str(max(0, math.ceil(left_s)))
+        imgui.set_cursor_pos(
+            imgui.ImVec2(
+                left + (column - imgui.calc_text_size(digit).x) / 2,
+                middle - imgui.get_text_line_height() / 2,
+            )
         )
-        imgui.push_text_wrap_pos(0.0)
-        imgui.text_colored(muted(), caption)
-        imgui.pop_text_wrap_pos()
+        imgui.text_colored(_count_color(warmup), digit)
+    imgui.pop_font()
+    if not (warmup or (take.phase == "recording" and take.timed)):
+        glyph = fa.ICON_FA_CIRCLE_CHECK if saved else fa.ICON_FA_CIRCLE
+        imgui.set_cursor_pos(
+            imgui.ImVec2(
+                left + (column - imgui.calc_text_size(glyph).x) / 2,
+                middle - imgui.get_text_line_height() / 2,
+            )
+        )
+        imgui.text_colored(SUCCESS if saved else DANGER, glyph)
+    text_left = left + column + ui_px(10)
+    lines = 2 * imgui.get_text_line_height() + ui_px(2)
+    imgui.set_cursor_pos(imgui.ImVec2(text_left, middle - lines / 2))
+    imgui.begin_group()
+    title = "Saved" if saved else "Get ready" if warmup else "Recording"
+    if take.gesture:
+        title += f" · {take.gesture}"
+    imgui.text_unformatted(_fit(title, text_right - text_left))
+    imgui.set_item_tooltip(title)
+    imgui.set_cursor_pos(
+        imgui.ImVec2(text_left, middle - lines / 2 + imgui.get_text_line_height() + ui_px(2))
+    )
+    mono_text(_fit(_take_detail(take), text_right - text_left), muted())
+    imgui.end_group()
+    if warmup:
+        imgui.set_cursor_pos(
+            imgui.ImVec2(right - action_w, middle - imgui.get_text_line_height() / 2)
+        )
+        imgui.text_unformatted(action)
+    elif action:
+        _stop_pill(action, right, top, height)
 
 
 def _action(ctx: Context, controls: RecordingControls) -> None:
@@ -193,20 +295,14 @@ def _action(ctx: Context, controls: RecordingControls) -> None:
             label += f" · {controls._take_lengths[controls._length_index]:g} s"
         needs_gesture = controls._timed and bool(controls._class_names) and gesture is None
         imgui.begin_disabled(ctx.recording or ctx.state not in RECORDABLE_STATES or needs_gesture)
-        for slot, color in (
-            (imgui.Col_.button, DANGER),
-            (imgui.Col_.button_hovered, DANGER),
-            (imgui.Col_.button_active, DANGER),
-            (imgui.Col_.text, ON_PRIMARY_TEXT),
-        ):
-            imgui.push_style_color(slot, color)
         try:
             if _record_button(
-                ctx, f"{fa.ICON_FA_CIRCLE}  {label}##rec_btn", imgui.ImVec2(-1, height)
+                ctx,
+                f"{fa.ICON_FA_CIRCLE}  {label}##rec_btn",
+                imgui.ImVec2(imgui.get_content_region_avail().x, height),
             ):
                 controls._start(ctx)
         finally:
-            imgui.pop_style_color(4)
             imgui.end_disabled()
         if needs_gesture and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
             imgui.set_tooltip("Choose a gesture before starting a timed take.")
@@ -217,62 +313,18 @@ def _action(ctx: Context, controls: RecordingControls) -> None:
     tone = SUCCESS if saved else WARNING if warmup else DANGER
     origin = imgui.get_cursor_screen_pos()
     width = imgui.get_content_region_avail().x
-    with tinted_row(tone, height=height) as inner:
-        left, top = imgui.get_cursor_pos()
-        right = left + inner
-        action = "Cancel" if warmup else "Stop early" if take.timed else "Stop"
-        action_w = (
-            0 if saved else imgui.calc_text_size(action).x + 2 * imgui.get_style().frame_padding.x
-        )
-        text_right = right - action_w - ui_px(8)
-        if saved:
-            imgui.set_cursor_pos_y(top + (height - ui_px(8) - imgui.get_text_line_height()) / 2)
-            # Keep the early-stop qualifier visible even in the 400 px step.
-            suffix = " (stopped early)"
-            text = take.saved_text
-            if text.endswith(suffix):
-                text = (
-                    _fit(text[: -len(suffix)], inner - imgui.calc_text_size(suffix).x - ui_px(20))
-                    + suffix
-                )
-            imgui.text_colored(SUCCESS, _fit(f"{fa.ICON_FA_CHECK}  {text}", inner))
-            imgui.set_item_tooltip(take.saved_text)
-        else:
-            if warmup:
-                imgui.push_font(display_font(), ui_px(32))
-                imgui.text_colored(WARNING, str(math.ceil(take.warmup_left_s)))
-                imgui.pop_font()
-            else:
-                imgui.text_colored(DANGER, fa.ICON_FA_CIRCLE)
-            imgui.same_line()
-            text_left = imgui.get_cursor_pos_x()
-            imgui.set_cursor_pos_y(top)
-            imgui.begin_group()
-            title = "Get ready" if warmup else "Recording"
-            if take.gesture:
-                title += f" · {take.gesture}"
-            imgui.text_unformatted(_fit(title, text_right - text_left))
-            imgui.set_item_tooltip(title)
-            imgui.set_cursor_pos_y(top + imgui.get_text_line_height() + ui_px(2))
-            detail = (
-                "nothing recorded yet"
-                if warmup
-                else (
-                    f"{_clock(take.elapsed_s)} / {_clock(take.length_s)}"
-                    if take.timed
-                    else f"{_clock(take.elapsed_s)} elapsed"
-                )
+    if saved:
+        with tinted_row(tone, height=height) as inner:
+            _take_row(take, inner, height, "")
+    else:
+        # Where Record was: the whole row is the action, so the second click lands
+        # where the first one did.
+        with action_row("##rec_btn", tone, height=height) as (clicked, inner):
+            _take_row(
+                take, inner, height, "Cancel" if warmup else "Stop early" if take.timed else "Stop"
             )
-            mono_text(_fit(detail, text_right - text_left), muted())
-            imgui.end_group()
-            imgui.same_line()
-            imgui.set_cursor_pos(
-                imgui.ImVec2(
-                    right - action_w, top + (height - ui_px(8) - imgui.get_frame_height()) / 2
-                )
-            )
-            if imgui.button(f"{action}##rec_btn"):
-                controls._machine.stop()
+        if clicked:
+            controls._machine.stop()
     if warmup or (take.phase == "recording" and take.timed):
         fraction = (
             1 - take.warmup_left_s / controls._warmups[controls._warmup_index]
@@ -292,3 +344,4 @@ def _render_recording_controls(ctx: Context, controls: RecordingControls) -> Non
     _gesture_tiles(ctx, controls)
     _timing_choices(controls)
     _action(ctx, controls)
+    _lock_caption(controls)

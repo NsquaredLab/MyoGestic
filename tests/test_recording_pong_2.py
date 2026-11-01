@@ -82,7 +82,7 @@ def test_record_idle_is_red_full_width_and_explains_participant_gate(
 
     imgui_frame(draw)
     record = next(b for b in buttons if "  Record" in b[0])
-    assert record[1] == pytest.approx(tuple(common.DANGER))
+    assert record[1] == pytest.approx(tuple(common.RECORD_FILL))
     assert record[3][0] == pytest.approx(bounds[0][0])
     assert record[3][2] == pytest.approx(bounds[0][1], abs=1)
     assert record[3][3] - record[3][1] >= common.ui_px(52)
@@ -109,9 +109,11 @@ def test_recording_row_has_elapsed_clock_and_stop_inside_narrow_cell(
         imgui.end_child()
 
     imgui_frame(draw)
-    assert rows == [common.DANGER]
     assert any(text.startswith("0:42.7") for text in texts)
-    stop = next(b for b in buttons if "Stop" in b[0])
+    # The red-tinted, red-bordered recording row is itself the Stop button.
+    stop = next(b for b in buttons if b[0] == "##record_stop")
+    assert stop[1] == pytest.approx(tuple(common._tinted(common.DANGER)))
+    assert stop[2] == pytest.approx(common.ui_px(2))
     assert stop[3][2] <= bounds[0]
 
 
