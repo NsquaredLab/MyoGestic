@@ -146,6 +146,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Virtual Hand lookup finds an existing per-user installation from another checkout and reports when the hand is not installed.
 - Headers, recording timing fields, signal toolbars and session guidance fit narrow cards and larger UI scales.
 - The macOS Dock icon uses Apple's tile size and transparent padding.
+- A stream counts as connected as soon as `Stream.reconnect` succeeds, not at its first chunk. Pong's first **Follow the cursor** block reconnects its cursor stream and records at once; `RecordingControls` read the wait for that chunk as a lost stream and saved an empty take.
+- Clicking **Serve** in `PongTask` serves; the court underneath took the click, so only Space did.
 
 ## [2.6.2] - 2026-08-10
 
