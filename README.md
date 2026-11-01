@@ -1,45 +1,65 @@
-<img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/myogestic_logo.png" height="200">
+<p align="center">
+  <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/myogestic/assets/myogestic_logo.png" alt="MyoGestic" width="300">
+</p>
 
-# MyoGestic
+<h3 align="center">Real-time biosignal experiment GUI builder</h3>
 
-[![Python](https://img.shields.io/badge/python-%3E=3.12-blue)](https://www.python.org/downloads/)
-[![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Docs](https://img.shields.io/badge/docs-nsquaredlab.github.io%2FMyoGestic-blue)](https://nsquaredlab.github.io/MyoGestic/)
+<p align="center">
+  <a href="https://pypi.org/project/myogestic/"><img src="https://img.shields.io/pypi/v/myogestic?color=3a74b8" alt="PyPI"></a>
+  <a href="https://pypi.org/project/myogestic/"><img src="https://img.shields.io/pypi/pyversions/myogestic?color=3a74b8" alt="Python versions"></a>
+  <a href="https://github.com/NsquaredLab/MyoGestic/actions/workflows/tests.yml"><img src="https://github.com/NsquaredLab/MyoGestic/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="https://nsquaredlab.github.io/MyoGestic/"><img src="https://img.shields.io/badge/docs-online-8a5cc7" alt="Docs"></a>
+  <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/license-GPL--3.0-8a5cc7" alt="License: GPL-3.0"></a>
+  <a href="https://doi.org/10.1126/sciadv.ads9150"><img src="https://img.shields.io/badge/Science%20Advances-2025-b05e0e" alt="Science Advances 2025"></a>
+</p>
 
-Real-time biosignal experiment GUI builder. A compact Python framework that
-turns a short script into a live experiment - signal viewers, recording,
-training, prediction - without classes, registries, or config files.
+<p align="center">
+  <a href="https://nsquaredlab.github.io/MyoGestic/"><b>Documentation</b></a> ·
+  <a href="https://nsquaredlab.github.io/MyoGestic/playground/"><b>Playground</b></a> ·
+  <a href="https://www.science.org/doi/abs/10.1126/sciadv.ads9150"><b>Paper</b></a> ·
+  <a href="https://github.com/NsquaredLab/MyoGestic-VHI"><b>Virtual Hand</b></a> ·
+  <a href="https://github.com/NsquaredLab/MyoGestic/blob/main/CHANGELOG.md"><b>Changelog</b></a>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/widgets/signal_viewer.png" alt="The signal viewer streaming four EMG channels" width="820">
+</p>
+
+MyoGestic is a compact Python framework that turns a short script into a live
+experiment with signal viewers, recording, training and prediction, without
+classes, registries or config files.
 
 Built at the [n-squared lab](https://www.nsquared.tf.fau.de/) at
 Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU) for the myocontrol
-research community. v2 is a ground-up rewrite of [MyoGestic v1](https://github.com/NsquaredLab/MyoGestic/tree/v1) focused on small,
-composable API surfaces and live extensibility.
-
-**Provides**: live LSL ingest, on-disk recording (Zarr → `.session.zip`),
-ML pipeline lifecycle (train/predict on their own threads), Dear ImGui
-widgets, output filters, gRPC + LSL dual-plane integration with the
-[Virtual Hand Interface](https://github.com/NsquaredLab/MyoGestic-VHI).
-
-**Does not provide**: DSP, ML models, feature extraction. You bring scipy,
-MyoVerse, CatBoost, PyTorch - whatever fits.
+research community. Version 2 is a ground-up rewrite of
+[MyoGestic v1](https://github.com/NsquaredLab/MyoGestic/tree/v1) focused on
+small, composable API surfaces and live extensibility.
 
 ## Try it in your browser
 
 A live MyoGestic app runs entirely in your browser via Pyodide at
-**<https://nsquaredlab.github.io/MyoGestic/playground/>**. Synthetic EMG,
-in-memory recording, sklearn LDA training, live prediction. No install.
+**[nsquaredlab.github.io/MyoGestic/playground](https://nsquaredlab.github.io/MyoGestic/playground/)**.
+It streams synthetic electromyography (EMG), records in memory, trains a
+scikit-learn linear discriminant classifier and predicts live. No install.
 
 ## Install
 
 ```bash
-uv sync                      # core dependencies only
-uv sync --extra examples     # + catboost, myoverse, torch, scikit-learn (to run the demos)
-uv sync --extra dev          # + pytest, ruff, the examples extras above
+pip install myogestic
 ```
 
-Optional extras: `[brainflow]` `[bdi]` `[serial]` `[grpc]` `[zarrs]` `[docs]`.
-`[grpc]` pulls in `grpcio` + `grpcio-tools` + `protobuf` for the VHI control
-plane.
+Extras add optional parts: `examples` (CatBoost, MyoVerse, PyTorch and
+scikit-learn for the demos), `grpc` (the Virtual Hand control plane),
+`brainflow`, `bdi`, `serial`, `keyboard`, `zarrs`, `docs` and `dev`. Install
+one with `pip install "myogestic[grpc]"`.
+
+To run the examples, clone the repository and sync it with uv:
+
+```bash
+git clone https://github.com/NsquaredLab/MyoGestic.git
+cd MyoGestic
+uv sync --extra examples --extra grpc
+```
 
 ## Quick start
 
@@ -66,59 +86,92 @@ app.run()
 That's the whole loop. Add a `Pipeline`, decorate `extract` / `train` /
 `predict`, and you have a closed-loop experiment.
 
-For a whole protocol rather than a loop to build on,
+## Run a session
+
 [`examples/start_here/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/start_here)
-holds applications you can take to a session unmodified — they pick their
+holds complete protocols you can take to a session unmodified. Each picks its
 hardware from a dropdown, so the same file runs against any supported amplifier
-or against the synthetic one when you have none:
+or against the synthetic one when you have none.
 
-- `force_ramps.py` - isometric force ramps: track a trapezoid at a set %MVC,
-  with the EMG, the force and the target all recorded together
-- `myocontrol.py` - record cued Rest/Fist trials, train a classifier or a
-  regressor, and drive the Virtual Hand from the prediction
-- `pong.py` - chase a cursor with the paddle, train one signed `[-1, +1]`
-  command, and play Pong with your wrist; the Virtual Hand only mirrors it
+| Script | Protocol |
+| --- | --- |
+| `force_ramps.py` | Isometric force ramps. Track a trapezoid at a set percentage of maximum voluntary contraction, with the EMG, the force and the target recorded together. |
+| `myocontrol.py` | Record cued Rest/Fist trials, train a classifier or a regressor, and drive the Virtual Hand from the prediction. |
+| `pong.py` | Chase a cursor with the paddle, train one signed [−1, +1] command, and play Pong with your wrist. |
 
-Runnable end-to-end demos and copyable templates live in
-[`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic):
+```bash
+uv run --extra examples --extra grpc python examples/start_here/myocontrol.py
+```
 
-- `my_session_app.py` - copy a session app; change classes, features, train and predict
-- `emg_classification.py` - the reference first read (CatBoost binary), with an optional
-  Virtual Hand driven by continuous LSL pose and discrete gRPC movements
-- `emg_regression.py` - continuous 5-DoF regression
-- `emg_regression_raulnet.py` - same flow with a PyTorch Lightning CNN
-- `emg_32ch_multi_model.py` - selectable classifier + Save/Load
-  Every card can pop out into its own window.
+[WINDOWS.md](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/start_here/WINDOWS.md)
+walks from an empty Windows machine to a recorded force-ramps session, with no
+programming assumed.
 
-For electrode-array comparisons, `examples/synthetic/electrode_grids.py` splits a
-256-channel synthetic stream into four tiled viewers with a shared manual range.
+## Widgets
+
+Each widget is one public function or class with typed arguments, placed on a
+`Px`/`Fr` grid. Every card can pop out into its own window.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/widgets/recording_controls.png" alt="recording_controls with four gestures and a Record button" width="400"><br>
+      <code>recording_controls</code><br>Pick a gesture and record a take.
+    </td>
+    <td align="center" width="50%">
+      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/widgets/pipeline_panel.png" alt="pipeline_panel with Train and Predict" width="400"><br>
+      <code>pipeline_panel</code><br>Train the model, then predict.
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/widgets/prediction_label.png" alt="prediction_label showing Fist at 82 percent" width="400"><br>
+      <code>prediction_label</code><br>The live prediction and each class's probability.
+    </td>
+    <td align="center" width="50%">
+      <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/widgets/VhiMovementPanel.png" alt="VhiMovementPanel with twelve hand movements" width="400"><br>
+      <code>VhiMovementPanel</code><br>Send movements to the Virtual Hand.
+    </td>
+  </tr>
+</table>
+
+See every widget in the [widget gallery](https://nsquaredlab.github.io/MyoGestic/widget-gallery/).
+
+## What MyoGestic provides
+
+**MyoGestic provides** live Lab Streaming Layer (LSL) ingest, on-disk recording
+(Zarr → `.session.zip`), the machine-learning pipeline lifecycle with training
+and prediction on their own threads, Dear ImGui widgets, output filters, and
+gRPC plus LSL integration with the
+[Virtual Hand Interface](https://github.com/NsquaredLab/MyoGestic-VHI).
+
+**You bring** the signal processing, features and models, with scipy,
+MyoVerse, CatBoost, PyTorch or whatever fits.
+
+## More examples
+
+[`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic)
+holds runnable demos and templates to copy.
+
+| Script | Shows |
+| --- | --- |
+| `my_session_app.py` | A session app to copy. Change the classes, features, training and prediction. |
+| `emg_classification.py` | The reference first read (CatBoost, binary), with an optional Virtual Hand. |
+| `emg_regression.py` | Continuous regression of five degrees of freedom. |
+| `emg_regression_raulnet.py` | The same flow with a PyTorch Lightning convolutional network. |
+| `emg_32ch_multi_model.py` | A selectable classifier with Save and Load. |
+| `electrode_grids.py` | A 256-channel stream split into four tiled viewers with a shared range. |
 
 ## Documentation
 
-The full docs live as a [ProperDocs](https://properdocs.org/) site under
-[`docs/`](https://github.com/NsquaredLab/MyoGestic/tree/main/docs) - tutorials, how-to guides, concept explanations, an
-auto-generated API reference, and the in-browser playground.
-
-Build and serve locally:
-
-```bash
-uv sync --extra docs --extra grpc --extra serial
-uv run properdocs serve
-```
-
-Then open `http://127.0.0.1:8000/MyoGestic/`.
-
-Quick links into the source:
-
-- **[Getting Started](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/getting-started.md)** - install + run the synthetic-EMG demo.
-- **[Tutorials](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/tutorials)** - `emg-classification`, `emg-regression-with-vhi`.
-- **[How-to guides](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/how-to)** - recipes (custom source, custom widget, custom model, integrate the Virtual Hand, install VHI, the recipe feature set, ...).
-- **[Concepts](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/concepts)** - architecture, streams, pipeline, threading, recording, the `Px`/`Fr` grid, the `EdgeTrigger` pattern.
-- **[API reference](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/api)** - auto-generated from docstrings.
-- **[API cheatsheet](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/reference/api-cheatsheet.md)** - the most-used public symbols on one page.
-- **[Playground](https://nsquaredlab.github.io/MyoGestic/playground/)** - the in-browser demo (no install).
-
-The docs are deployed to GitHub Pages via [`.github/workflows/docs.yml`](https://github.com/NsquaredLab/MyoGestic/blob/main/.github/workflows/docs.yml) on every push to `main`.
+| Page | Covers |
+| --- | --- |
+| [Getting started](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/getting-started.md) | Install and run the synthetic-EMG demo. |
+| [Tutorials](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/tutorials) | EMG classification, and EMG regression with the Virtual Hand. |
+| [How-to guides](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/how-to) | A custom source, widget or model, the Virtual Hand, and the recipe feature set. |
+| [Concepts](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/concepts) | Architecture, streams, pipeline, threading, recording, the `Px`/`Fr` grid and the `EdgeTrigger` pattern. |
+| [API reference](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/api) | Generated from the docstrings. |
+| [API cheatsheet](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/reference/api-cheatsheet.md) | The most-used public symbols on one page. |
 
 ## Development
 
@@ -128,14 +181,27 @@ uv run pytest -q
 uv run ruff check .
 ```
 
-Some integration tests need a live LSL outlet (port-bind sensitive in
-sandboxed CI). A handful of test files lag recent refactors and are
-scheduled for cleanup.
+Some integration tests need a live LSL outlet. To build and serve the docs
+locally:
+
+```bash
+uv sync --extra docs --extra grpc --extra serial
+uv run properdocs serve
+```
+
+Then open `http://127.0.0.1:8000/MyoGestic/`.
 
 ## How to cite
 
 If you use MyoGestic in your research, please cite our
 [Science Advances paper](https://www.science.org/doi/abs/10.1126/sciadv.ads9150):
+
+Sîmpetru, R. C. et al. MyoGestic: EMG interfacing framework for decoding
+multiple spared motor dimensions in individuals with neural lesions.
+*Science Advances* 11, eads9150 (2025).
+
+<details>
+<summary>BibTeX</summary>
 
 ```bibtex
 @article{Simpetru2025,
@@ -156,9 +222,16 @@ If you use MyoGestic in your research, please cite our
 }
 ```
 
+</details>
+
 ## License
 
 MyoGestic is licensed under the
 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 (GPL-3.0), matching the v1 release. Derivative work must remain open under
 the same license.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/myogestic/assets/app_settings/icon.png" alt="" width="48"><br>
+  <sub>n-squared lab · Friedrich-Alexander-Universität Erlangen-Nürnberg</sub>
+</p>
