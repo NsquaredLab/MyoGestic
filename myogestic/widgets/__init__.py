@@ -1,7 +1,14 @@
 """Reusable ImGui widgets for building MyoGestic ``@app.ui`` functions."""
 
-from myogestic.widgets.common import panel_header, primary_button, status_pill
+from myogestic.widgets.common import (
+    CarouselItem,
+    carousel,
+    panel_header,
+    primary_button,
+    status_pill,
+)
 from myogestic.widgets.control_map_editor import ControlMapEditor
+from myogestic.widgets.follow import FollowRun
 from myogestic.widgets.panels import (
     BUILTIN_FILTERS,
     AppLogo,
@@ -62,9 +69,11 @@ __all__ = [
     "SYNTHETIC_DEVICE",
     "AppHeader",
     "AppLogo",
+    "CarouselItem",
     "DeviceSpec",
     "DevicePicker",
     "FeatureSelector",
+    "FollowRun",
     "FilterParam",
     "FilterProcessor",
     "FilterSpec",
@@ -99,6 +108,7 @@ __all__ = [
     "VhiMovementPanel",
     "VhiStateCache",
     "VhiStateSnapshot",
+    "carousel",
     "panel_header",
     "popout_panel",
     "primary_button",

@@ -120,6 +120,7 @@ With a take open, two producers write event streams for you:
 | `prediction.<key>` | `Pipeline`, what `@pipeline.predict` returned | predict tick | same |
 | `pipeline.tick` | `Pipeline`, the LSL `local_clock()` at the decision | predict tick | same — so `tick − timestamp` is the latency |
 | `controls` | `ControlBus`, the continuous frame it delivered, DOF names as channels | `push` | delivery clock |
+| `controls.<name>` | A second bus with `record_as="controls.<name>"`; its map is saved in `meta.control_spaces` | `push` | delivery clock |
 
 A dict becomes one stream per key. A value is recorded when it is a bool, a number, or a 1-D array; text, `None`, nested dicts and anything 2-D or wider are skipped — once, with a log line, and listed under `extras.pipeline.skipped` in `meta.json`. A raw window returned by `extract` is the recorded stream already; a CNN history is rebuilt from consecutive frames.
 

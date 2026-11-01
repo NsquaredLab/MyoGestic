@@ -139,9 +139,12 @@ class ControlBus:
         it. Pass ``ctx.log`` to surface these in the app.
     ctx
         Optional `myogestic.Context`. Given one, every delivered continuous frame is
-        appended to the open recording as the ``controls`` event stream — DOF names as
+        appended to the open recording as the ``record_as`` event stream — DOF names as
         channels, in wire order, stamped with the delivery clock — while
         ``ctx.recording`` is set. `connect_controls` passes its ``ctx`` through.
+    record_as
+        Recording stream name; defaults to ``"controls"``. Give each independently
+        driven link its own name, such as ``"controls.operator"``.
 
     Notes
     -----
@@ -168,6 +171,7 @@ class ControlBus:
         "_reported",
         "_on_warn",
         "_ctx",
+        "_record_as",
     )
 
     def __init__(
@@ -181,6 +185,7 @@ class ControlBus:
         hysteresis: float | None = None,
         on_warn: Callable[[str], None] | None = None,
         ctx: Any = None,
+        record_as: str = "controls",
     ) -> None:
         if hz <= 0 or not math.isfinite(hz):
             raise ValueError(f"hz must be > 0 (got {hz})")
@@ -196,6 +201,7 @@ class ControlBus:
         self._hysteresis = hysteresis
         self._on_warn = on_warn
         self._ctx = ctx
+        self._record_as = record_as
         self._reported: set[str] = set()
 
         cont = controls.continuous
@@ -334,14 +340,14 @@ class ControlBus:
             from mne_lsl.lsl import local_clock
 
             ctx.session.append_event(
-                "controls",
+                self._record_as,
                 encode(self._controls, values),
                 local_clock(),
                 channel_names=self._names,
                 fs=self._hz,
             )
         except Exception as exc:  # noqa: BLE001 - recording must never affect delivery
-            self._warn_once("record", f"controls not recorded: {exc!r}")
+            self._warn_once("record", f"{self._record_as} not recorded: {exc!r}")
 
     def select(self, name: str, state: str) -> bool:
         """Command a discrete DOF from the UI, bypassing the debounce.
@@ -392,8 +398,10 @@ def connect_controls(
     targets: Sequence[Any],
     *,
     ctx: Any = None,
+    record_as: str = "controls",
     hz: float = 32.0,
     smoothing: Any = None,
+    on_warn: Callable[[str], None] | None = None,
 ) -> ControlBus | None:
     """Resolve a map against what `targets` export, and build the bus. `None` if they cannot say yet.
 
@@ -419,10 +427,17 @@ def connect_controls(
         useful when another one is unavailable.
     ctx
         The app's `~myogestic.Context`. Given one, the map is recorded as
-        ``ctx.control_space`` so a recording carries the mapping it was made under, and
-        the outcome is logged.
+        ``ctx.control_space`` for the default name, or ``ctx.control_spaces[record_as]``
+        for a named stream, and the outcome is logged. A different map already using
+        that name raises `ValueError`; rebinding the same map is allowed.
+    record_as
+        Recording stream name; defaults to ``"controls"``. Use a distinct name such
+        as ``"controls.operator"`` for a second link on the same context.
     hz, smoothing
         Passed to `ControlBus`.
+    on_warn
+        Warning callback, including when ``ctx=None``. Defaults to ``ctx.log``
+        when a context is supplied; overrides it when explicitly provided.
 
     Returns
     -------
@@ -432,6 +447,18 @@ def connect_controls(
     """
     from myogestic._controls_map import resolve
 
+    warn = on_warn if on_warn is not None else (None if ctx is None else ctx.log)
+    if ctx is not None:
+        existing = (
+            getattr(ctx, "control_space", None)
+            if record_as == "controls"
+            else ctx.control_spaces.get(record_as)
+        )
+        if existing is not None and existing is not control_map:
+            raise ValueError(
+                f"two control links record as {record_as!r}; pass record_as=… "
+                "with a distinct stream name for each link"
+            )
     merged: list[Any] = []
     for target in targets:
         fetch = getattr(target, "capabilities", None)
@@ -444,13 +471,13 @@ def connect_controls(
             # the two outcomes a caller can act on are "got a bus" and "did not". The
             # message is the useful half and it says what to do, so it is logged in full
             # rather than reduced to "not reachable".
-            if ctx is not None:
-                ctx.log(f"{type(target).__name__} refused: {exc}")
+            if warn is not None:
+                warn(f"{type(target).__name__} refused: {exc}")
             log.warning("%s refused the handshake: %s", type(target).__name__, exc)
             return None
         if got is None:
-            if ctx is not None:
-                ctx.log(f"{type(target).__name__} not reachable yet — controls stay unresolved")
+            if warn is not None:
+                warn(f"{type(target).__name__} not reachable yet — controls stay unresolved")
             return None
         merged.extend(got)
 
@@ -464,11 +491,15 @@ def connect_controls(
         targets=list(targets),
         smoothing=smoothing,
         hz=hz,
-        on_warn=None if ctx is None else ctx.log,
+        on_warn=warn,
         ctx=ctx,
+        record_as=record_as,
     )
     if ctx is not None:
-        ctx.control_space = control_map
+        if record_as == "controls":
+            ctx.control_space = control_map
+        else:
+            ctx.control_spaces[record_as] = control_map
         ctx.log(f"resolved {len(controls.dofs)} control(s)")
     return bus
 
@@ -484,7 +515,7 @@ class ControlLink:
 
     Parameters
     ----------
-    control_map, targets, ctx, hz, smoothing
+    control_map, targets, ctx, record_as, hz, smoothing, on_warn
         Exactly `connect_controls`'s arguments, kept for every attempt. The targets are
         constructed **once** by the caller and reused: a failed attempt asks each target
         for its capabilities and stops there, so nothing is bound and no target is left
@@ -512,7 +543,16 @@ class ControlLink:
     useful targets may start or fail separately, give each its own map and link.
     """
 
-    __slots__ = ("_bus", "_control_map", "_ctx", "_hz", "_smoothing", "_targets")
+    __slots__ = (
+        "_bus",
+        "_control_map",
+        "_ctx",
+        "_record_as",
+        "_hz",
+        "_smoothing",
+        "_targets",
+        "_on_warn",
+    )
 
     def __init__(
         self,
@@ -520,14 +560,18 @@ class ControlLink:
         targets: Sequence[Any],
         *,
         ctx: Any = None,
+        record_as: str = "controls",
         hz: float = 32.0,
         smoothing: Any = None,
+        on_warn: Callable[[str], None] | None = None,
     ) -> None:
         self._control_map = control_map
         self._targets = list(targets)
         self._ctx = ctx
+        self._record_as = record_as
         self._hz = hz
         self._smoothing = smoothing
+        self._on_warn = on_warn
         self._bus: ControlBus | None = None
 
     @property
@@ -549,8 +593,10 @@ class ControlLink:
                 self._control_map,
                 self._targets,
                 ctx=self._ctx,
+                record_as=self._record_as,
                 hz=self._hz,
                 smoothing=self._smoothing,
+                on_warn=self._on_warn,
             )
         return self._bus
 
@@ -565,7 +611,7 @@ class ControlLink:
 
 
 class ControlLinkConnector:
-    """Resolve a deferred `ControlLink` without blocking UI or prediction frames.
+    """Resolve deferred control links without blocking UI or prediction frames.
 
     A target launched from an application's process panel cannot answer its capability
     request when the application first opens. `ControlLink` deliberately keeps the
@@ -574,8 +620,9 @@ class ControlLinkConnector:
 
     Parameters
     ----------
-    link
-        The `ControlLink` to resolve. It remains the owner of the eventual bus.
+    *links
+        One or more control links to resolve in order. Each owns its eventual bus.
+        A failed attempt keeps already bound links and retries only unbound links.
     retry_s
         Minimum time between background attempts. ``poll(force=True)`` bypasses this
         interval, but never starts a second attempt while one is in flight.
@@ -590,7 +637,7 @@ class ControlLinkConnector:
         "_busy",
         "_last_attempt",
         "_last_error",
-        "_link",
+        "_links",
         "_lock",
         "_retry_s",
         "_status",
@@ -598,10 +645,12 @@ class ControlLinkConnector:
         "_worker",
     )
 
-    def __init__(self, link: ControlLink, *, retry_s: float = 2.0) -> None:
+    def __init__(self, *links: ControlLink, retry_s: float = 2.0) -> None:
+        if not links:
+            raise ValueError("links: pass at least one ControlLink")
         if retry_s < 0 or not math.isfinite(retry_s):
             raise ValueError("retry_s must be finite and non-negative")
-        self._link = link
+        self._links = links
         self._retry_s = float(retry_s)
         self._lock = Lock()
         self._worker: Thread | None = None
@@ -613,8 +662,8 @@ class ControlLinkConnector:
 
     @property
     def connected(self) -> bool:
-        """Whether the link has resolved to a bus."""
-        return self._link.bus is not None
+        """Whether every link has resolved to a bus."""
+        return all(link.bus is not None for link in self._links)
 
     @property
     def busy(self) -> bool:
@@ -654,7 +703,13 @@ class ControlLinkConnector:
 
     def _attempt(self) -> ControlBus | None:
         try:
-            bus = self._link.ensure()
+            for link in self._links:
+                with self._lock:
+                    if self._stopped:
+                        return None
+                if link.bus is None and link.ensure() is None:
+                    break
+            bus = self._links[0].bus if self.connected else None
         except Exception as exc:  # noqa: BLE001 - report background failures as state
             with self._lock:
                 self._last_error = exc
@@ -669,15 +724,16 @@ class ControlLinkConnector:
         return bus
 
     def _run(self) -> None:
-        bus = self._attempt()
+        self._attempt()
         with self._lock:
             self._busy = False
             stopped = self._stopped
             if stopped:
                 self._status = "control connection stopped"
-        if stopped and bus is not None:
+        if stopped:
             # The application may have closed while a target RPC was in flight.
-            self._link.stop()
+            for link in self._links:
+                link.stop()
 
     def poll(self, *, force: bool = False) -> bool:
         """Start one non-blocking connection attempt when it is due.
@@ -711,12 +767,12 @@ class ControlLinkConnector:
         return True
 
     def ensure_now(self) -> ControlBus | None:
-        """Make one synchronous attempt unless a background worker owns it."""
+        """Return the first bus once all links bind, unless another attempt owns them."""
         if self.connected:
-            return self._link.bus
+            return self._links[0].bus
         with self._lock:
             if self._stopped or self._busy:
-                return self._link.bus
+                return None
             self._last_attempt = monotonic()
             self._last_error = None
             self._busy = True
@@ -725,8 +781,9 @@ class ControlLinkConnector:
             bus = self._attempt()
             with self._lock:
                 stopped = self._stopped
-            if stopped and bus is not None:
-                self._link.stop()
+            if stopped:
+                for link in self._links:
+                    link.stop()
                 return None
             return bus
         finally:
@@ -736,11 +793,12 @@ class ControlLinkConnector:
                     self._status = "control connection stopped"
 
     def stop(self, *, timeout_s: float = 4.0) -> None:
-        """Stop retrying, tear down the bus, and briefly join an in-flight request."""
+        """Stop retrying, tear down every link, and briefly join an in-flight request."""
         with self._lock:
             self._stopped = True
             self._status = "control connection stopped"
             worker = self._worker
-        self._link.stop()
+        for link in self._links:
+            link.stop()
         if worker is not None and worker is not current_thread():
             worker.join(timeout=max(0.0, timeout_s))

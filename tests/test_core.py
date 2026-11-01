@@ -354,6 +354,81 @@ def test_cleanup_finalises_an_open_take(tmp_path):
     assert _only_zip(tmp_path).exists()
 
 
+@pytest.mark.parametrize("take_count", [1, 2])
+def test_cleanup_waits_for_takes_stopped_by_a_hook(tmp_path, monkeypatch, take_count):
+    app, stream = _connected_app()
+    release = threading.Event()
+    all_finalizing = threading.Event()
+    cleanup_done = threading.Event()
+    finalizers = []
+
+    def hold_finalization(session):
+        finalizers.append(threading.current_thread())
+        if len(finalizers) == take_count:
+            all_finalizing.set()
+        assert release.wait(5), "test did not release finalization"
+
+    app.finalize_hooks.append(hold_finalization)
+    for _ in range(take_count - 1):
+        app.start_recording(str(tmp_path))
+        app.stop_recording()
+    app.start_recording(str(tmp_path))
+    app.cleanup_hooks.append(lambda app: app.stop_recording())
+    pending_at_stream_stop = []
+    stop_stream = stream.stop
+
+    def stop():
+        pending_at_stream_stop.extend(app.ctx.pending_saves)
+        stop_stream()
+
+    monkeypatch.setattr(stream, "stop", stop)
+
+    def cleanup():
+        try:
+            app._cleanup()
+        finally:
+            cleanup_done.set()
+
+    cleanup_thread = threading.Thread(target=cleanup)
+    cleanup_thread.start()
+    try:
+        assert all_finalizing.wait(5)
+        assert not cleanup_done.wait(0.05), "cleanup returned before finalization"
+    finally:
+        release.set()
+        cleanup_thread.join(5)
+        for thread in finalizers:
+            thread.join(5)
+
+    assert not cleanup_thread.is_alive()
+    assert not app.ctx.recording
+    assert not app.ctx.pending_saves
+    assert pending_at_stream_stop == []
+    archives = list(tmp_path.glob("*.session.zip"))
+    assert len(archives) == take_count
+    for archive in archives:
+        with zipfile.ZipFile(archive) as saved:
+            assert json.loads(saved.read("meta.json"))["app_name"] == app.name
+
+
+def test_cleanup_logs_a_save_timeout_and_finishes_teardown(tmp_path, monkeypatch, caplog):
+    app = App("save timeout")
+    app._running = True
+    app.ctx.pending_saves.add(tmp_path)
+    stopped = []
+    app.ctx.streams["emg"] = SimpleNamespace(stop=lambda: stopped.append("stream"))
+    app.ctx.bridges["hand"] = SimpleNamespace(stop=lambda: stopped.append("bridge"))
+    monkeypatch.setattr(core, "_FINALIZE_TIMEOUT_S", 0.01)
+
+    app._cleanup()
+
+    assert stopped == ["stream", "bridge"]
+    assert app._running is False
+    assert app.ctx.pending_saves == {tmp_path}
+    assert "waiting for 1 recording save(s) at exit" in caplog.text
+    assert "Timed out" in caplog.text
+
+
 def test_add_stream_is_refused_while_a_take_is_open_under_predicting(
     tmp_path, recordable_predicting
 ):

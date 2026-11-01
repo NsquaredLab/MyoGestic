@@ -174,6 +174,21 @@ uv run python tools/widget_screenshot.py --all
 
 </div>
 
+## Following runs
+
+<div class="grid cards" markdown>
+
+-   __[FollowRun][myogestic.widgets.FollowRun]__
+
+    ![FollowRun](images/widgets/FollowRun.png){ .widget-thumb loading=lazy }
+
+    Gesture chips and captioned movement, endpoint hold, peak and repetition controls
+    start a recorded run. Progress and phase lead to saved-take RMSE, correlation and lag.
+    Runs without hardware; apps send its `(gesture_index, level)` through their control bus.
+    Try the [panel demo](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/panels/follow_run.py).
+
+</div>
+
 ## Other widgets
 
 These need richer fixtures (live data, trained models, recorded trials) than the screenshot script produces, so they're listed here and documented in full on the [Widgets API](api/widgets.md) page.

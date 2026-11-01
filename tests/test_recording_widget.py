@@ -263,15 +263,24 @@ def test_invalid_timing_choices_are_rejected(options):
         RecordingControls(on_record=lambda: None, on_stop=lambda: None, **options)
 
 
-def test_action_row_height_is_constant(timed_controls, imgui_frame):
+def test_action_row_height_is_constant(timed_controls, imgui_frame, monkeypatch):
     from imgui_bundle import imgui
+
+    from myogestic.widgets.panels import _recording_controls as module
 
     controls, ctx, now, _, _ = timed_controls
     heights = []
+    action = module._action
+
+    def measured(*args):
+        # The row itself: a lock caption may follow it, so it is not the last item.
+        action(*args)
+        heights.append(imgui.get_item_rect_size().y)
+
+    monkeypatch.setattr(module, "_action", measured)
 
     def draw():
         controls.ui(ctx)
-        heights.append(imgui.get_item_rect_size().y)
 
     imgui_frame(draw)
     controls._start(ctx)

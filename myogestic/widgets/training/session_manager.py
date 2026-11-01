@@ -386,7 +386,14 @@ def _render_row(
     time_x = right - time_width - gap - duration_width
     if row.get("drive", False):
         imgui.align_text_to_frame_padding()
-        imgui.text_colored(muted(), "Guided" if row.get("guided", False) else "Drive")
+        imgui.text_colored(
+            muted(),
+            "Follow"
+            if row.get("follow", False)
+            else "Guided"
+            if row.get("guided", False)
+            else "Drive",
+        )
         imgui.same_line()
     for index, (ci, name, _) in enumerate(row_gestures(row, class_names)):
         room = time_x - gap - imgui.get_cursor_pos_x()

@@ -35,12 +35,15 @@ from myogestic.widgets.common import (
     DANGER,
     IDLE,
     ON_PRIMARY_TEXT,
+    RECORD_FILL,
     _truncate_to_width,
+    action_row,
     destructive_button,
     mono_text,
     muted,
     panel_header,
     primary_button,
+    solid_fill,
     tinted_row,
     ui_px,
 )
@@ -204,15 +207,49 @@ def _elapsed_str(seconds: float, *, tenths: bool = False) -> str:
 
 
 def _record_button(ctx: Context, label: str, size: imgui.ImVec2) -> bool:
-    """Render Record with a reason when the participant gate disables it."""
-    if not getattr(ctx, "require_participant", False) or getattr(ctx, "participant", ""):
-        return imgui.button(label, size)
-    imgui.begin_disabled()
-    imgui.button(label, size)
-    imgui.end_disabled()
+    """Render Record in its fill, with a reason when the participant gate disables it."""
+    with solid_fill(RECORD_FILL):
+        if not getattr(ctx, "require_participant", False) or getattr(ctx, "participant", ""):
+            return imgui.button(label, size)
+        imgui.begin_disabled()
+        imgui.button(label, size)
+        imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
         imgui.set_tooltip("Set a participant ID before recording.")
     return False
+
+
+def _stop_label(action: str) -> str:
+    return f"{fa.ICON_FA_STOP}  {action}"
+
+
+def _stop_pill_width(action: str) -> float:
+    """Width `_stop_pill` takes at the row's right edge."""
+    return imgui.calc_text_size(_stop_label(action)).x + 2 * imgui.get_style().frame_padding.x
+
+
+def _stop_pill(action: str, right: float, top: float, height: float) -> None:
+    """Name the action of an `action_row` as a filled pill at its right edge.
+
+    Only a label: the whole row is the click target. ``right`` and ``top`` are the
+    row's inner right edge and top in window coordinates, ``height`` its full height.
+    """
+    style = imgui.get_style()
+    text = _stop_label(action)
+    width = _stop_pill_width(action)
+    pill = imgui.get_frame_height() + ui_px(10)
+    imgui.set_cursor_pos(imgui.ImVec2(right - width, top + (height - ui_px(8) - pill) / 2))
+    lo = imgui.get_cursor_screen_pos()
+    imgui.get_window_draw_list().add_rect_filled(
+        lo,
+        imgui.ImVec2(lo.x + width, lo.y + pill),
+        imgui.get_color_u32(RECORD_FILL),
+        style.frame_rounding,
+    )
+    imgui.set_cursor_screen_pos(
+        imgui.ImVec2(lo.x + style.frame_padding.x, lo.y + (pill - imgui.get_text_line_height()) / 2)
+    )
+    imgui.text_colored(ON_PRIMARY_TEXT, text)
 
 
 class RecordButton:
@@ -373,43 +410,36 @@ class RecordButton:
 
         height = max(ui_px(52), 2 * imgui.get_text_line_height() + ui_px(12))
         if recording:
-            with tinted_row(DANGER, height=height) as width:
+            # Where Record was: the whole row is Stop, so the second click lands on the first.
+            with action_row("##record_stop", DANGER, height=height) as (clicked, width):
                 left, top = imgui.get_cursor_pos()
-                stop_w = imgui.calc_text_size("Stop").x + 2 * imgui.get_style().frame_padding.x
-                text_w = max(0.0, width - stop_w - ui_px(8))
+                text_w = max(0.0, width - _stop_pill_width("Stop") - ui_px(8))
+                line = imgui.get_text_line_height() + ui_px(2)
+                first = top + (height - ui_px(8) - line - imgui.get_text_line_height()) / 2
+                imgui.set_cursor_pos_y(first)
                 imgui.text_unformatted(_truncate_to_width("Recording", text_w))
-                imgui.set_cursor_pos_y(top + imgui.get_text_line_height() + ui_px(2))
+                imgui.set_cursor_pos_y(first + line)
                 self._mono_detail(detail, text_w)
-                imgui.same_line()
-                imgui.set_cursor_pos(
-                    imgui.ImVec2(
-                        left + width - stop_w,
-                        top + (height - ui_px(8) - imgui.get_frame_height()) / 2,
-                    )
-                )
-                if imgui.button("Stop"):
-                    self._stop(ctx)
+                _stop_pill("Stop", left + width, top, height)
+            if clicked:
+                self._stop(ctx)
             return
 
         busy = ctx.state not in RECORDABLE_STATES
         imgui.begin_disabled(busy)
-        for slot, color in (
-            (imgui.Col_.button, DANGER),
-            (imgui.Col_.button_hovered, DANGER),
-            (imgui.Col_.button_active, DANGER),
-            (imgui.Col_.text, ON_PRIMARY_TEXT),
-        ):
-            imgui.push_style_color(slot, color)
         try:
             if (
-                _record_button(ctx, f"{fa.ICON_FA_CIRCLE}  Record", imgui.ImVec2(-1, height))
+                _record_button(
+                    ctx,
+                    f"{fa.ICON_FA_CIRCLE}  Record",
+                    imgui.ImVec2(imgui.get_content_region_avail().x, height),
+                )
                 and not busy
             ):
                 self._name = ""
                 self._started = time.monotonic()
                 self._on_record()
         finally:
-            imgui.pop_style_color(4)
             imgui.end_disabled()
         if busy:
             imgui.set_item_tooltip("Busy — wait until the current action finishes.")

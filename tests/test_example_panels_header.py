@@ -18,6 +18,7 @@ TITLES = {
     "control_map_editor": "ControlMapEditor",
     "device_picker": "DevicePicker",
     "feature_selector": "FeatureSelector",
+    "follow_run": "FollowRun",
     "heatmap": "Heatmap",
     "image": "Image",
     "line_plot": "LinePlot",
@@ -46,6 +47,7 @@ TITLES = {
     "vhi_movements": "VhiMovementPanel",
 }
 STATE_DEMOS = {
+    "follow_run",
     "record_button",
     "recording_controls",
     "session_manager",

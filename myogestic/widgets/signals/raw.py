@@ -71,6 +71,9 @@ class RawSignalViewer:
     show_connect : bool, optional
         Offer a Connect button while detached. Turn it off when a StreamPanel
         or DevicePicker owns connecting, to avoid duplicate Connect controls.
+    stream_type : str | None, optional
+        LSL type of the other streams the empty state offers, as in
+        `SignalViewer`. ``None`` takes the type of the app's own stream.
     channel_height : float, optional
         Trace spacing in signal units. ``0`` derives spacing from the visible
         data. Set a common value when comparing several viewers.
@@ -95,6 +98,7 @@ class RawSignalViewer:
         size: tuple[float, float] = (-1, 300),
         channel_height: float = 0.0,
         show_connect: bool = True,
+        stream_type: str | None = None,
         widget_id: str | None = None,
         show_title: bool = True,
     ) -> None:
@@ -102,6 +106,7 @@ class RawSignalViewer:
         self._size = size
         self._channel_height = channel_height
         self._show_connect = show_connect
+        self._stream_type = stream_type
         self._widget_id = stream_name if widget_id is None else widget_id
         self._show_title = show_title
 
@@ -125,7 +130,12 @@ class RawSignalViewer:
             self._header(None, tone)
             imgui.begin_child("disconnected", plot_size(self._size))
             try:
-                _disconnected_ui(self._stream_name, stream, show_connect=self._show_connect)
+                _disconnected_ui(
+                    self._stream_name,
+                    stream,
+                    show_connect=self._show_connect,
+                    stream_type=self._stream_type,
+                )
             finally:
                 imgui.end_child()
             return

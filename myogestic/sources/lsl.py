@@ -148,10 +148,19 @@ class LSLSource:
             self._inlet = None
 
     def discover(self) -> list[dict[str, str]]:
-        """Scan for available LSL streams on the network."""
+        """Scan for available LSL streams on the network.
+
+        Each result carries the stream's ``name``, a one-line ``info`` and its LSL
+        ``type`` on its own, so a picker can offer only streams of one kind.
+        """
         found = resolve_streams(timeout=2.0)
         return [
-            {"name": s.name, "info": f"{s.n_channels}ch {s.sfreq:.0f}Hz {s.stype}"} for s in found
+            {
+                "name": s.name,
+                "info": f"{s.n_channels} ch · {s.sfreq:.0f} Hz · {s.stype}",
+                "type": s.stype,
+            }
+            for s in found
         ]
 
     def reconnect(self, target: str | None = None) -> StreamInfo:

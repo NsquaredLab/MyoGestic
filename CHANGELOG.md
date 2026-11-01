@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Independent control links can record named streams with `record_as`, with their maps saved in optional `meta.control_spaces`; duplicate map names are rejected and single-link metadata stays unchanged.
+- `ControlLinkConnector(*links)` binds several links with one retry worker and stops every link, including partial and late binds.
+- `FollowRun(operator=, aliases=, poses=, rest=)` drives pose vectors directly, validates their shapes at construction, rests after joining on every run exit, and offers `hold()` for manual poses. Myocontrol uses this API and one connector for both hands, fixing concurrent binds and premature connection announcements.
+
+- `Sinusoid`, `score_tracking`, `blend_pose`, and the reusable `FollowRun` card record and score smooth control-hand following runs; Myocontrol Drive offers **Follow**, and saved Follow takes remain unticked for training. A hardware-free panel demo is included.
+
 - Myocontrol's Guided drive runs cue shuffled gesture repetitions, save prediction takes, and score match and cue reach from the saved take; Takes marks them **Guided** and leaves them unticked for training.
 - Myocontrol records the hand’s LSL feedback with the EMG and offers **Record this run** in Drive. Stopping prediction saves an open run first; Drive takes carry the running model and stay unticked for training unless selected.
 - `Pipeline(input_streams=...)` selects model inputs and their tick clock independently of recording-only feedback; `SignalViewer(exclude=...)` keeps those streams out of the EMG viewer.
@@ -80,6 +86,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The signal viewers' empty state is a carousel with one Connect. The stream on its card
+  is the one Connect attaches, and the button says so (**Connect TestEMG32**), starting
+  on the app's own stream; ‹ › step through the other streams of its kind, and stepping
+  past the last one is what looks for more (nothing scans on its own). This replaces a
+  Connect beside an unexplained Scan whose results came with a second Connect that did
+  something else. A failure reads **Couldn't connect** over the error's first sentence,
+  the full text on hover. `SignalViewer(stream_type=…)` and
+  `RawSignalViewer(stream_type=…)` choose the LSL type offered; by default it is the type
+  of the app's own stream, and with no type known, MyoGestic's control outlets and
+  marker streams are left out. `LSLSource.discover()` results gain a ``type`` key, and
+  their ``info`` reads ``32 ch · 2048 Hz · EMG``.
+- Stop sits where Record was: in `RecordingControls` and `RecordButton` the whole
+  recording row is the Stop button (and, during a warm-up, Cancel), in Record's exact
+  rectangle, instead of a small default-grey button at its right edge. A timed take's row
+  leads with the whole seconds left, in the same face as the warm-up count (no longer the
+  serif display face); the saved row reads like the others — **Saved · gesture** over the
+  time in mono, early stops first. The lock caption moved below the row so starting a take
+  no longer pushes Stop down. Record and the Stop label use `RECORD_FILL`,
+  simpetru-figstyle's bright red #d80032 (white text 5.3:1; `DANGER` gave 3.4:1). On the
+  light theme the countdown takes figstyle's darker shades, red #d80032 (3.9:1) and orange
+  #d06708 (2.9:1), where the status tones read 2.5:1 and 1.6:1 on their own tints. New
+  `action_row` and `solid_fill` helpers in `widgets/common.py`.
 - `RecordingControls` and `RecordButton` offer Record while predicting and Stop under any
   state with a take open; `RecordButton` freezes the session at the Stop click, so rows
   produced over the naming dialog are not part of the take. The ML Predict button starts
@@ -109,6 +137,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Follow runs stopped by another panel save their actual target end before metadata is written, so saved-take scoring uses the interrupted interval and later takes remain unaffected.
+- `FollowRun(drive=..., hz=32)` drives the operator hand on its own clock, independent of EMG, the GUI and `predict`; Stop joins the driver before restoring rest. Myocontrol uses separate prediction and operator links so `controls` records predictions only.
+- App shutdown waits for pending recording saves, including takes stopped by cleanup hooks, before stopping streams; unfinished saves are logged after a 30-second timeout.
 - A take selected while saving remains selected and trainable after its folder becomes an archive; scans skip incomplete saves.
 - Live UI rescaling starts from base style sizes, preventing compounded sizes and crashes; unknown display scale keeps the last scale or styles once at 1.0.
 - macOS GUI startup waits for an active display when the screen is locked or asleep, before starting streams or hooks.

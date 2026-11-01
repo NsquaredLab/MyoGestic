@@ -116,6 +116,8 @@ def _collapse_glfw_monitor_spam():
 
 log = logging.getLogger("myogestic")
 
+_FINALIZE_TIMEOUT_S = 30.0
+
 
 class AppState(StrEnum):
     """Core app-state values. Extensions (e.g. myogestic.ml.PipelineState) add more.
@@ -200,6 +202,9 @@ class Context:
     pending_saves
         Source folders still being finalized. Nonempty until every pending
         pack has registered its saved take or reported failure.
+    finalize_hooks
+        The owning `App.finalize_hooks` list, also available to widgets that
+        receive only a context. Hooks run after freeze and before metadata is saved.
     participant
         Pseudonymised ID used to label new recordings; empty when none is set.
     require_participant
@@ -209,9 +214,12 @@ class Context:
         Names for the label class indices, mirrored here by the recording
         widgets so `App.stop_recording` can persist them in ``meta.json``.
     control_space
-        Optional `myogestic.controls.ControlSet` this app commands. Set once at
+        Optional `myogestic.controls.ControlMap` this app commands. Set once at
         setup (``app.ctx.control_space = CONTROLS``); every recording then
         stores the space it was made under.
+    control_spaces
+        Additional control maps keyed by recording stream name, populated by
+        `myogestic.controls.connect_controls` for names other than ``"controls"``.
     current_label
         Class index a label click would record right now; ``-1`` for rest / no
         class.
@@ -241,12 +249,14 @@ class Context:
     pending_saves: set[Path] = field(default_factory=set)
     class_names: list[str] = field(default_factory=list)
     control_space: Any = None
+    control_spaces: dict[str, Any] = field(default_factory=dict)
     current_label: int = -1
     status_message: str = ""
     logs: list[str] = field(default_factory=list)
     notifications: list[Notification] = field(default_factory=list)
     participant: str = ""
     require_participant: bool = False
+    finalize_hooks: list[Callable[[Session], None]] = field(default_factory=list, repr=False)
     # A Stop during a countdown is still a cancellation, even though capture has
     # not begun and state remains idle. Widgets observe this without callbacks.
     _recording_stop_revision: int = field(default=0, init=False, repr=False)
@@ -363,7 +373,7 @@ class App:
         #: `Session.freeze` and before ``meta.json`` is written — so a hook can add to
         #: ``session.extras`` or drop a file into ``session.path``. `myogestic.ml.Pipeline`
         #: saves the running model here. Not called on `discard_recording`.
-        self.finalize_hooks: list[Callable[[Session], None]] = []
+        self.finalize_hooks: list[Callable[[Session], None]] = self.ctx.finalize_hooks
         self._popout_specs: list[tuple[str, Callable[[], None], bool, bool, bool | None]] = []
 
     def streams(self, *streams: Stream) -> None:
@@ -579,6 +589,7 @@ class App:
         # that meta.json will not list.
         session.freeze()
         controls = self.ctx.control_space
+        control_spaces = dict(self.ctx.control_spaces)
         class_names = self.ctx.class_names or None
         hooks = list(self.finalize_hooks)
         self.ctx.status_message = "Finalizing…"
@@ -601,6 +612,10 @@ class App:
                     self.name,
                     class_names=class_names,
                     control_space=controls.as_control_space() if controls is not None else None,
+                    control_spaces={
+                        name: control_map.as_control_space()
+                        for name, control_map in control_spaces.items()
+                    },
                 )
                 n = len(session.label_track)
                 zip_path = session.pack_to_zip()
@@ -698,6 +713,7 @@ class App:
             └─ 4. [finally] cleanup - always runs, even on startup failure
                  ├─ cleanup_hooks(app)   each wrapped in try/except
                  ├─ stop_recording(wait=True) if a take is open
+                 ├─ wait for pending saves (up to 30 seconds)
                  ├─ Stream.stop()         per stream
                  ├─ Bridge.stop()         per bridge
                  └─ process_launcher._cleanup_all()
@@ -772,7 +788,8 @@ class App:
 
         An open recording is stopped *after* the cleanup hooks (the pipeline's hook stops
         the predict thread, so no tick appends during the flush) and *before* the streams
-        stop, inline, so the archive is complete when the interpreter exits.
+        stop, inline, so the archive is complete when the interpreter exits. Saves started
+        earlier or by cleanup hooks get up to 30 seconds to finish before streams stop.
         """
         log.info("run() - cleanup")
         for hook in self.cleanup_hooks:
@@ -785,6 +802,17 @@ class App:
                 self.stop_recording(wait=True)
             except Exception as e:
                 log.exception("stop_recording at exit failed: %s", e)
+        deadline = time.monotonic() + _FINALIZE_TIMEOUT_S
+        while self.ctx.pending_saves:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                log.warning(
+                    "Timed out after %.1f s waiting for %d recording save(s) at exit",
+                    _FINALIZE_TIMEOUT_S,
+                    len(self.ctx.pending_saves),
+                )
+                break
+            time.sleep(min(0.05, remaining))
         for stream in self.ctx.streams.values():
             try:
                 stream.stop()
