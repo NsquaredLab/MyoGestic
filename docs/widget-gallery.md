@@ -100,6 +100,12 @@ uv run python tools/widget_screenshot.py --all
 
     Launch / stop external subprocesses (synthetic generator, Virtual Hand, custom acquisition tools) from the GUI. Shows live state per entry; framework adopts children for clean exit.
 
+-   __[TargetPanel][myogestic.widgets.TargetPanel]__
+
+    ![TargetPanel](images/widgets/TargetPanel.png){ .widget-thumb loading=lazy }
+
+    One row per target the app drives (the Virtual Hand, a robot hand, a game): connect to one already running, launch it only if none answers, and stop only what this card started.
+
 </div>
 
 ## ML pipeline

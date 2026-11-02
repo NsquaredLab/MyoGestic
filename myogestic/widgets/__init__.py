@@ -24,6 +24,7 @@ from myogestic.widgets.panels import (
     RecordingControls,
     StepBar,
     StreamManager,
+    TargetPanel,
     popout_panel,
 )
 from myogestic.widgets.panels.app_header import AppHeader
@@ -97,6 +98,7 @@ __all__ = [
     "StepBar",
     "StatusBar",
     "StreamManager",
+    "TargetPanel",
     "SignalViewer",
     "SimulatorControls",
     "StreamPanel",

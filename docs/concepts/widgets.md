@@ -36,6 +36,12 @@ pop-out icon opens the selected process's log, which stays open when another
 process is selected. Each launcher gets its own identity by default; set
 `widget_id` explicitly to keep that identity across reconstruction.
 
+`TargetPanel(targets, connectors=...)` is the card for the processes an app *drives*,
+one row each: a tinted state in words, PID and elapsed time in mono, one action and the
+process output. A target with a `ControlLinkConnector` gets **Connect**, which binds to
+one already running and launches only when none answers; one without gets **Launch**.
+**Stop** appears only for a process the card started.
+
 `PostProcessor(hz=50)` defaults to a compact Smoothing row with a filter combo,
 mono delay and a settings popover for the description, captioned sliders and
 Reset. Pass `compact=False` for the full panel; `FilterProcessor` provides the

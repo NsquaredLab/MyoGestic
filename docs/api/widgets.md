@@ -133,6 +133,10 @@ Serve is inside the court. **Space** also serves when the app window has focus a
 
 ![process_launcher](../images/widgets/process_launcher.png){ loading=lazy }
 
+::: myogestic.widgets.TargetPanel
+
+![TargetPanel](../images/widgets/TargetPanel.png){ loading=lazy }
+
 ## Plotting
 
 ::: myogestic.widgets.Scatter2D

@@ -792,6 +792,20 @@ class ControlLinkConnector:
                 if self._stopped:
                     self._status = "control connection stopped"
 
+    def disconnect(self) -> None:
+        """Tear down every link and keep the connector usable.
+
+        For a target that went away (stopped from the app, or exited on its own) so
+        the next attempt binds whatever answers then. Unlike `stop`, `poll` keeps
+        working. An attempt already in flight is left to finish and may bind again;
+        call this once `busy` clears if it must not.
+        """
+        for link in self._links:
+            link.stop()
+        with self._lock:
+            if not self._stopped:
+                self._status = "controls not connected"
+
     def stop(self, *, timeout_s: float = 4.0) -> None:
         """Stop retrying, tear down every link, and briefly join an in-flight request."""
         with self._lock:

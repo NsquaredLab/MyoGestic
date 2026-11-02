@@ -27,6 +27,7 @@ The current registry covers:
 | `widgets/session_manager.png`              | 3 mock sessions                     |
 | `widgets/FilterControl.png`                | one-euro defaults                   |
 | `widgets/process_launcher.png`             | 2 dummy `sleep 60` processes        |
+| `widgets/TargetPanel.png`                  | connected, running and idle targets |
 | `widgets/pipeline_panel.png`               | idle Pipeline                       |
 | `widgets/FeatureSelector.png`              | RMS / MAV / WL / VAR / ZC           |
 | `widgets/app_logo.png`                     | shipped wordmark, centred           |

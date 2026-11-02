@@ -109,7 +109,7 @@ its own program, which most are not.
 - [Sources](https://nsquaredlab.github.io/MyoGestic/api/sources/): the `Source` protocol plus the built-in `LSLSource`, `ReplaySource` and `SerialSource`.
 - [Outlets](https://nsquaredlab.github.io/MyoGestic/api/outputs/): the `Outlet` base class and `LSLOutlet`. Anything that *moves* is a `Target`, not an outlet.
 - [Bridges](https://nsquaredlab.github.io/MyoGestic/api/bridges/): subprocess acquisition for heavy data that does not fit the LSL pull model, such as a webcam writing frames straight to Zarr.
-- [Widgets](https://nsquaredlab.github.io/MyoGestic/api/widgets/): every public widget class with its screenshot - signal viewers, scatter/line/heatmap plots, recording controls, `SessionManager`, `ProcessLauncher`, `FeatureSelector`, output post-processing, log and status panels.
+- [Widgets](https://nsquaredlab.github.io/MyoGestic/api/widgets/): every public widget class with its screenshot - signal viewers, scatter/line/heatmap plots, recording controls, `SessionManager`, `ProcessLauncher`, `TargetPanel`, `FeatureSelector`, output post-processing, log and status panels.
 - [Estimator recipes](https://nsquaredlab.github.io/MyoGestic/api/models/): constructor recipes for CatBoost, scikit-learn and zero-dependency dummy estimators, with lazy optional imports and a clear `ImportError` naming the extra to install.
 - [Session](https://nsquaredlab.github.io/MyoGestic/api/session/): read a recording back - `open_session_store`, `iter_labeled_windows`, aligned-window iteration.
 - [Filters](https://nsquaredlab.github.io/MyoGestic/api/filters/): the `VectorFilter` protocol and the built-in OneEuro, Gaussian and identity output filters.

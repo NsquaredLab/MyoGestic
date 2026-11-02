@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `TargetPanel(targets, connectors=)`: one card for the processes an app drives, a row each. A target with a `ControlLinkConnector` gets **Connect**, which binds to one already running and launches only when none answers; one without gets **Launch**. **Stop** appears only for what the card started, a launched target that exits drops its bus, and a target that cannot be launched says why on hover.
+- `ControlLinkConnector.disconnect()` tears down every link and keeps the connector usable, so the next attempt binds whatever answers then.
+- `mono_text(width=)` ellipsizes in the mono face.
 - Independent control links can record named streams with `record_as`, with their maps saved in optional `meta.control_spaces`; duplicate map names are rejected and single-link metadata stays unchanged.
 - `ControlLinkConnector(*links)` binds several links with one retry worker and stops every link, including partial and late binds.
 - `FollowRun(operator=, aliases=, poses=, rest=)` drives pose vectors directly, validates their shapes at construction, rests after joining on every run exit, and offers `hold()` for manual poses. Myocontrol uses this API and one connector for both hands, fixing concurrent binds and premature connection announcements.

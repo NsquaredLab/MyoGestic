@@ -583,6 +583,25 @@ def test_connector_retries_in_the_background_until_the_target_answers():
     connector.stop()
 
 
+def test_connector_disconnect_drops_the_bus_and_binds_again():
+    """A target that went away is forgotten, and the same connector binds its successor."""
+    target = _LateTarget()
+    target.up = True
+    connector = ControlLinkConnector(_link(target), retry_s=0.0)
+    assert connector.poll() is True
+    assert _wait_until(lambda: connector.connected)
+
+    connector.disconnect()
+
+    assert connector.connected is False
+    assert target.stopped == 1
+    assert connector.status == "controls not connected"
+    assert connector.poll() is True
+    assert _wait_until(lambda: connector.connected)
+    assert target.bound == 2
+    connector.stop()
+
+
 def test_connector_allows_only_one_capability_request_at_a_time():
     """A fast UI loop must not fan one slow RPC out into many threads."""
     entered = Event()

@@ -95,6 +95,7 @@ SIZES: dict[str, tuple[int, int]] = {
     "session_manager": (440, 240),
     "FilterControl": (480, 220),
     "process_launcher": (440, 240),
+    "TargetPanel": (440, 200),
     "pipeline_panel": (440, 200),
     "FeatureSelector": (440, 240),
     "app_logo": (360, 260),
@@ -269,6 +270,58 @@ def render_process_launcher(out: Path) -> None:
 
     _self_capture_after(3.0, out)
     app.run(window_size=SIZES["process_launcher"])
+
+
+def render_target_panel(out: Path) -> None:
+    import sys as _sys
+    import threading
+    from types import SimpleNamespace
+
+    from myogestic import App
+    from myogestic.controls import Capability, ControlLink, ControlLinkConnector, load_control_map
+    from myogestic.widgets import TargetPanel
+
+    sleeper = [_sys.executable, "-c", "import time; time.sleep(60)"]
+
+    def spec(name: str) -> SimpleNamespace:
+        return SimpleNamespace(name=name, launcher=lambda: [(name, sleeper)])
+
+    class Hand:
+        """A control target that answers once the process launched for it is up."""
+
+        up = False
+
+        def capabilities(self):
+            return [Capability("cursor.x", "continuous", lo=-1.0, hi=1.0)] if self.up else None
+
+        def bind(self, controls):
+            pass
+
+        def send(self, values, changed):
+            pass
+
+        def stop(self):
+            pass
+
+    hand = Hand()
+    link = ControlLink(load_control_map({"dofs": {"aim": "cursor.x"}}), [hand])
+    connector = ControlLinkConnector(link, retry_s=0.0)
+    panel = TargetPanel(
+        [spec("VHI Hand"), spec("Kappa Hand"), spec("EMG Generator")],
+        connectors={"VHI Hand": connector},
+    )
+    panel.start("VHI Hand")  # nothing answers, so it launches, then binds
+    panel.start("Kappa Hand")
+    threading.Timer(0.5, lambda: setattr(hand, "up", True)).start()
+
+    app = App("TargetPanel")
+
+    @app.ui
+    def ui(ctx):
+        panel.ui(details={"Kappa Hand": "board /dev/cu.usbmodem1101"})
+
+    _self_capture_after(3.0, out)
+    app.run(window_size=SIZES["TargetPanel"])
 
 
 def render_pipeline_panel(out: Path) -> None:
@@ -487,6 +540,7 @@ WIDGETS: dict[str, callable] = {
     "session_manager": render_session_manager,
     "FilterControl": render_filter_control,
     "process_launcher": render_process_launcher,
+    "TargetPanel": render_target_panel,
     "pipeline_panel": render_pipeline_panel,
     "FeatureSelector": render_feature_selector,
     "app_logo": render_app_logo,
