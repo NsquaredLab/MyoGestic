@@ -99,6 +99,30 @@ except FileNotFoundError as e:
     PROCESSES = base  # demo still runs; VHI button just absent
 ```
 
+### Connect, or launch
+
+An app that binds controls to VHI wants one button that does both: bind to a VHI
+that is already running, and launch one only if none answers. `TargetPanel` is that
+button, next to any other target the app drives:
+
+```python
+from myogestic.controls import ControlLinkConnector
+from myogestic.widgets import TargetPanel
+
+connector = ControlLinkConnector(link)
+targets = TargetPanel([vhi], connectors={vhi.name: connector}, title="Hands")
+
+
+@app.ui
+def ui(ctx):
+    with grid[0, 0]:
+        targets.ui()
+```
+
+Prediction keeps reading `link.bus`, which is `None` until VHI answers. When VHI
+cannot be launched here, the row says so and its tooltip carries the same
+install message `launcher()` raises.
+
 ## What VHI calls its controls
 
 A running VHI's manifest is the authority

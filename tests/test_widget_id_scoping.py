@@ -6,13 +6,15 @@ literal ids inside one cell drive each other's sliders, popups and plots. The
 obvious case is two force transducers, or two amplifiers, in one study.
 """
 
+from types import SimpleNamespace
+
 import pytest
 from imgui_bundle import imgui
 
 from myogestic import Stream
 from myogestic.core import Context
 from myogestic.sources import SyntheticSource
-from myogestic.widgets import DevicePicker, PongTask, RecordButton, TrackingTask
+from myogestic.widgets import DevicePicker, PongTask, RecordButton, TargetPanel, TrackingTask
 
 
 def _ctx() -> Context:
@@ -49,6 +51,15 @@ def _with_ctx(widget, ctx) -> None:
             lambda i: PongTask(widget_id=f"g{i}"),
             lambda widget, _ctx: widget.ui(0.25),
             id="PongTask",
+        ),
+        # Two cards over the same target: the default id is the title, so each needs its own.
+        pytest.param(
+            lambda i: TargetPanel(
+                [SimpleNamespace(name="Hand", launcher=lambda: [("Hand", ["true"])])],
+                widget_id=f"h{i}",
+            ),
+            lambda widget, _ctx: widget.ui(),
+            id="TargetPanel",
         ),
     ],
 )

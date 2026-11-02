@@ -1,4 +1,4 @@
-"""Panel widgets: image/logo, filter controls, logs, popouts, process launcher, recording."""
+"""Panel widgets: image/logo, filter controls, logs, popouts, process launcher, targets, recording."""
 
 from myogestic.widgets.panels.app_logo import AppLogo
 from myogestic.widgets.panels.filter_processor import (
@@ -16,6 +16,7 @@ from myogestic.widgets.panels.process_launcher import ProcessLauncher
 from myogestic.widgets.panels.recording import RecordButton, RecordingControls
 from myogestic.widgets.panels.step_bar import StepBar
 from myogestic.widgets.panels.stream_manager import StreamManager
+from myogestic.widgets.panels.target_panel import TargetPanel
 
 __all__ = [
     "BUILTIN_FILTERS",
@@ -32,5 +33,6 @@ __all__ = [
     "RecordingControls",
     "StepBar",
     "StreamManager",
+    "TargetPanel",
     "popout_panel",
 ]

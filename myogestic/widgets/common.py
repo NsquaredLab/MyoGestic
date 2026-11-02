@@ -671,15 +671,18 @@ def format_age(seconds: float | None) -> str:
     return "last  >99 s"
 
 
-def mono_text(text: str, color: imgui.ImVec4 | None = None) -> None:
+def mono_text(text: str, color: imgui.ImVec4 | None = None, *, width: float | None = None) -> None:
     """Draw ``text`` in the mono face — for a value that changes as you watch it.
 
     Falls back to the UI face when the mono one could not be loaded, which costs
-    only the alignment.
+    only the alignment. Pass ``width`` to ellipsize to it, measured in the face
+    the text is drawn in.
     """
     font = mono_font()
     if font is not None:
         imgui.push_font(font, imgui.get_style().font_size_base)
+    if width is not None:
+        text = fit_text(text, width)
     if color is None:
         imgui.text_unformatted(text)
     else:
