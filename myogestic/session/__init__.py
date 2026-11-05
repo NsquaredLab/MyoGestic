@@ -10,6 +10,7 @@ from myogestic.session._core import (
     Recording,
     Session,
     labelled_path,
+    participant_dir,
     recorded_time,
 )
 from myogestic.session._io import open_session_store
@@ -28,6 +29,7 @@ __all__ = [
     "Session",
     "SessionSplit",
     "labelled_path",
+    "participant_dir",
     "recorded_time",
     "open_session_store",
     "iter_labeled_windows",

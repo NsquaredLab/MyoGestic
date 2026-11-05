@@ -12,7 +12,7 @@ App(name, theme=True, docking=False)
   .streams(*streams)
   .ui(fn)                                          # decorator
   .popout(title, gui_fn)                           # App(docking=True)
-  .start_recording(base_path="sessions")
+  .start_recording(base_path="data")
   .stop_recording()
   .run(mode="gui" | "headless")
   .ctx                                             # Context

@@ -89,6 +89,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **One folder per participant.** Data now goes under `data/<ID>/`, split by kind:
+  `recordings/` for takes started from idle, `predictions/` for takes started while a model
+  is predicting (chosen from `ctx.state`), and `models/` for `Pipeline.autosave_dir`. Takes
+  with no participant go to `data/recordings/` and `data/predictions/`. The default root of
+  `App.start_recording`, `Session`, `SessionManager`, `ParticipantPanel` and `StatusBar` is
+  `"data"`, no longer `"sessions"`. `SessionManager` lists both recordings and predictions
+  for a participant, and drive runs stay unticked as before. New
+  `myogestic.session.participant_dir(root, participant, kind)`; `labelled_path` and
+  `Session` take `kind=`. Takes already in `sessions/<ID>/` are not moved or listed, but they
+  still open with `open_session_store` or the Takes file picker.
+
 - The signal viewers' empty state is a carousel with one Connect. The stream on its card
   is the one Connect attaches, and the button says so (**Connect TestEMG32**), starting
   on the app's own stream; ‹ › step through the other streams of its kind, and stepping

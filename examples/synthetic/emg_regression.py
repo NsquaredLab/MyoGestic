@@ -341,7 +341,7 @@ recording = RecordingControls(
     on_gesture=_on_gesture,
     show_header=False,
 )
-sessions = SessionManager("sessions", class_names=CLASSES)
+sessions = SessionManager("data", class_names=CLASSES)
 train_button = TrainButton(pipeline, size=(-1, 0))
 training_log = TrainingLog(pipeline, height=100)
 predict_button = PredictButton(pipeline, size=(-1, 0))
@@ -440,7 +440,7 @@ def _step_done(ctx: Context) -> list[bool]:
     return [
         stream is not None and stream.status == "connected" and stream.info is not None,
         bool(ctx.participant)
-        and any(pathlib.Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
+        and any(pathlib.Path("data", ctx.participant, "recordings").glob(f"{ctx.participant}_*")),
         pipeline.model is not None,
         ctx.state == "predicting",
     ]

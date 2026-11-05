@@ -234,7 +234,7 @@ def test_stop_recording_notifies_saved(tmp_path, monkeypatch):
     saved = [n for n in app.ctx.notifications if n.title == "Recording saved"]
     assert len(saved) == 1
     assert saved[0].kind == "success"
-    assert saved[0].detail == next((tmp_path / "sessions").glob("*.session.zip")).name
+    assert saved[0].detail == next((tmp_path / "sessions").rglob("*.session.zip")).name
 
 
 def test_stop_recording_notifies_pack_failure(tmp_path, monkeypatch):

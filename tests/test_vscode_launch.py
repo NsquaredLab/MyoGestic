@@ -149,7 +149,7 @@ def test_a_cwd_is_always_set_and_follows_the_right_thing(launch):
 
     A user's own file gets `${fileDirname}`, so a control map beside it resolves the way
     it does when they run it by hand. A repository entry gets the workspace, because the
-    examples create `sessions/` relative to cwd.
+    examples create `data/` relative to cwd.
     """
     for config in _configs(launch):
         cwd = config.get("cwd")

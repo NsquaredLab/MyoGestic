@@ -88,7 +88,7 @@ def test_regression_completion_tracks_the_participants_takes(regression_app, mon
     assert done(ctx) == [False] * 4
     ctx.participant = "P-014"
     monkeypatch.setitem(ctx.streams, "emg", SimpleNamespace(status="connected", info=object()))
-    folder = tmp_path / "sessions" / ctx.participant
+    folder = tmp_path / "data" / ctx.participant / "recordings"
     folder.mkdir(parents=True)
     (folder / "someone-else_take.session.zip").touch()
     assert done(ctx) == [True, False, False, False]

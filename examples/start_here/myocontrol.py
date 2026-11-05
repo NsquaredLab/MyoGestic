@@ -119,7 +119,7 @@ app.streams(Stream("emg", source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_
 pipeline = Pipeline(app, predict_hz=PREDICT_HZ, input_streams=("emg",))
 pipeline.save_model = save_pickle
 pipeline.load_model = load_pickle
-pipeline.autosave_dir = "sessions"
+pipeline.autosave_dir = "data"
 link = ControlLink(
     CONTROL_MAP,
     [RemoteTarget(client=vhi_control, interface=vhi)],
@@ -333,7 +333,7 @@ def _select_participant(ctx: Context, *, navigate: bool = True, load_model: bool
     participant_workflow["participant"] = ctx.participant
     if ctx.participant:
         sessions.select_all(ctx.participant)
-        folder = pathlib.Path("sessions", ctx.participant)
+        folder = pathlib.Path("data", ctx.participant, "models")
         if load_model:
             try:
                 models = [path for path in folder.glob("*_model.joblib") if path.is_file()]
@@ -397,7 +397,7 @@ processes = ProcessLauncher(hand_processes)
 # rate-limited and single-flight, safe to poll every frame.
 binder = ControlLinkConnector(link, operator)
 hand_attempt = {"phase": "idle"}
-sessions = SessionManager("sessions", class_names=CLASSES)
+sessions = SessionManager("data", class_names=CLASSES)
 prediction = PredictionLabel(pipeline, CLASSES, show_probability=True)
 hand_connection: dict[str, Any] = {"announced": None, "feedback_pending": False}
 drive_run: dict[str, float | None] = {"started": None}
@@ -749,7 +749,7 @@ def _refresh_recorded(ctx: Context) -> RecordedTime:
         or (recorded["pending"] and not ctx.pending_saves)
     ):
         recorded["time"] = (
-            recorded_time(pathlib.Path("sessions", ctx.participant))
+            recorded_time(pathlib.Path("data", ctx.participant, "recordings"))
             if ctx.participant
             else RecordedTime(0, 0.0, {})
         )
@@ -1489,7 +1489,7 @@ def _step_done(ctx: Context) -> list[bool]:
     return [
         stream is not None and stream.status == "connected" and stream.info is not None,
         bool(ctx.participant)
-        and any(pathlib.Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
+        and any(pathlib.Path("data", ctx.participant, "recordings").glob(f"{ctx.participant}_*")),
         pipeline.model is not None,
         ctx.state == "predicting",
     ]

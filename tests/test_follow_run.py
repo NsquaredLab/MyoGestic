@@ -172,7 +172,7 @@ def test_record_saved_target_score_and_unticked_take(run, stop_at):
     session.extras.clear()  # Scores must come from disk.
     widget.sync(app.ctx)
     assert widget.score["rmse"] == (None if stop_at < 1 else pytest.approx(0))
-    row = get_state("Sessions_sessions").sessions[0]
+    row = get_state("Sessions_data").sessions[0]
     assert row["follow"] and row["drive"] and not row["selected"]
 
 

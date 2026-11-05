@@ -15,8 +15,8 @@ from imgui_bundle import imgui
 
 from myogestic._theme import mono_font
 from myogestic.core import Context
-from myogestic.session import labelled_path
-from myogestic.session._core import _slug
+from myogestic.session import labelled_path, participant_dir
+from myogestic.session._core import KINDS, _slug
 from myogestic.widgets.common import (
     CONSOLE_BG,
     CONSOLE_TEXT,
@@ -141,6 +141,8 @@ def _recorded_participants(base: Path, key_file: Path) -> list[_RecordedParticip
     for folder in folders:
         if not folder.is_dir() or not folder.name or _slug(folder.name) != folder.name:
             continue
+        if folder.name in KINDS:  # takes recorded with no participant
+            continue
         try:
             takes = scan_sessions(str(folder))
             if not takes:
@@ -153,7 +155,7 @@ def _recorded_participants(base: Path, key_file: Path) -> list[_RecordedParticip
             )
             models = [
                 (path.stat().st_mtime, path)
-                for path in folder.glob("*_model.joblib")
+                for path in participant_dir(base, folder.name, "models").glob("*_model.joblib")
                 if path.is_file()
             ]
             saved, model = max(models, default=(None, None))
@@ -226,12 +228,13 @@ class ParticipantPanel:
         Stable input-state and popup identity, by default ``"participant"``.
         Use a different ID for each independent participant selector.
     sessions_dir : str or Path, optional
-        Recording root, by default ``"sessions"``. Recorded participants
-        are discovered once each time the dialog opens, excluding pending saves.
+        Data root, by default ``"data"``, holding ``<ID>/recordings``,
+        ``<ID>/predictions`` and ``<ID>/models``. Recorded participants are
+        discovered once each time the dialog opens, excluding pending saves.
     on_drive : callable or None, optional
         Called as ``on_drive(participant_id, model_path)`` after selecting
         the ID with **Drive with saved model**. The newest ``*_model.joblib``
-        by modification time is offered. None hides that action.
+        in ``<ID>/models`` by modification time is offered. None hides that action.
 
     Notes
     -----
@@ -246,7 +249,7 @@ class ParticipantPanel:
         *,
         key_file: str | Path = "~/myogestic/participant-key.csv",
         widget_id: str = "participant",
-        sessions_dir: str | Path = "sessions",
+        sessions_dir: str | Path = "data",
         on_drive: Callable[[str, Path], None] | None = None,
     ) -> None:
         self._key_file = Path(key_file).expanduser()
@@ -744,13 +747,14 @@ def _input_row(label: str, value: str, *, mono: bool = False) -> tuple[bool, str
             imgui.pop_font()
 
 
-def _preview(pid: str, sessions_dir: Path = Path("sessions")) -> None:
+def _preview(pid: str, sessions_dir: Path = Path("data")) -> None:
     """Show shared recording paths without widening the dialog to fit them."""
-    path = labelled_path(sessions_dir, pid)
+    take = labelled_path(sessions_dir, pid)
+    model = labelled_path(sessions_dir, pid, "model.joblib", kind="models")
     lines = (
-        f"Folder: {path.parent.as_posix()}/",
-        f"Recording: {path.as_posix()}.session.zip",
-        f"Model: {path.as_posix()}_model.joblib",
+        f"Folder: {take.parent.parent.as_posix()}/",
+        f"Recording: {take.as_posix()}.session.zip",
+        f"Model: {model.as_posix()}",
     )
     imgui.push_style_color(imgui.Col_.child_bg, CONSOLE_BG)
     padding = imgui.get_style().window_padding

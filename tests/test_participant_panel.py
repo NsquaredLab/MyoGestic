@@ -29,7 +29,7 @@ def _rows(key):
 def _panel(tmp_path, widget_id="test-participant"):
     return _api().ParticipantPanel(
         key_file=tmp_path / "key.csv",
-        sessions_dir=tmp_path / "sessions",
+        sessions_dir=tmp_path / "data",
         widget_id=widget_id,
     )
 
@@ -204,7 +204,7 @@ def test_start_logs_id_only(tmp_path):
     panel, ctx = _panel(tmp_path, "log-id"), Context()
     assert panel._start(ctx, " P/014 ", "Jane", "Doe") is True
     assert len(ctx.logs) == 1
-    folder = (tmp_path / "sessions" / "P-014").as_posix()
+    folder = (tmp_path / "data" / "P-014").as_posix()
     assert ctx.logs[-1].endswith(f"Participant P-014 · saving to {folder}/")
     assert all("Jane" not in line and "Doe" not in line for line in ctx.logs)
 
@@ -367,7 +367,8 @@ def test_modal_uses_returning_id_and_shared_preview(tmp_path, imgui_frame, monke
     imgui_frame(draw)
     assert inputs["##Participant ID"] == "P-007"
     assert "Returning participant" in text
-    assert any("sessions/P-007/P-007_" in line for line in text)
+    assert any("data/P-007/recordings/P-007_" in line for line in text)
+    assert any("data/P-007/models/P-007_" in line for line in text)
     _click(imgui_frame, draw, positions["Start session"])
     assert ctx.participant == "P-007"
     assert len(_rows(tmp_path / "key.csv")) == 1
@@ -465,4 +466,4 @@ def test_default_key_is_outside_sessions(tmp_path, monkeypatch):
     panel, ctx = _api().ParticipantPanel(widget_id="default-key"), Context()
     panel._start(ctx, "P-014", "Jane", "Doe")
     assert (tmp_path / "myogestic" / "participant-key.csv").exists()
-    assert not (tmp_path / "sessions").exists()
+    assert not (tmp_path / "data").exists()

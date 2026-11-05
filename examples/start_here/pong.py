@@ -519,7 +519,7 @@ processes = ProcessLauncher(hand_processes)
 # VHI takes seconds to boot and `ensure()` blocks, so this retries in the background —
 # rate-limited and single-flight, safe to poll every frame.
 binder = ControlLinkConnector(link)
-sessions = SessionManager("sessions", class_names=CLASSES)
+sessions = SessionManager("data", class_names=CLASSES)
 train_button = TrainButton(pipeline, size=(-1, 0))
 training_log = TrainingLog(pipeline)
 
@@ -1142,7 +1142,7 @@ def _step_done(ctx: Context) -> list[bool]:
     return [
         stream is not None and stream.status == "connected" and stream.info is not None,
         bool(ctx.participant)
-        and any(pathlib.Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
+        and any(pathlib.Path("data", ctx.participant, "recordings").glob(f"{ctx.participant}_*")),
         pipeline.model is not None,
         ctx.state == "predicting",
     ]

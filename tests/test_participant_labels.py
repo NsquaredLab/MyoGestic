@@ -47,15 +47,15 @@ def _connect(app):
 
 
 def test_labelled_path_with_and_without_id(tmp_path, frozen_clock):
-    assert session_api.labelled_path("sessions", "P-014") == Path(
-        "sessions/P-014/P-014_2026-10-24_15-12-03"
+    assert session_api.labelled_path("data", "P-014") == Path(
+        "data/P-014/recordings/P-014_2026-10-24_15-12-03"
     )
-    assert session_api.labelled_path("sessions", "P-014", suffix="model.joblib") == Path(
-        "sessions/P-014/P-014_2026-10-24_15-12-03_model.joblib"
+    assert session_api.labelled_path("data", "P-014", suffix="model.joblib", kind="models") == Path(
+        "data/P-014/models/P-014_2026-10-24_15-12-03_model.joblib"
     )
-    assert session_api.labelled_path("sessions") == Path("sessions/2026-10-24_15-12-03")
-    assert session_api.labelled_path("sessions", suffix="model.joblib") == Path(
-        "sessions/2026-10-24_15-12-03_model.joblib"
+    assert session_api.labelled_path("data") == Path("data/recordings/2026-10-24_15-12-03")
+    assert session_api.labelled_path("data", suffix="model.joblib", kind="models") == Path(
+        "data/models/2026-10-24_15-12-03_model.joblib"
     )
     session_api.labelled_path(tmp_path / "preview", "P-014")
     assert list(tmp_path.iterdir()) == [], "a preview must not reserve a folder"
@@ -63,24 +63,24 @@ def test_labelled_path_with_and_without_id(tmp_path, frozen_clock):
 
 @pytest.mark.parametrize(("typed", "slug"), [(" p/014 ", "p-014"), ("../x", "x"), ("Jörg", "J-rg")])
 def test_labelled_path_slugs_the_id(typed, slug, frozen_clock):
-    path = session_api.labelled_path("sessions", typed)
-    assert path == Path("sessions") / slug / f"{slug}_{_TIMESTAMP}"
-    assert len(path.parent.relative_to("sessions").parts) == 1
-    assert all(fragment not in path.parent.name for fragment in ("/", "\\", ".."))
+    path = session_api.labelled_path("data", typed)
+    assert path == Path("data") / slug / "recordings" / f"{slug}_{_TIMESTAMP}"
+    assert path.parent.relative_to("data").parts == (slug, "recordings")
+    assert all(fragment not in slug for fragment in ("/", "\\", ".."))
 
 
 @pytest.mark.parametrize("participant", ["", " ... / "])
-def test_session_without_participant_keeps_legacy_layout(tmp_path, participant):
+def test_session_without_participant_goes_in_the_root_kind_folder(tmp_path, participant):
     session = (
         Session(str(tmp_path), participant=participant) if participant else Session(str(tmp_path))
     )
-    assert session.path.parent == tmp_path
+    assert session.path.parent == tmp_path / "recordings"
     assert re.fullmatch(r"\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d_[0-9a-f]{8}", session.path.name)
 
 
 def test_session_with_participant_nests_and_labels(tmp_path, frozen_clock):
     session = Session(str(tmp_path), participant="P-014")
-    assert session.path == tmp_path / "P-014" / f"P-014_{_TIMESTAMP}"
+    assert session.path == tmp_path / "P-014" / "recordings" / f"P-014_{_TIMESTAMP}"
     assert session.participant == "P-014"
     assert session.path.is_dir()
 
@@ -88,7 +88,7 @@ def test_session_with_participant_nests_and_labels(tmp_path, frozen_clock):
 def test_session_persists_the_slugged_id(tmp_path, frozen_clock):
     session = Session(str(tmp_path), participant=" ../p/014 ")
     assert session.participant == "p-014"
-    assert session.path == tmp_path / "p-014" / f"p-014_{_TIMESTAMP}"
+    assert session.path == tmp_path / "p-014" / "recordings" / f"p-014_{_TIMESTAMP}"
     session.save_meta("test")
     assert json.loads((session.path / "meta.json").read_text())["participant"] == "p-014"
 
@@ -120,7 +120,7 @@ def test_same_second_takes_do_not_collide(tmp_path, frozen_clock, name):
 
 def test_session_retries_a_racing_folder_creation(tmp_path, frozen_clock, monkeypatch):
     """Another recorder can reserve a candidate between the check and mkdir."""
-    candidate = tmp_path / "P-014" / f"P-014_{_TIMESTAMP}"
+    candidate = tmp_path / "P-014" / "recordings" / f"P-014_{_TIMESTAMP}"
     mkdir = Path.mkdir
     raced = False
 
@@ -194,7 +194,7 @@ def test_require_participant_refuses_without_id(tmp_path):
     app.ctx.participant = "P-014"
     app.start_recording(str(tmp_path))
     assert app.ctx.state == "recording"
-    assert app.ctx.session.path.parent == tmp_path / "P-014"
+    assert app.ctx.session.path.parent == tmp_path / "P-014" / "recordings"
     assert stream._session is app.ctx.session
     app.discard_recording()
 

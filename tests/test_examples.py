@@ -642,7 +642,7 @@ def test_force_completion_needs_both_devices_and_participant_takes(
     for name in ("emg", "force"):
         monkeypatch.setitem(ctx.streams, name, SimpleNamespace(status="connected", info=object()))
         assert done(ctx) == [name == "force", False]
-    folder = tmp_path / "sessions" / ctx.participant
+    folder = tmp_path / "data" / ctx.participant / "recordings"
     folder.mkdir(parents=True)
     (folder / "someone-else_take.session.zip").touch()
     assert done(ctx) == [True, False]

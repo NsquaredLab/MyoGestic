@@ -111,7 +111,7 @@ def test_completion_follows_this_participants_takes(session_app, monkeypatch, tm
     ctx = ns["app"].ctx
     assert ns["_step_done"](ctx) == [False] * 4
     ctx.participant = "P-014"
-    folder = tmp_path / "sessions" / ctx.participant
+    folder = tmp_path / "data" / ctx.participant / "recordings"
     folder.mkdir(parents=True)
     (folder / "someone_else_take.session.zip").touch()
     monkeypatch.setitem(

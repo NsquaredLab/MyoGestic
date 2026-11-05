@@ -17,7 +17,7 @@ recording = RecordingControls(
     on_stop=app.stop_recording,
     on_gesture=lambda i: ctrl_outlet.push_sample([float(i)]),
 )
-sessions = SessionManager(base_path="sessions", class_names=CLASSES)
+sessions = SessionManager(base_path="data", class_names=CLASSES)
 
 
 @app.ui
@@ -30,7 +30,7 @@ def ui(ctx):
 
 [`RecordingControls`][myogestic.widgets.RecordingControls] renders:
 
-- **Record / Stop** buttons that call `app.start_recording("sessions")` / `app.stop_recording()`.
+- **Record / Stop** buttons that call `app.start_recording("data")` / `app.stop_recording()`.
 - One **button** per class. Clicking a button writes a `LabelEvent(class_index, timestamp=local_clock())` to the active session's label track and fires your `on_gesture` callback. Use the callback to drive an external pattern (synthetic generator, robot, prompt screen).
 
 The `on_gesture` callback is yours; the label is added by `RecordingControls` itself before calling it. You don't need to call `ctx.session.add_label()` manually.
@@ -131,7 +131,7 @@ Use [`open_session_store`][myogestic.session.open_session_store] for either layo
 ```python
 from myogestic.session import open_session_store
 
-sess = open_session_store("sessions/2026-05-06_18-46-47.session.zip")
+sess = open_session_store("data/recordings/2026-05-06_18-46-47.session.zip")
 
 # Continuous data - sample-major as recorded
 data, ts = sess.get_continuous("emg")
@@ -210,7 +210,7 @@ app.streams(
     Stream(
         "emg",
         source=ReplaySource(
-            session_path="sessions/2026-05-06_18-46-47.session.zip",
+            session_path="data/recordings/2026-05-06_18-46-47.session.zip",
             stream_name="emg",
             speed=1.0,  # 0.5 = half-speed, 2.0 = double-speed
         ),
@@ -240,7 +240,7 @@ Stop when done; the archive holds the raw streams *and* what the model saw and d
 from myogestic.session import open_session_store
 import numpy as np
 
-with open_session_store("sessions/2026-09-13_10-12-44_3f9a1c02.session.zip") as s:
+with open_session_store("data/P-014/predictions/P-014_2026-09-13_10-12-44.session.zip") as s:
     print(s.event_streams)  # ('features.vec', 'prediction.pose', 'pipeline.tick', 'controls')
     pose = np.array(s.stores["prediction.pose"])  # (n_ticks, 5)
     t = np.array(s.ts_stores["prediction.pose"])  # data time of each tick

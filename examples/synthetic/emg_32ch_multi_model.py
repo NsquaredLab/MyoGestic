@@ -461,7 +461,7 @@ recording = RecordingControls(
     on_gesture=_on_gesture,
     show_header=False,
 )
-sessions = SessionManager("sessions", class_names=CLASSES)
+sessions = SessionManager("data", class_names=CLASSES)
 prediction = PredictionLabel(pipeline, CLASSES)
 connection = {"busy": False}
 launch_errors: dict[str, str] = {}
@@ -654,7 +654,7 @@ def _step_done(ctx: Context) -> list[bool]:
     return [
         stream is not None and stream.status == "connected" and stream.info is not None,
         bool(ctx.participant)
-        and any(Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
+        and any(Path("data", ctx.participant, "recordings").glob(f"{ctx.participant}_*")),
         pipeline.model is not None,
         ctx.state == "predicting",
     ]

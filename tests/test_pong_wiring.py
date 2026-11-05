@@ -442,7 +442,7 @@ def test_step_completion_follows_connection_participant_files_model_and_predicti
     ctx, done = app_module["app"].ctx, app_module["_step_done"]
     assert done(ctx) == [False, False, False, False]
     ctx.participant = "P-014"
-    folder = tmp_path / "sessions" / ctx.participant
+    folder = tmp_path / "data" / ctx.participant / "recordings"
     folder.mkdir(parents=True)
     (folder / "unrelated.txt").touch()
     assert not done(ctx)[1]
@@ -1650,7 +1650,7 @@ def test_the_block_does_not_run_without_participant(app_module, monkeypatch, tmp
         assert not app_module["target"].running
         assert not app_module["block"]["recording"]
         assert app.ctx.session is None
-        assert not (tmp_path / "sessions").exists()
+        assert not (tmp_path / "data").exists()
         assert [note.title for note in app.ctx.notifications] == ["Recording refused"]
     finally:
         app_module["target"].stop()

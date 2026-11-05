@@ -35,7 +35,7 @@ def test_autosave_writes_labelled_model(tmp_path):
 
     _train_and_wait(pipeline)
 
-    files = list((tmp_path / "P-014").glob("P-014_*_model.joblib"))
+    files = list((tmp_path / "P-014" / "models").glob("P-014_*_model.joblib"))
     assert len(files) == 1
     assert pipeline.last_saved_model == str(files[0])
     assert load_pickle(files[0]) == pipeline.model == {"classes": [0, 1]}
@@ -115,7 +115,7 @@ def test_training_failure_notifies_danger(tmp_path):
     )
 
 
-def test_autosave_without_participant_uses_base_folder(tmp_path):
+def test_autosave_without_participant_uses_the_root_models_folder(tmp_path):
     pipeline = _pipeline(tmp_path)
     pipeline.app.ctx.participant = ""
     pipeline.autosave_dir = str(tmp_path)
@@ -123,6 +123,6 @@ def test_autosave_without_participant_uses_base_folder(tmp_path):
 
     _train_and_wait(pipeline)
 
-    files = list(tmp_path.glob("*_model.joblib"))
+    files = list((tmp_path / "models").glob("*_model.joblib"))
     assert len(files) == 1
     assert Path(pipeline.last_saved_model) == files[0]

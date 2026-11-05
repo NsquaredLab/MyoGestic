@@ -23,7 +23,7 @@ app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
 
 def run_recording():
     time.sleep(2)  # let streams warm up
-    app.start_recording(base_path="sessions")
+    app.start_recording(base_path="data")
     time.sleep(60)  # 60 s of data
     app.stop_recording()
     time.sleep(2)  # let .session.zip finalise
@@ -37,7 +37,7 @@ threading.Thread(target=run_recording, daemon=True).start()
 app.run(mode="headless")
 ```
 
-Run it: `uv run python scripts/unattended.py`. After 60 s the session lands in `sessions/<timestamp>.session.zip` and the script exits.
+Run it: `uv run python scripts/unattended.py`. After 60 s the session lands in `data/recordings/<timestamp>.session.zip` and the script exits.
 
 !!! note "Why SIGINT, not a stop event"
     [`App.run(mode="headless")`][myogestic.App.run] blocks on a simple
@@ -88,7 +88,7 @@ def run_protocol():
         print(f"[{datetime.now():%H:%M:%S}] {class_name} for {duration}s")
         time.sleep(duration)
     app.stop_recording()
-    print("Done. Session in sessions/.")
+    print("Done. Session in data/recordings/.")
     time.sleep(2)
     os.kill(os.getpid(), signal.SIGINT)  # wake the run loop
 
@@ -186,7 +186,7 @@ See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by 
 
 - **No streams connected.** In headless mode, `app.start_recording()` checks `Stream.info` to decide what to record. If your streams haven't connected yet (the upstream LSL outlet hasn't appeared), recording starts with zero streams. Sleep for 1-2 seconds after `app.run` starts before recording.
 - **Calling `app.start_recording()` from before `app.run()`.** The streams' acquisition threads start inside `app.run`. Call recording from a thread that's launched *before* `app.run` but does its work after a small sleep, or from a `before_run_hook`.
-- **Forgetting to wait for `.session.zip` to finalise.** `app.stop_recording()` kicks off a daemon thread that packs the folder. If main exits immediately, the zip might not finish. Sleep 1-2 seconds before exiting, or check that `sessions/<timestamp>.session.zip` exists.
+- **Forgetting to wait for `.session.zip` to finalise.** `app.stop_recording()` kicks off a daemon thread that packs the folder. If main exits immediately, the zip might not finish. Sleep 1-2 seconds before exiting, or check that `data/recordings/<timestamp>.session.zip` exists.
 - **Using `time.sleep` inside `@pipeline.predict`.** Same as in GUI mode - it blocks the predict thread. The framework already paces ticks at `predict_hz`.
 
 See also: [Record and replay](record-and-replay.md), [Recording concept page](../concepts/recording.md).

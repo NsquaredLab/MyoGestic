@@ -9,7 +9,7 @@ stateDiagram-v2
     [*] --> idle
     idle: state = "idle"\nstreams flowing\nnothing persisted
 
-    idle --> recording: app.start_recording(base_path="sessions")
+    idle --> recording: app.start_recording(base_path="data")
     recording: state = "recording"\nctx.recording = True\nacquisition threads also write to Zarr
 
     recording --> recording: button click\n→ ctx.session.add_label(class_idx, timestamp=local_clock())
@@ -30,11 +30,31 @@ Acquisition threads append each chunk while their stream has an attached session
 
 ## On-disk layout
 
-During recording, one folder per session:
+Everything for one participant lives in one folder under `data/`, split by what it is:
 
 ```text
-sessions/
-└── 2026-05-06_18-46-47/
+data/
+├── P-014/
+│   ├── recordings/                 # takes started from idle: training data
+│   │   └── P-014_2026-05-06_18-46-47_Rest.session.zip
+│   ├── predictions/                # takes started while a model was predicting
+│   │   └── P-014_2026-05-06_18-52-10_Follow-run.session.zip
+│   └── models/                     # Pipeline.autosave_dir output
+│       └── P-014_2026-05-06_18-50-02_model.joblib
+├── recordings/                     # takes recorded with no participant set
+└── predictions/
+```
+
+`app.start_recording()` picks `recordings/` or `predictions/` from `ctx.state` when the take
+starts, so a prediction run never lands among the training takes.
+[`participant_dir(root, participant, kind)`][myogestic.session.participant_dir] returns any
+of these folders.
+
+During recording, one folder per take:
+
+```text
+data/P-014/recordings/
+└── P-014_2026-05-06_18-46-47/
     ├── meta.json                   # class_names, started_at, model_meta
     ├── labels.json                 # label_track (timestamps + class indices)
     ├── emg.zarr/                   # (n_samples, n_channels) sample-major
@@ -46,9 +66,9 @@ sessions/
 After `stop_recording`, the folder packs to a single archive:
 
 ```text
-sessions/
-├── 2026-05-06_18-46-47/            # original folder (kept until pack succeeds)
-└── 2026-05-06_18-46-47.session.zip # archive - contains the same internal layout
+data/P-014/recordings/
+├── P-014_2026-05-06_18-46-47/            # original folder (kept until pack succeeds)
+└── P-014_2026-05-06_18-46-47.session.zip # archive - contains the same internal layout
 ```
 
 Both are loadable via [`open_session_store(path)`][myogestic.session.open_session_store] - readers don't need to know which they got.
@@ -133,7 +153,7 @@ On stop, `App.finalize_hooks` run on the finalize thread before `meta.json` is w
 ```python
 from myogestic.session import open_session_store
 
-sess = open_session_store("sessions/2026-05-06_18-46-47.session.zip")
+sess = open_session_store("data/P-014/recordings/P-014_2026-05-06_18-46-47.session.zip")
 
 # Continuous data
 data, ts = sess.get_continuous("emg")

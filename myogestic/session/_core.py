@@ -220,36 +220,68 @@ def _slug(name: str) -> str:
     return "-".join(filter(None, kept.split("-")))[:_SLUG_MAX].strip("-_")
 
 
-def labelled_path(base_path: str | Path, participant: str = "", suffix: str = "") -> Path:
-    """Build a timestamped path, optionally nested and labelled by participant.
+#: The folders under ``data/<ID>/`` that hold takes: ``recordings/`` for takes
+#: made while idle, ``predictions/`` for takes made beside a live model. Trained
+#: models go in ``models/``.
+TAKE_KINDS = ("recordings", "predictions")
+#: Every folder ``data/<ID>/`` (and ``data/`` itself, for takes with no ID) is split into.
+KINDS = (*TAKE_KINDS, "models")
+
+
+def participant_dir(root: str | Path, participant: str = "", kind: str = "recordings") -> Path:
+    """Return the folder that holds one kind of file for one participant.
 
     Parameters
     ----------
-    base_path
-        Parent directory for recordings or saved models.
+    root
+        Data root, usually ``"data"``.
     participant
-        Pseudonymised ID, reduced to a safe single path segment. An empty
-        slug keeps the timestamp directly under ``base_path``.
-    suffix
-        Optional filename suffix, appended after an underscore, such as
-        ``"model.joblib"``.
+        Pseudonymised ID, reduced to a safe single path segment.
+    kind
+        ``"recordings"``, ``"predictions"`` or ``"models"``.
 
     Returns
     -------
     pathlib.Path
-        ``base/ID/ID_timestamp[_suffix]`` or ``base/timestamp[_suffix]``.
+        ``root/ID/kind``, or ``root/kind`` when the ID has no usable
+        characters. Nothing is created.
+
+    Examples
+    --------
+    >>> participant_dir("data", "P-014", "models").as_posix()
+    'data/P-014/models'
+    """
+    return Path(root, _slug(participant), kind)
+
+
+def labelled_path(
+    base_path: str | Path, participant: str = "", suffix: str = "", *, kind: str = "recordings"
+) -> Path:
+    """Build a timestamped path in a participant's folder for one kind of file.
+
+    Parameters
+    ----------
+    base_path
+        Data root, usually ``"data"``.
+    participant
+        Pseudonymised ID, reduced to a safe single path segment. An empty
+        slug drops the participant level and the filename prefix.
+    suffix
+        Optional filename suffix, appended after an underscore, such as
+        ``"model.joblib"``.
+    kind
+        Subfolder, see `participant_dir`. Default ``"recordings"``.
+
+    Returns
+    -------
+    pathlib.Path
+        ``base/ID/kind/ID_timestamp[_suffix]`` or ``base/kind/timestamp[_suffix]``.
         No directories are created and no name is reserved. `Session` adds
         its collision guard when it creates the recording folder.
     """
     participant = _slug(participant)
-    timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
-    parent = Path(base_path)
-    if participant:
-        parent /= participant
-        timestamp = f"{participant}_{timestamp}"
-    if suffix:
-        timestamp = f"{timestamp}_{suffix}"
-    return parent / timestamp
+    stem = "_".join(filter(None, (participant, time.strftime("%Y-%m-%d_%H-%M-%S"), suffix)))
+    return participant_dir(base_path, participant, kind) / stem
 
 
 def _unique_stem(parent: Path, stem: str) -> str:
@@ -346,9 +378,9 @@ class Session:
     Zarr folders, and optionally packs the tree into a portable ``.session.zip``.
 
     Layout on disk (one folder per recording, named with the start
-    timestamp)::
+    timestamp, packed to ``<folder>.session.zip`` on stop)::
 
-        sessions/2026-05-17_14-23-05/
+        data/P-014/recordings/P-014_2026-05-17_14-23-05/
             emg.zarr/                  # shape (n_samples, n_channels)
             emg_timestamps.zarr/       # shape (n_samples,) float64
             vhi_control.zarr/          # any additional stream
@@ -362,25 +394,29 @@ class Session:
     Parameters
     ----------
     base_path
-        Parent directory; the session creates a timestamp-named subdirectory
-        inside. Default ``"sessions"`` (created if missing).
+        Data root; the session creates a timestamp-named subdirectory in
+        ``base_path/ID/kind``. Default ``"data"`` (created if missing).
     participant
         Pseudonymised ID. A safe slug labels the folder and ``meta.json`` and
-        nests the recording under ``base_path/ID``. Empty by default, keeping
-        the legacy timestamp and random suffix directly under ``base_path``.
+        nests the recording under ``base_path/ID/kind``. Empty by default,
+        which puts a timestamp and random suffix directly in ``base_path/kind``.
+    kind
+        ``"recordings"`` (default) or ``"predictions"``, see `participant_dir`.
 
     Examples
     --------
     >>> from myogestic.session import Session
-    >>> session = Session("sessions")
+    >>> session = Session("data")
     >>> session.add_label(0, timestamp=123.0)
     """
 
-    def __init__(self, base_path: str = "sessions", participant: str = "") -> None:
+    def __init__(
+        self, base_path: str = "data", participant: str = "", kind: str = "recordings"
+    ) -> None:
         #: Pseudonymised ID only; personal names belong in the local key file.
         self.participant: str = _slug(participant)
         if self.participant:
-            labelled = labelled_path(base_path, self.participant)
+            labelled = labelled_path(base_path, self.participant, kind=kind)
             parent = labelled.parent
             parent.mkdir(parents=True, exist_ok=True)
             # Archives keep a stem reserved after packing removes its folder.
@@ -398,7 +434,7 @@ class Session:
             # never share a folder: pack_to_zip() runs on a daemon thread and
             # shutil.rmtree()s its own folder, so a shared name lets the old session's
             # pack thread wipe the new recording (and collide on the .session.zip path).
-            self.path = Path(base_path) / f"{ts}_{uuid.uuid4().hex[:8]}"
+            self.path = participant_dir(base_path, kind=kind) / f"{ts}_{uuid.uuid4().hex[:8]}"
             self.path.mkdir(parents=True, exist_ok=True)
         #: Free-form facts a widget contributed about this recording, merged into
         #: ``meta.json`` under ``"extras"``. For anything the raw arrays cannot

@@ -501,10 +501,12 @@ class App:
 
     # --- Recording (universal; ML is in myogestic.ml) ---
 
-    def start_recording(self, base_path: str = "sessions") -> None:
+    def start_recording(self, base_path: str = "data") -> None:
         """Begin recording all connected streams to a new session.
 
-        Creates ``base_path/<timestamp>/`` and starts appending each
+        Creates ``base_path/<ID>/recordings/<ID>_<timestamp>/``, or
+        ``.../predictions/...`` when the take starts while a model is
+        predicting, and starts appending each
         stream's data + timestamps to per-stream Zarr arrays. Streams
         whose ``info`` is still ``None`` (disconnected) are skipped -
         they won't be retroactively captured if they connect later in
@@ -515,8 +517,8 @@ class App:
         Parameters
         ----------
         base_path
-            Directory where the per-session subfolder is
-            created. Defaults to ``"sessions"``.
+            Data root holding one folder per participant. Defaults to
+            ``"data"``. See [`participant_dir`][myogestic.session.participant_dir].
         """
         if self.ctx.recording:
             self.ctx.status_message = "Cannot start recording: already recording."
@@ -531,11 +533,13 @@ class App:
             self.ctx.status_message = "Set a participant ID before recording."
             self.ctx.notify("Recording refused", "Set a participant ID first.", "warning")
             return
+        # A take beside a live model is a prediction run, not training data.
+        kind = "predictions" if self.ctx.state == "predicting" else "recordings"
         # A stream with info=None has no zarr schema and would fail on append.
         self.ctx.recording = True
         if self.ctx.state == AppState.IDLE:
             self.ctx.state = AppState.RECORDING
-        self.ctx.session = Session(base_path=base_path, participant=self.ctx.participant)
+        self.ctx.session = Session(base_path=base_path, participant=self.ctx.participant, kind=kind)
         n_ready = 0
         for name, stream in self.ctx.streams.items():
             if stream.info is None:

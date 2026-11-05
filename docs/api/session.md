@@ -18,6 +18,15 @@ Three window iterators, differing only in what each window is paired with. `iter
 
 ::: myogestic.session.SessionSplit
 
+## Where takes are saved
+
+Everything for one participant lives under `data/<ID>/`, in `recordings/`, `predictions/` and
+`models/`. See [On-disk layout](../concepts/recording.md#on-disk-layout).
+
+::: myogestic.session.participant_dir
+
+::: myogestic.session.labelled_path
+
 ## Data model
 
 ::: myogestic.session.Session

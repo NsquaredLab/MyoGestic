@@ -99,7 +99,7 @@ grid = Grid(8, 3)
 viewer = SignalViewer("emg")
 launcher = ProcessLauncher(processes)
 recording = RecordingControls(classes, on_record=..., on_stop=..., on_gesture=...)
-sessions = SessionManager("sessions")
+sessions = SessionManager("data")
 panel = PipelinePanel(pipeline)
 save = SaveModelButton(pipeline, "model.pkl")
 

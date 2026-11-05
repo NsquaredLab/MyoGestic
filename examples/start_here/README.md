@@ -14,7 +14,7 @@ uv run --extra examples --extra grpc python examples/start_here/pong.py
 speak to the Virtual Hand. `force_ramps.py` needs neither, and `pong.py` plays
 with no Virtual Hand at all — the wrist there only mirrors the paddle.
 
-In `myocontrol.py`, set a participant ID, then follow Connect → Record → Train → Drive; recordings and trained models are saved under `sessions/<ID>/`.
+In `myocontrol.py`, set a participant ID, then follow Connect → Record → Train → Drive; recordings, prediction runs and trained models are saved under `data/<ID>/` in `recordings/`, `predictions/` and `models/`.
 
 Use **+** in the Source card to add another amplifier; generated targets are
 excluded from device selection. In `force_ramps.py`, follow Connect → Track to

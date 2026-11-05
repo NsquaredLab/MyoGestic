@@ -122,7 +122,7 @@ recording = RecordButton(
     on_discard=app.discard_recording,
     show_header=False,
 )
-sessions = SessionManager("sessions")
+sessions = SessionManager("data")
 
 
 def _step_done(ctx: Context) -> list[bool]:
@@ -135,7 +135,7 @@ def _step_done(ctx: Context) -> list[bool]:
             for name in ("emg", "force")
         ),
         bool(ctx.participant)
-        and any(Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
+        and any(Path("data", ctx.participant, "recordings").glob(f"{ctx.participant}_*")),
     ]
 
 

@@ -268,7 +268,7 @@ def _connected_app() -> tuple[App, Stream]:
 
 
 def _only_zip(folder: Path) -> Path:
-    zips = list(folder.glob("*.session.zip"))
+    zips = list(folder.rglob("*.session.zip"))
     assert len(zips) == 1, zips
     return zips[0]
 
@@ -284,7 +284,7 @@ def test_recording_while_predicting_leaves_the_state_alone(tmp_path, recordable_
     assert app.ctx.recording is False
     assert app.ctx.state == "predicting"
     assert stream._session is None
-    assert _only_zip(tmp_path).exists()
+    assert _only_zip(tmp_path).parent == tmp_path / "predictions"
 
 
 def test_recording_from_idle_still_shows_the_recording_state(tmp_path):
@@ -293,6 +293,7 @@ def test_recording_from_idle_still_shows_the_recording_state(tmp_path):
     assert (app.ctx.recording, app.ctx.state) == (True, "recording")
     app.stop_recording(wait=True)
     assert (app.ctx.recording, app.ctx.state) == (False, "idle")
+    assert _only_zip(tmp_path).parent == tmp_path / "recordings"
 
 
 def test_start_recording_is_refused_outside_recordable_states(tmp_path):
@@ -343,7 +344,7 @@ def test_discard_while_predicting_runs_no_hook(tmp_path, recordable_predicting):
     app.start_recording(str(tmp_path))
     app.discard_recording()
     assert (app.ctx.recording, app.ctx.state, app.ctx.session) == (False, "predicting", None)
-    assert not list(tmp_path.iterdir())
+    assert not list((tmp_path / "predictions").iterdir())
 
 
 def test_cleanup_finalises_an_open_take(tmp_path):
@@ -404,7 +405,7 @@ def test_cleanup_waits_for_takes_stopped_by_a_hook(tmp_path, monkeypatch, take_c
     assert not app.ctx.recording
     assert not app.ctx.pending_saves
     assert pending_at_stream_stop == []
-    archives = list(tmp_path.glob("*.session.zip"))
+    archives = list(tmp_path.rglob("*.session.zip"))
     assert len(archives) == take_count
     for archive in archives:
         with zipfile.ZipFile(archive) as saved:

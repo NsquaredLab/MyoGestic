@@ -62,8 +62,9 @@ def _running_app(tmp_path: Path, *, save_model=None):
     return app, pipeline, stream
 
 
-def _zip(folder: Path) -> Path:
-    (zip_path,) = folder.glob("*.session.zip")
+def _zip(folder: Path, kind: str = "predictions") -> Path:
+    # Takes started while predicting land in the root's predictions/ folder.
+    (zip_path,) = (folder / kind).glob("*.session.zip")
     return zip_path
 
 
@@ -209,7 +210,7 @@ def test_model_is_not_saved_for_a_take_the_pipeline_never_wrote_into(tmp_path):
     app.start_recording(str(tmp_path))
     assert app.ctx.state == "recording"  # never set to predicting: the pipeline never ticked
     app.stop_recording(wait=True)
-    with zipfile.ZipFile(_zip(tmp_path)) as zf:
+    with zipfile.ZipFile(_zip(tmp_path, "recordings")) as zf:
         meta = json.loads(zf.read("meta.json"))
         names = set(zf.namelist())
     assert "model.joblib" not in names

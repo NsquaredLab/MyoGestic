@@ -144,7 +144,7 @@ def test_bare_footer_fits_in_light_theme(probe, width, scale, with_pipeline, lon
         right = view.bounds[1][0] - imgui.get_style().window_padding.x
         assert abs(view.items[-1].hi[0] - right) <= 1
     if long:
-        detail = f"emg · disconnected · {participant} · {Path('sessions') / participant}"
+        detail = f"emg · disconnected · {participant} · {Path('data') / participant}"
         assert view.items[1].label.endswith("…")
         assert view.tooltips[0] == detail
         if with_pipeline:

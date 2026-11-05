@@ -304,7 +304,7 @@ is mostly made of them.
     [Track a force target](track-a-force-target.md), writes its `Trapezoid` through the
     same `TargetSource`, onto a stream also called `target`, with the identical channel
     names — in **percent of MVC**, `0..100`. A `StreamInfo` carries no unit, so nothing
-    in the recording distinguishes the two, and the same `sessions/` folder holds both.
+    in the recording distinguishes the two, and the same `recordings/` folder holds both.
     Concatenated with a cursor block, one such session collapsed
     `directional_decoder`'s `span_` from 4.17 to 0.046 and turned a graded transfer curve
     into a hard three-step staircase. `fit` now refuses any `abs(y) > 1`, and

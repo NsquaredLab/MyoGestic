@@ -7,7 +7,7 @@ Selecting a gesture fires ``on_gesture`` and labels the captured data.
 
 Wired here to a live synthetic stream and a **throwaway temp directory**,
 so both timed takes and manual Record → (click classes) → Stop perform real
-recordings without leaving anything in the repo's ``sessions/``.
+recordings without leaving anything in the repo's ``data/``.
 
 Run with:
     uv run python examples/panels/recording_controls.py

@@ -95,17 +95,18 @@ def test_recorded_time_sums_folder(tmp_path):
             session.add_label(1, timestamp=14.0)
             session.save_meta("totals", class_names=["Rest", "Fist"])
             if packed:
-                session.pack_to_zip().rename(tmp_path / "renamed.zip")
+                session.pack_to_zip().rename(tmp_path / "recordings" / "renamed.zip")
+    folder = tmp_path / "recordings"
     # A nested participant and unrelated/corrupt files are not direct takes.
-    with _session(tmp_path / "nested") as nested:
+    with _session(folder / "nested") as nested:
         nested.save_meta("nested")
-    (tmp_path / "broken.zip").write_text("not an archive")
-    (tmp_path / "notes.txt").write_text("not a session")
-    assert recorded_time(tmp_path) == RecordedTime(2, 20.0, {"Rest": 8.0, "Fist": 12.0})
-    assert recorded_time(str(tmp_path)) == recorded_time(tmp_path)
+    (folder / "broken.zip").write_text("not an archive")
+    (folder / "notes.txt").write_text("not a session")
+    assert recorded_time(folder) == RecordedTime(2, 20.0, {"Rest": 8.0, "Fist": 12.0})
+    assert recorded_time(str(folder)) == recorded_time(folder)
     assert recorded_time(tmp_path / "missing") == RecordedTime(0, 0.0, {})
     with pytest.raises(FrozenInstanceError):
-        recorded_time(tmp_path).takes = 0
+        recorded_time(folder).takes = 0
 
 
 def test_old_session_without_seconds(tmp_path):
@@ -132,7 +133,7 @@ def test_old_session_without_seconds(tmp_path):
         assert len(rows) == 1
         assert rows[0]["duration_s"] == 0.0
         assert rows[0]["class_seconds"] == {}
-        assert recorded_time(tmp_path) == RecordedTime(1, 0.0, {})
+        assert recorded_time(tmp_path / "recordings") == RecordedTime(1, 0.0, {})
         assert list(iter_labeled_windows([str(session.path)], "emg", window_ms=200, hop_ms=100))
 
 

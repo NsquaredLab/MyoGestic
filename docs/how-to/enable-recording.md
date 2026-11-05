@@ -27,7 +27,7 @@ def ui(ctx):
 app.run()
 ```
 
-Click **Record** → data flows into `sessions/<timestamp>/`. Click **Stop** → that folder packs into `sessions/<timestamp>[_<labels>].session.zip`, with the recorded gesture labels included when available. No further setup required.
+Click **Record** → data flows into `data/<ID>/recordings/<ID>_<timestamp>/` (or `data/recordings/<timestamp>/` with no participant set). Click **Stop** → that folder packs into `<ID>_<timestamp>[_<labels>].session.zip` beside it, with the recorded gesture labels included when available. No further setup required.
 
 ## Just capture, and name it afterwards
 
@@ -65,7 +65,7 @@ The name is written to `meta.json` and appended to the archive filename, so a sa
        │     └─ enter GUI loop                                │
        │                                                      │
        │   ┌─ user clicks Record ────────────────────────┐   │
-       │   │ app.start_recording(base_path="sessions")   │   │
+       │   │ app.start_recording(base_path="data")       │   │
        │   │   ├─ ctx.state = "recording"                │   │
        │   │   ├─ ctx.session = Session(base_path)       │   │
        │   │   ├─ Session.init_stream(name, info)        │   │
@@ -94,15 +94,19 @@ The name is written to `meta.json` and appended to the archive filename, so a sa
 ## The artifact
 
 ```
-sessions/
-└── 2026-05-17_14-23-05.session.zip       # final packaged artifact
+data/P-014/recordings/
+└── P-014_2026-05-17_14-23-05.session.zip # final packaged artifact
                                           # (after Stop completes)
 ```
+
+A take started while a model is predicting goes to `data/P-014/predictions/` instead, and
+`Pipeline.autosave_dir` writes trained models to `data/P-014/models/`. See
+[On-disk layout](../concepts/recording.md#on-disk-layout).
 
 Inside the zip:
 
 ```
-2026-05-17_14-23-05/
+P-014_2026-05-17_14-23-05/
 ├── emg.zarr/                       # shape (n_samples, n_channels), dtype = stream dtype
 │   └── chunks: (fs, n_channels)    # 1 second per chunk
 ├── emg_timestamps.zarr/            # shape (n_samples,) float64 LSL clock seconds
@@ -113,7 +117,7 @@ Inside the zip:
 └── labels.json                     # list of {timestamp, class_index}
 ```
 
-While recording is in progress and before `stop_recording()` completes, the same content lives as an unpacked folder `sessions/2026-05-17_14-23-05/`. The folder is deleted only after the zip is verified.
+While recording is in progress and before `stop_recording()` completes, the same content lives as an unpacked folder `data/P-014/recordings/P-014_2026-05-17_14-23-05/`. The folder is deleted only after the zip is verified.
 
 ## Zarr configuration (what defaults you get)
 
@@ -156,7 +160,7 @@ def _capture(app):
     # the acquisition threads while we sleep here.
     def _run():
         time.sleep(2)  # let buffers warm up
-        app.start_recording("sessions")
+        app.start_recording("data")
         app.ctx.session.add_label(0)  # initial class index
         for class_idx in (1, 0, 1, 0):  # cycle Fist <-> Rest
             time.sleep(5)
@@ -176,7 +180,7 @@ app.before_run_hooks.append(_capture)
 app.run(mode="headless")
 ```
 
-The artifact lands at `sessions/<timestamp>.session.zip` just as in the GUI flow.
+The artifact lands in `data/recordings/` (or `data/<ID>/recordings/` with a participant set) just as in the GUI flow.
 
 ## Custom GUI integration
 
@@ -207,7 +211,7 @@ When `ctx.state == "recording"`, `app.ctx.session` is a live [`Session`](../api/
 
 | Method                                                | Purpose                                                                  |
 |-------------------------------------------------------|--------------------------------------------------------------------------|
-| `Session(base_path="sessions")`                       | Constructor (called by `start_recording`; you rarely need it directly).  |
+| `Session(base_path="data")`                           | Constructor (called by `start_recording`; you rarely need it directly).  |
 | `session.path`                                        | `Path` to the session folder being written.                              |
 | `session.stores[name]`                                | The live `zarr.Array` for stream `name` (sample data, append-only).      |
 | `session.ts_stores[name]`                             | Parallel timestamp `zarr.Array` for stream `name`.                       |
@@ -226,7 +230,7 @@ You typically only call `add_label` directly; everything else is wired by `start
 from myogestic.session import open_session_store
 
 # Works for both packed zips AND unpacked folders.
-sess = open_session_store("sessions/2026-05-17_14-23-05.session.zip")
+sess = open_session_store("data/P-014/recordings/P-014_2026-05-17_14-23-05.session.zip")
 
 emg = sess.stores["emg"]  # zarr.Array, shape (n_samples, n_channels)
 emg_ts = sess.ts_stores["emg"]  # zarr.Array, shape (n_samples,) float64
@@ -267,7 +271,7 @@ These skip windows that straddle a label boundary and handle the window/hop math
 
 - **Calling `start_recording` before streams connect.** A `Stream` whose `info is None` is silently skipped (no Zarr schema yet). Either wait for `app.ctx.streams["emg"].info is not None` or trigger recording from a `before_run_hook` plus a short sleep, as in the headless example.
 - **Recording with the synthetic generator paused.** The generator only produces data while it's running. Click Launch in the `ProcessLauncher` panel before Record, or in headless flow start the generator subprocess before `app.run()`.
-- **Killing the process mid-recording.** The `.session.zip` is packed only at `stop_recording()`. Crashes leave the raw `sessions/<timestamp>/` folder; you can pack it later with `Session(base_path=...).pack_to_zip()` after re-attaching to it, or just load the folder directly with `open_session_store("sessions/<timestamp>/")` - both work.
+- **Killing the process mid-recording.** The `.session.zip` is packed only at `stop_recording()`. Crashes leave the raw `data/<ID>/recordings/<ID>_<timestamp>/` folder; you can pack it later with `Session(base_path=...).pack_to_zip()` after re-attaching to it, or just load the folder directly with `open_session_store("data/<ID>/recordings/<ID>_<timestamp>/")` - both work.
 - **Forgetting `class_names` in `save_meta`**. `RecordingControls` passes them through automatically. If you call `add_label` directly from custom code, also call `app.ctx.session.save_meta(app_name="...", class_names=[...])` before `stop_recording` or your labels will only be integers in `labels.json` with no name lookup.
 
 ## See also

@@ -52,7 +52,7 @@ visible explanation that the simulator follows the recorded gesture.
 ::: myogestic.widgets.ParticipantPanel
 
 The header chip opens **Recorded** when readable takes exist under `sessions_dir`
-(default `"sessions"`), otherwise **New participant**. Recorded participants are listed
+(default `"data"`), otherwise **New participant**. Recorded participants are listed
 by latest recording, with gesture dots (or `cursor`), take counts, duration and saved
 model availability. Search uses IDs; **Show names** also enables local name search.
 Names start masked and are hidden again when the dialog closes. **Continue with ID**
@@ -67,7 +67,7 @@ prediction, and an open dialog closes when the app becomes busy.
 Pass `on_drive=callback` to offer **Drive with saved model** for participants with a
 saved `*_model.joblib`. The callback receives `(participant_id, model_path)` after
 `ctx.participant` has been set; `model_path` is a `Path` to the most recently modified
-model in that participant's folder. Takes are scanned once each time the dialog
+model in that participant's `models/` folder. Takes are scanned once each time the dialog
 opens, using the same pending-save exclusions as `SessionManager`.
 
 Names stay in widget memory and the local `~/myogestic/participant-key.csv` key file;

@@ -17,7 +17,7 @@ from myogestic.widgets.training import _session_state as session_state
 def _take(
     base, pid="P-003", *, stamp="2026-10-25T15:47:00", classes=("Rest", "Fist"), folder=False
 ):
-    parent = base / pid
+    parent = base / pid / "recordings"
     parent.mkdir(parents=True, exist_ok=True)
     path = parent / f"{pid}_{stamp.replace(':', '-')}"
     meta = dict(
@@ -43,7 +43,7 @@ def _take(
 def _panel(tmp_path, **kwargs):
     return api.ParticipantPanel(
         key_file=tmp_path / "key.csv",
-        sessions_dir=tmp_path / "sessions",
+        sessions_dir=tmp_path / "data",
         widget_id=str(tmp_path),
         **kwargs,
     )
@@ -64,7 +64,7 @@ def _capture(monkeypatch):
 
 
 def test_listing_uses_readable_takes_and_skips_pending(tmp_path):
-    base = tmp_path / "sessions"
+    base = tmp_path / "data"
     _take(base)
     _take(base, "P-004", stamp="2026-10-26T08:47:00", classes=())
     pending = _take(base, "P-005", folder=True)
@@ -83,7 +83,7 @@ def test_listing_uses_readable_takes_and_skips_pending(tmp_path):
 
 
 def test_search_names_only_when_revealed_and_ids_never_merge(tmp_path):
-    base = tmp_path / "sessions"
+    base = tmp_path / "data"
     for pid in ("P-003", "P-004"):
         _take(base, pid)
         api._append(tmp_path / "key.csv", pid, "Jörg", "Müller")
@@ -99,7 +99,7 @@ def test_search_names_only_when_revealed_and_ids_never_merge(tmp_path):
 
 
 def test_scan_once_per_open_and_names_reset_on_cancel(tmp_path, imgui_frame, monkeypatch):
-    _take(tmp_path / "sessions")
+    _take(tmp_path / "data")
     api._append(tmp_path / "key.csv", "P-003", "Jane", "Doe")
     panel, ctx = _panel(tmp_path), Context()
     reads, text = [], []
@@ -146,12 +146,13 @@ def test_scan_once_per_open_and_names_reset_on_cancel(tmp_path, imgui_frame, mon
 
 @pytest.mark.parametrize("drive", [False, True])
 def test_continue_and_drive_keep_key_unchanged(tmp_path, imgui_frame, monkeypatch, drive):
-    _take(tmp_path / "sessions")
+    _take(tmp_path / "data")
     key = tmp_path / "key.csv"
     api._append(key, "P-003", "Jane", "Doe")
     before = key.read_bytes()
-    old = tmp_path / "sessions/P-003/old_model.joblib"
+    old = tmp_path / "data/P-003/models/old_model.joblib"
     new = old.with_name("new_model.joblib")
+    old.parent.mkdir()
     old.touch()
     new.touch()
     os.utime(old, (1, 1))
@@ -175,7 +176,7 @@ def test_continue_and_drive_keep_key_unchanged(tmp_path, imgui_frame, monkeypatc
 
 @pytest.mark.parametrize("busy", ["recording", "training", "predicting"])
 def test_open_dialog_closes_and_hides_names_when_busy(tmp_path, imgui_frame, busy):
-    _take(tmp_path / "sessions")
+    _take(tmp_path / "data")
     panel, ctx = _panel(tmp_path), Context()
     panel.open()
     imgui_frame(lambda: panel.ui(ctx))
@@ -187,7 +188,7 @@ def test_open_dialog_closes_and_hides_names_when_busy(tmp_path, imgui_frame, bus
 
 
 def test_next_free_id_includes_recordings_without_key_rows(tmp_path):
-    _take(tmp_path / "sessions", "P-014")
+    _take(tmp_path / "data", "P-014")
     panel = _panel(tmp_path)
     panel._prepare()
     assert panel._state.pid == "P-015"
@@ -196,7 +197,7 @@ def test_next_free_id_includes_recordings_without_key_rows(tmp_path):
 
 @pytest.mark.parametrize("content", [None, "wrong,header\nP-003,Jane\n"])
 def test_missing_or_edited_key_still_lists_ids(tmp_path, content):
-    _take(tmp_path / "sessions")
+    _take(tmp_path / "data")
     if content is not None:
         (tmp_path / "key.csv").write_text(content)
     panel = _panel(tmp_path)
@@ -208,9 +209,10 @@ def test_missing_or_edited_key_still_lists_ids(tmp_path, content):
 def test_drive_action_requires_both_callback_and_model(
     tmp_path, imgui_frame, monkeypatch, callback, model
 ):
-    _take(tmp_path / "sessions")
+    _take(tmp_path / "data")
     if model:
-        (tmp_path / "sessions/P-003/a_model.joblib").touch()
+        (tmp_path / "data/P-003/models").mkdir()
+        (tmp_path / "data/P-003/models/a_model.joblib").touch()
     panel = _panel(tmp_path, on_drive=(lambda *_: None) if callback else None)
     labels, _ = _capture(monkeypatch)
     panel.open()
@@ -233,7 +235,7 @@ def test_empty_recorded_tab_points_to_new_participant(tmp_path, imgui_frame, mon
 
 def test_continue_uses_clicked_id_even_when_names_match(tmp_path, imgui_frame, monkeypatch):
     for pid in ("P-003", "P-004"):
-        _take(tmp_path / "sessions", pid)
+        _take(tmp_path / "data", pid)
         api._append(tmp_path / "key.csv", pid, "Jane", "Doe")
     panel, ctx = _panel(tmp_path), Context()
     _, clicks = _capture(monkeypatch)
@@ -266,9 +268,10 @@ def test_last_recorded_labels():
 def test_light_dialog_fits_narrow_viewport(
     tmp_path, imgui_frame, monkeypatch, scale, width, height, tab
 ):
-    _take(tmp_path / "sessions")
+    _take(tmp_path / "data")
     panel, ctx = _panel(tmp_path, on_drive=lambda *_: None), Context()
-    (tmp_path / "sessions/P-003/a_model.joblib").touch()
+    (tmp_path / "data/P-003/models").mkdir()
+    (tmp_path / "data/P-003/models/a_model.joblib").touch()
     monkeypatch.setattr(_scale, "_current", scale)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()

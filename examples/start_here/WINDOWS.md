@@ -99,7 +99,7 @@ The status line changes to **ready**. Until both captures are done, the
 4. Press **Stop** on the recorder, then **Save**.
 
 The session appears in the panel at the bottom right, and the data is saved
-in `sessions/<ID>/` inside `MyoGestic-main`, with the participant ID in each
+in `data/<ID>/recordings/` inside `MyoGestic-main`, with the participant ID in each
 recording's filename.
 
 ## No amplifier to hand?

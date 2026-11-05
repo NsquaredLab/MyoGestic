@@ -25,7 +25,7 @@ class StatusBar:
     stream : str, optional
         Acquisition stream to describe, by default ``"emg"``.
     sessions_dir : str or Path, optional
-        Root of the participant folders, by default ``"sessions"``.
+        Root of the participant folders, by default ``"data"``.
     pipeline : Pipeline or None, optional
         Read ``model`` and ``last_saved_model`` for a right-aligned model
         readout. Without a pipeline, no model text is drawn.
@@ -42,7 +42,7 @@ class StatusBar:
         self,
         stream: str = "emg",
         *,
-        sessions_dir: str | Path = "sessions",
+        sessions_dir: str | Path = "data",
         pipeline: Pipeline | None = None,
         widget_id: str = "status_bar",
     ) -> None:

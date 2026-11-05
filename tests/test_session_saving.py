@@ -145,7 +145,7 @@ def test_pending_save_covers_pack_and_clears_on_success_or_failure(
     assert pending_during_pack == [True]
     assert not app.ctx.pending_saves
     assert ("Pack failed" in app.ctx.status_message) is fails
-    assert [row["path"] for row in get_state("Sessions_sessions").sessions if row["selected"]] == [
+    assert [row["path"] for row in get_state("Sessions_data").sessions if row["selected"]] == [
         str(session.path.resolve())
     ]
 

@@ -75,10 +75,10 @@ def test_the_name_lands_in_meta_and_in_the_archive_filename(tmp_path):
     app.ctx.session.name = "subject 03 fist"
     app.stop_recording()
 
-    zips = list((tmp_path / "sessions").glob("*.session.zip"))
+    zips = list((tmp_path / "sessions" / "recordings").glob("*.session.zip"))
     # stop_recording packs on a daemon thread; wait for it rather than sleeping.
     for _ in range(200):
-        zips = list((tmp_path / "sessions").glob("*.session.zip"))
+        zips = list((tmp_path / "sessions" / "recordings").glob("*.session.zip"))
         if zips:
             break
         import time
@@ -129,7 +129,7 @@ def test_discarding_a_recording_deletes_it_and_returns_to_idle(tmp_path):
     app.discard_recording()
 
     assert not folder.exists(), "discarded recording left its folder behind"
-    assert list((tmp_path / "sessions").glob("*.session.zip")) == []
+    assert list((tmp_path / "sessions" / "recordings").glob("*.session.zip")) == []
     assert app.ctx.state == AppState.IDLE
     assert app.ctx.session is None
 

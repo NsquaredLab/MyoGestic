@@ -16,7 +16,7 @@ from myogestic.widgets.training._session_state import (
 
 
 def _take(base, participant, name):
-    path = base / participant / f"{name}.session.zip"
+    path = base / participant / "recordings" / f"{name}.session.zip"
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("meta.json", json.dumps({"participant": participant}))
@@ -171,13 +171,13 @@ def test_recording_refresh_replaces_a_packed_folder(tmp_path, imgui_frame, monke
 
 
 def test_recorded_take_registers_under_participant(tmp_path, imgui_frame, monkeypatch):
-    path = _take(tmp_path / "sessions", "P-014", "recorded")
+    path = _take(tmp_path / "data", "P-014", "recorded")
     monkeypatch.chdir(tmp_path)
     # Exercise the default identity used by App.stop_recording as well as a
     # participant subfolder, with no custom registration arguments.
     manager = SessionManager()
     state = SessionWidgetState()
-    monkeypatch.setitem(_states, "Sessions_sessions", state)
+    monkeypatch.setitem(_states, "Sessions_data", state)
     _render(manager, "P-014", imgui_frame, monkeypatch)
 
     add_recorded_session(path)

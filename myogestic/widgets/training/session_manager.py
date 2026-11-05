@@ -51,7 +51,7 @@ class SessionManager:
     Assign the returned value to
     ``pipeline.training_data`` to make it visible to ``@pipeline.train``::
 
-        sessions = SessionManager("sessions", class_names=CLASSES)
+        sessions = SessionManager("data", class_names=CLASSES)
 
         @app.ui
         def ui(ctx):
@@ -60,9 +60,11 @@ class SessionManager:
     Parameters
     ----------
     base_path
-        Folder scanned for ``.session.zip`` archives and session folders. Not
-        read until you press the **Rescan folder** icon, unless ``ui(participant=...)``
-        scopes the list to a participant whose takes appear automatically.
+        Data root, default ``"data"``. Takes are read from its
+        ``recordings/`` and ``predictions/`` folders, or from
+        ``base_path/<ID>/...`` when ``ui(participant=...)`` scopes the list to a
+        participant, whose takes then appear automatically. Unscoped, nothing is
+        read until you press the **Rescan folder** icon.
     title
         Panel header text. Also part of the widget's ImGui id scope, so two
         managers over the same folder need different titles to keep separate
@@ -75,13 +77,13 @@ class SessionManager:
     Examples
     --------
     >>> from myogestic.widgets import SessionManager
-    >>> manager = SessionManager("sessions", class_names=["Rest", "Fist"])
+    >>> manager = SessionManager("data", class_names=["Rest", "Fist"])
     >>> training_data = manager.ui()
     """
 
     def __init__(
         self,
-        base_path: str = "sessions",
+        base_path: str = "data",
         *,
         title: str = "Sessions",
         class_names: list[str] | None = None,

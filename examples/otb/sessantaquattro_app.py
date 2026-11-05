@@ -85,7 +85,7 @@ recording = RecordingControls(
     on_stop=app.stop_recording,
     show_header=False,
 )
-sessions = SessionManager("sessions", class_names=CLASSES)
+sessions = SessionManager("data", class_names=CLASSES)
 
 
 def _step_done(ctx: Context) -> list[bool]:
@@ -94,7 +94,7 @@ def _step_done(ctx: Context) -> list[bool]:
     return [
         stream is not None and stream.status == "connected" and stream.info is not None,
         bool(ctx.participant)
-        and any(pathlib.Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
+        and any(pathlib.Path("data", ctx.participant, "recordings").glob(f"{ctx.participant}_*")),
     ]
 
 

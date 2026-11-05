@@ -55,7 +55,7 @@ Return any object - it's stored on `pipeline.model` and forwarded to every subse
 `pipeline.training_data` is set externally - usually from [`SessionManager`][myogestic.widgets.SessionManager] inside `@app.ui`:
 
 ```python
-sessions = SessionManager(str(Path("sessions")), class_names=CLASSES)
+sessions = SessionManager(str(Path("data")), class_names=CLASSES)
 with grid[2, 0]:
     pipeline.training_data = sessions.ui()
 ```

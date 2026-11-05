@@ -214,7 +214,7 @@ def test_take_overlay_names_the_active_capture(
 def test_myocontrol_autosaves_models(app_module):
     from myogestic.ml import save_pickle
 
-    assert app_module["pipeline"].autosave_dir == "sessions"
+    assert app_module["pipeline"].autosave_dir == "data"
     assert app_module["pipeline"].save_model is save_pickle
 
 
@@ -409,7 +409,7 @@ def test_recorded_block_reads_disk(app_module, tmp_path, monkeypatch, imgui_fram
     monkeypatch.chdir(tmp_path)
     ctx = app_module["app"].ctx
     ctx.participant = "P-014"
-    take = tmp_path / "sessions" / ctx.participant / "take"
+    take = tmp_path / "data" / ctx.participant / "recordings" / "take"
     take.mkdir(parents=True)
     meta = take / "meta.json"
     meta.write_text(json.dumps({"duration_s": 74.0, "class_seconds": {"Rest": 60, "Fist": 14}}))
@@ -438,7 +438,7 @@ def test_recorded_block_reads_disk(app_module, tmp_path, monkeypatch, imgui_fram
     monkeypatch.setattr(imgui, "text_colored", remember_colored)
     monkeypatch.setattr(imgui, "progress_bar", remember_bar)
     imgui_frame(lambda: render(ctx))
-    assert reads == [Path("sessions/P-014")]
+    assert reads == [Path("data/P-014/recordings")]
     assert {"1 takes · 1:14", "Rest", "Fist", "1:00", "0:14"} <= set(messages)
     assert len(bars) == 2
     imgui_frame(lambda: render(ctx))
@@ -458,7 +458,7 @@ def test_recorded_block_reads_disk(app_module, tmp_path, monkeypatch, imgui_fram
     ctx.participant = "P-015"
     messages.clear()
     imgui_frame(lambda: render(ctx))
-    assert reads[-1] == Path("sessions/P-015")
+    assert reads[-1] == Path("data/P-015/recordings")
     assert "Nothing yet. Each gesture's recorded time shows here as you go." in messages
 
 
@@ -645,7 +645,7 @@ def test_record_step_done_reads_disk(app_module, tmp_path, monkeypatch):
     assert not done(ctx)[1]
     ctx.participant = "P-014"
     assert not done(ctx)[1]
-    folder = tmp_path / "sessions" / "P-014"
+    folder = tmp_path / "data" / "P-014" / "recordings"
     folder.mkdir(parents=True)
     (folder / "unrelated.txt").touch()
     assert not done(ctx)[1]
@@ -1528,8 +1528,9 @@ def test_train_card_fits_step_cell(app_module, implot_frame, monkeypatch, scale,
 def _participant_take(tmp_path, pid="P-014"):
     import zipfile
 
-    path = tmp_path / "sessions" / pid / f"{pid}_2026-10-25_15-47-00.session.zip"
+    path = tmp_path / "data" / pid / "recordings" / f"{pid}_2026-10-25_15-47-00.session.zip"
     path.parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / pid / "models").mkdir(exist_ok=True)
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(
             "meta.json",
@@ -1565,8 +1566,8 @@ def test_recorded_participant_loads_newest_model_and_ticks_takes(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_session_state, "_states", {})
     take = _participant_take(tmp_path)
-    old = take.parent / "old_model.joblib"
-    new = take.parent / "new_model.joblib"
+    old = take.parent.parent / "models" / "old_model.joblib"
+    new = take.parent.parent / "models" / "new_model.joblib"
     save_pickle(("Classification", {"version": "old"}), old)
     save_pickle(("Regression", {"version": "new"}), new)
     os.utime(old, (1, 1))
@@ -1665,7 +1666,7 @@ def test_saved_model_train_card_has_drive_and_retrain(
 
     monkeypatch.chdir(tmp_path)
     take = _participant_take(tmp_path)
-    path = take.parent / "saved_model.joblib"
+    path = take.parent.parent / "models" / "saved_model.joblib"
     save_pickle(("Classification", {}), path)
     ctx = app_module["app"].ctx
     ctx.participant = "P-014"
@@ -1749,7 +1750,7 @@ def test_switching_participant_clears_old_model_and_training_selection(
     monkeypatch.setattr(_session_state, "_states", {})
     first = _participant_take(tmp_path)
     second = _participant_take(tmp_path, "P-015")
-    model = first.parent / "saved_model.joblib"
+    model = first.parent.parent / "models" / "saved_model.joblib"
     save_pickle(("Classification", {}), model)
     ctx = app_module["app"].ctx
     ctx.participant = "P-014"
@@ -1773,7 +1774,7 @@ def test_saved_model_loader_failure_does_not_disclose_exception(
 ):
     monkeypatch.chdir(tmp_path)
     take = _participant_take(tmp_path)
-    path = take.parent / "broken_model.joblib"
+    path = take.parent.parent / "models" / "broken_model.joblib"
     path.touch()
     ctx = app_module["app"].ctx
 
@@ -1799,7 +1800,7 @@ def test_saved_model_card_fits_light_320_cell(
 
     monkeypatch.chdir(tmp_path)
     take = _participant_take(tmp_path)
-    path = take.parent / "saved_model.joblib"
+    path = take.parent.parent / "models" / "saved_model.joblib"
     save_pickle(("Classification", {}), path)
     app_module["app"].ctx.participant = "P-014"
     app_module["participant"]._on_drive("P-014", path)
@@ -1917,7 +1918,7 @@ def test_drive_record_toggle_saves_without_stopping_prediction(app_module, tmp_p
     assert app.ctx.recording and app.ctx.state == "predicting"
     assert (
         session.participant == "P-014"
-        and session.path.parent.resolve() == tmp_path / "sessions" / "P-014"
+        and session.path.parent.resolve() == tmp_path / "data" / "P-014" / "predictions"
     )
     session.append_event("pipeline.tick", [1.0], 1.0)
     pipeline._recorded_session = session
@@ -2192,7 +2193,7 @@ def test_guided_run_schedule_labels_save_idle_and_unticked_tag(
     app_module["_sync_guided_run"]()
     assert run["phase"] == "results"
     assert run["score"]["match"] == (1.0 if stop_after else None)
-    rows = _session_state.get_state("Sessions_sessions").sessions
+    rows = _session_state.get_state("Sessions_data").sessions
     assert len(rows) == 1
     row = rows[0]
     assert row["guided"] and row["drive"] and not row["selected"]
@@ -2556,7 +2557,7 @@ def test_follow_run_drives_and_scores_saved_control_frames(
         assert "follow.target" in saved.stores and "controls" in saved.stores
         assert saved.extras["follow"]["gesture_index"] == 0
         assert saved.extras["pipeline"]["model"] == "model.joblib"
-    row = _session_state.get_state("Sessions_sessions").sessions[0]
+    row = _session_state.get_state("Sessions_data").sessions[0]
     assert row["follow"] and not row["selected"]
     assert set(app_module["predict"](model, np.zeros(4))["controls"]) == {"prediction"}
 

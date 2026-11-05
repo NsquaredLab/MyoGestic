@@ -45,7 +45,7 @@ emg_viewer = SignalViewer("emg")
 rec_controls = RecordingControls(
     ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
 )
-sessions = SessionManager("sessions", class_names=["Rest", "Fist"])
+sessions = SessionManager("data", class_names=["Rest", "Fist"])
 ml_panel = PipelinePanel(pipeline)
 
 
@@ -201,7 +201,7 @@ emg_viewer = SignalViewer("emg")
 rec_controls = RecordingControls(
     ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
 )
-sessions = SessionManager("sessions", class_names=["Rest", "Fist"])
+sessions = SessionManager("data", class_names=["Rest", "Fist"])
 ml_panel = PipelinePanel(pipeline)
 
 

@@ -139,9 +139,9 @@ class Pipeline:
     Attributes
     ----------
     autosave_dir : str or None
-        Save each successfully trained model here when ``save_model`` is set.
-        The path uses the participant ID and timestamp. ``None`` disables
-        automatic saving (the default).
+        Data root to save each successfully trained model under, as
+        ``autosave_dir/<ID>/models/<ID>_<timestamp>_model.joblib``, when
+        ``save_model`` is set. ``None`` disables automatic saving (the default).
     last_saved_model : str or None
         Path of the most recent successful auto-save, or ``None`` before one
         succeeds. A save failure leaves the trained model usable in memory.
@@ -278,7 +278,9 @@ class Pipeline:
                 detail = f"in {time.perf_counter() - started:.1f} s"
                 if self.autosave_dir is not None and self.save_model is not None:
                     try:
-                        path = labelled_path(self.autosave_dir, participant, "model.joblib")
+                        path = labelled_path(
+                            self.autosave_dir, participant, "model.joblib", kind="models"
+                        )
                         path.parent.mkdir(parents=True, exist_ok=True)
                         self.save_model(self.model, str(path))
                     except Exception as e:

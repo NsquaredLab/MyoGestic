@@ -84,7 +84,7 @@ def test_sessantaquattro_completion_tracks_connection_and_participant_takes(
     ctx.participant = "P-014"
     stream = SimpleNamespace(status="connected", info=object())
     monkeypatch.setitem(ctx.streams, "emg", stream)
-    folder = tmp_path / "sessions" / ctx.participant
+    folder = tmp_path / "data" / ctx.participant / "recordings"
     folder.mkdir(parents=True)
     (folder / "someone-else_take.session.zip").touch()
     assert done(ctx) == [True, False]

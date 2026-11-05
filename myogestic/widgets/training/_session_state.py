@@ -7,7 +7,7 @@ from glob import escape
 from pathlib import Path
 from typing import cast
 
-from myogestic.session._core import _read_session_metadata, _slug
+from myogestic.session._core import KINDS, TAKE_KINDS, _read_session_metadata, _slug
 
 
 @dataclass
@@ -35,10 +35,15 @@ def set_session_saving(path: Path, saving: bool) -> None:
         _pending_packs.discard(path.resolve())
 
 
+def _in_scope(folder: Path, base: Path) -> bool:
+    """Whether takes in ``folder`` belong to ``base`` itself or one of its take kinds."""
+    return folder == base or (folder.parent == base and folder.name in TAKE_KINDS)
+
+
 def is_session_saving(base_path: str) -> bool:
     """Report pending takes in the folder this manager is showing."""
     base = Path(base_path).resolve()
-    return any(path.parent == base for path in _pending_packs.copy())
+    return any(_in_scope(path.parent, base) for path in _pending_packs.copy())
 
 
 def _packed_siblings(path: Path, suffix: str = ".session.zip") -> list[Path]:
@@ -53,22 +58,29 @@ def packed_session_path(path: Path) -> Path | None:
 
 
 def scan_sessions(base_path: str) -> list[dict]:
-    """Find saved takes, preferring archives to their source folders."""
+    """Find saved takes newest first, preferring archives to their source folders.
+
+    Looks in ``base_path`` and in its ``recordings/`` and ``predictions/``
+    subfolders, so a participant folder lists both kinds of take.
+    """
     base = Path(base_path)
     sessions = []
-    if not base.is_dir():
-        return sessions
-    for d in sorted(base.iterdir(), reverse=True):
-        if d.is_dir() and (
-            d.resolve() in _pending_packs
-            or _packed_siblings(d)
-            or _packed_siblings(d, ".session.zip.tmp")
-        ):
+    for folder in (base, *(base / kind for kind in TAKE_KINDS)):
+        if not folder.is_dir():
             continue
-        row = _session_row(d)
-        if row is not None:
-            sessions.append(row)
-    return sessions
+        for d in folder.iterdir():
+            if d.name in KINDS:
+                continue
+            if d.is_dir() and (
+                d.resolve() in _pending_packs
+                or _packed_siblings(d)
+                or _packed_siblings(d, ".session.zip.tmp")
+            ):
+                continue
+            row = _session_row(d)
+            if row is not None:
+                sessions.append(row)
+    return sorted(sessions, key=lambda row: row["name"], reverse=True)
 
 
 def reconcile_sessions(state: SessionWidgetState) -> None:
@@ -160,7 +172,7 @@ def _streams_str(streams_meta: dict) -> str:
     return " + ".join(stream_parts) if stream_parts else "—"
 
 
-def add_recorded_session(path: str, base_path: str = "sessions", title: str = "Sessions") -> None:
+def add_recorded_session(path: str, base_path: str = "data", title: str = "Sessions") -> None:
     """Register a freshly recorded session as selected."""
     widget_id = f"{title}_{base_path}"
     state = get_state(widget_id)
@@ -310,7 +322,7 @@ def group_sessions(
     groups: dict[str, SessionGroup] = {}
     for row in sorted(sessions, key=lambda r: r.get("created") or datetime.min, reverse=True):
         created = row.get("created")
-        if Path(row["path"]).parent != base:
+        if not _in_scope(Path(row["path"]).parent, base):
             key, label = "loaded", "Loaded"
         elif created is None:
             key, label = "undated", "Undated"
