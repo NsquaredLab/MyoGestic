@@ -107,6 +107,24 @@ What a subject is asked to follow. `myogestic.tracking` is plain data — no ImG
 
 ::: myogestic.tracking.Calibration
 
+## Finger piano
+
+::: myogestic.widgets.PianoTask
+
+::: myogestic.widgets.PianoGate
+
+The widget is only the game, like `PongTask`: `ui(note)` takes the key sounding now as a
+plain int, `0` (thumb) to `4` (pinky) or `-1`. Feed it a `PianoGate`'s output, not a raw
+argmax. The gate takes seven class scores — Rest, Thumb to Pinky, Fist, in that order — and
+lets one deliberately bent finger strike once: a held finger must return to Rest before it
+strikes again, Rest and Fist are silent, and a key already sounding survives small score
+dips that could not start one. Its thresholds are module constants in
+`myogestic.widgets.piano`, tuned at 32 Hz on probability scores. `expected` is the key the
+song asks for now, for recording beside the prediction. `check_calibration` in the same
+module refuses a model with any class below 70 % held-out recall.
+[`examples/start_here/magic_piano.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/start_here/magic_piano.py)
+is the whole loop.
+
 ## Proportional-control game
 
 ::: myogestic.widgets.PongTask

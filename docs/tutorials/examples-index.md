@@ -357,6 +357,31 @@ opponent's top speed as a multiple of `ball_speed`); changing it clears the cour
 score won against a slower paddle should not carry over. `PongTask(paddle_size=...)` and
 `ball_speed` are the two knobs left in code.
 
+### `start_here/magic_piano.py` - seven classes a subject will practise
+
+Rest, Thumb to Pinky, and Fist: seven classes from one forearm, played as a five-key piano.
+**Record** runs the finger lesson as one take — each movement held, rest between, three
+rounds — and labels it as the cue changes. **Train** checks every class on held-out windows
+before it fits, and refuses a model with one finger it cannot recognise, by name: good
+overall accuracy hides exactly that, and the finger's key would never play. **Play** runs
+the scores through [`PianoGate`][myogestic.widgets.PianoGate] into a
+[`PianoTask`][myogestic.widgets.PianoTask], so a held finger strikes once and an ambiguous
+prediction stays silent. Follow mode drops a song down five lanes; Free is a playground.
+
+```bash
+uv run --extra examples python examples/start_here/magic_piano.py
+```
+
+The amplifier defaults to the Quattrocento. With none plugged in, pick the synthetic hand:
+it follows the lesson's cues while recording, plays the song by itself on request, and
+keys 1 to 5 bend a finger. **Record take** in Play saves the class scores, the key the gate
+let through (`prediction.note`) and the key the song asked for (`prediction.cue`) beside the
+EMG, with the playing model and each finished song's score.
+
+**What to tweak:** `HOLD_S`, `REST_S` and `LESSON_ROUNDS` for the lesson, and the gate's
+thresholds at the top of `myogestic/widgets/piano.py` when a new amplifier or montage plays
+too eagerly or too reluctantly.
+
 ### `start_here/force_ramps.py` - a protocol with no model in it
 
 The other two `start_here` apps train something. This one does not: it is the standard
@@ -401,6 +426,8 @@ actually on.
   classification and regression flows in one application that names no hardware.
 * **A bidirectional DOF, or a task a subject will stay with** - `start_here/pong.py`, the
   one signed example: Down is `-1`, and the rally is what trains graded control.
+* **Many classes, and a reason to keep practising them** - `start_here/magic_piano.py`,
+  seven classes played as a piano, with a per-finger check before any model plays.
 * **Recording a protocol rather than training a model** - `start_here/force_ramps.py`,
   isometric trapezoids with the calibration that makes them readable later.
 * **Custom extension point** - skip the examples and read the

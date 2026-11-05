@@ -98,6 +98,7 @@ or against the synthetic one when you have none.
 | `force_ramps.py` | Isometric force ramps. Track a trapezoid at a set percentage of maximum voluntary contraction, with the EMG, the force and the target recorded together. |
 | `myocontrol.py` | Record cued Rest/Fist trials, train a classifier or a regressor, and drive the Virtual Hand from the prediction. |
 | `pong.py` | Chase a cursor with the paddle, train one signed [−1, +1] command, and play Pong with your wrist. |
+| `magic_piano.py` | Record a finger lesson, train seven classes with a per-finger check, and play songs on a five-key piano, one finger per key. |
 
 ```bash
 uv run --extra examples --extra grpc python examples/start_here/myocontrol.py

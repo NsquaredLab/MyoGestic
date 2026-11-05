@@ -29,6 +29,7 @@ from myogestic.widgets.panels import (
 )
 from myogestic.widgets.panels.app_header import AppHeader
 from myogestic.widgets.panels.status_bar import StatusBar
+from myogestic.widgets.piano import PianoGate, PianoTask
 from myogestic.widgets.plots import Heatmap, LinePlot, Scatter2D, Scatter3D
 from myogestic.widgets.pong import PongTask
 from myogestic.widgets.signals import (
@@ -85,6 +86,8 @@ __all__ = [
     "LogPanel",
     "ParticipantPanel",
     "DeviceOption",
+    "PianoGate",
+    "PianoTask",
     "PongTask",
     "PostProcessor",
     "PredictionLabel",
