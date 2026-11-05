@@ -6,8 +6,10 @@ does: each finger is a key, a song asks for them in order, and a missed note nam
 finger the model has not learned. Rest and Fist play nothing; they are there so the
 model learns what *not* playing looks like.
 
-The amplifier defaults to the Quattrocento. Connect picks another, or the synthetic
-hand, which plays without one: hold keys 1 to 5 to bend a finger.
+The amplifier defaults to the Quattrocento in its 384-channel mode at 2048 Hz, the
+smallest mode that carries a montage of around 320 channels. Connect picks another, or
+the synthetic hand, which plays without one at the same size: hold keys 1 to 5 to bend
+a finger.
 
 **Record** runs the lesson as one take, cueing each movement and labelling it as it
 goes. **Train** fits a classifier and then checks every finger on held-out windows;
@@ -25,6 +27,8 @@ Run with:
     uv run --extra examples python examples/start_here/magic_piano.py
 """
 
+import dataclasses
+import functools
 import pathlib
 import time
 from types import SimpleNamespace
@@ -84,7 +88,11 @@ HOP_MS = 100
 #: The gate's timings (`myogestic.widgets.piano`) were tuned at this rate.
 PREDICT_HZ = 32
 CLASSES = list(PIANO_CLASSES)
-ITERATIONS = 150
+# Shallow and short on purpose: at 320 channels x 3 features, CatBoost's defaults with
+# 150 iterations took 52-89 s for the check plus the fit; this takes about 8 s, and
+# grows with every lesson ticked. Softmax scores, which is what the gate is tuned on.
+ITERATIONS = 100
+DEPTH = 4
 #: Folds of the held-out finger check that runs before every fit.
 CHECK_FOLDS = 3
 
@@ -108,18 +116,21 @@ LESSON = [
     ),
 ]
 LESSON_S = sum(seconds for *_, seconds in LESSON)
+#: The synthetic hand's channels per finger: 5 x 64 = 320.
+CHANNELS_PER_FINGER = 64
 
 
 class DummyHandSource:
     """A synthetic hand for trying the piano without an amplifier.
 
-    Two channels per finger. Bending one raises its pair out of a quiet floor; a fist
-    raises every channel. That is enough for a classifier to separate all seven classes,
-    which is all a dry run of this app needs.
+    A block of `CHANNELS_PER_FINGER` channels per finger, 320 in all, so a dry run trains
+    on as many features as a Quattrocento montage gives. Bending a finger raises its
+    block out of a quiet floor; a fist raises every channel. That separates all seven
+    classes, which is all a dry run of this app needs.
     """
 
     def __init__(self) -> None:
-        self._source = SyntheticSource(n_channels=2 * len(FINGERS) + 2)
+        self._source = SyntheticSource(n_channels=CHANNELS_PER_FINGER * len(FINGERS))
         #: The class being made now, an index into `CLASSES`.
         self.gesture = 0
 
@@ -131,7 +142,8 @@ class DummyHandSource:
         if data is not None:
             gains = np.full(data.shape[1], 0.05, dtype=np.float32)
             if 1 <= self.gesture <= len(FINGERS):
-                gains[2 * (self.gesture - 1) : 2 * self.gesture] = 1.0
+                block = CHANNELS_PER_FINGER * (self.gesture - 1)
+                gains[block : block + CHANNELS_PER_FINGER] = 1.0
             elif self.gesture == len(FINGERS) + 1:
                 gains[:] = 0.6
             data *= gains
@@ -141,10 +153,15 @@ class DummyHandSource:
         self._source.disconnect()
 
 
-QUATTROCENTO = next(d for d in DEFAULT_DEVICES if d.label == "Quattrocento")
+_STOCK_QUATTROCENTO = next(d for d in DEFAULT_DEVICES if d.label == "Quattrocento")
+# The 384-channel mode as the default, in the dropdown and in the seeded stream alike;
+# the stock entry opens on 192, which cannot carry a ~320-channel montage.
+QUATTROCENTO = dataclasses.replace(
+    _STOCK_QUATTROCENTO, factory=functools.partial(_STOCK_QUATTROCENTO.factory, nch_mode=3)
+)
 DEVICES = (
     QUATTROCENTO,
-    *(d for d in DEFAULT_DEVICES if d is not QUATTROCENTO),
+    *(d for d in DEFAULT_DEVICES if d is not _STOCK_QUATTROCENTO),
     DeviceSpec(
         "Synthetic hand (keys 1-5 bend a finger)",
         DummyHandSource,
@@ -175,6 +192,10 @@ lesson: dict = {"start": None, "label": None}
 take = {"songs": 0}
 #: Whether the synthetic hand plays the song by itself.
 simulated = {"auto": False}
+
+
+def _classifier():
+    return catboost_classifier(iterations=ITERATIONS, depth=DEPTH)
 
 
 @pipeline.extract
@@ -215,7 +236,7 @@ def train(data: TrainingData) -> SimpleNamespace:
         fold[members] = np.arange(len(members)) * CHECK_FOLDS // len(members)
     held_out = np.empty_like(y)
     for k in range(CHECK_FOLDS):
-        model = catboost_classifier(iterations=ITERATIONS).fit(x[fold != k], y[fold != k])
+        model = _classifier().fit(x[fold != k], y[fold != k])
         held_out[fold == k] = np.asarray(model.predict(x[fold == k])).ravel()
     recall = [float(np.mean(held_out[y == c] == c)) for c in range(len(CLASSES))]
     accuracy = float(np.mean(held_out == y))
@@ -230,7 +251,7 @@ def train(data: TrainingData) -> SimpleNamespace:
     )
     check_calibration(recall, accuracy)
 
-    estimator = catboost_classifier(iterations=ITERATIONS)
+    estimator = _classifier()
     estimator.fit(x, y)
     app.ctx.log(f"[train] {len(x)} windows from {len(data.paths)} sessions")
     # `report` is what `Pipeline` writes into every take's meta.json beside the model.
