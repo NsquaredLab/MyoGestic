@@ -238,7 +238,8 @@ def participant_dir(root: str | Path, participant: str = "", kind: str = "record
     participant
         Pseudonymised ID, reduced to a safe single path segment.
     kind
-        ``"recordings"``, ``"predictions"`` or ``"models"``.
+        ``"recordings"``, ``"predictions"`` or ``"models"``. ``""`` drops the
+        kind level, for tools that keep their own layout.
 
     Returns
     -------
@@ -402,6 +403,8 @@ class Session:
         which puts a timestamp and random suffix directly in ``base_path/kind``.
     kind
         ``"recordings"`` (default) or ``"predictions"``, see `participant_dir`.
+        ``""`` writes straight into ``base_path`` (or ``base_path/ID``), for a
+        converter or script that keeps its own folder layout.
 
     Examples
     --------
