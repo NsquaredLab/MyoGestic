@@ -473,12 +473,12 @@ def test_classifier_caption_and_icon_actions_keep_model_persistence(
     implot_frame(lambda: ns["app"]._ui_fn(ns["app"].ctx))
     assert calls.index("recipe") < calls.index("train")
     assert globals_["selected_model_idx"] == 3
-    saved = tmp_path / "models" / "CatBoost_20261025_120000.joblib"
+    saved = tmp_path / "data" / "models" / "CatBoost_20261025_120000_model.joblib"
     assert ns["load_pickle"](str(saved)) == ns["pipeline"].model
-    assert ns["_save_current"]().name == "Logistic_Regression_20261025_120000.joblib"
+    assert ns["_save_current"]().name == "Logistic_Regression_20261025_120000_model.joblib"
     clicked.add("load_model")
     implot_frame(lambda: ns["app"]._ui_fn(ns["app"].ctx))
-    assert ("Load model", "models", ["Model", "*.joblib"]) in calls
+    assert ("Load model", str(Path("data", "models")), ["Model", "*.joblib"]) in calls
     assert any(t.startswith("Save model") for t in tooltips)
     assert any(t.startswith("Load model") for t in tooltips)
 

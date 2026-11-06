@@ -50,7 +50,7 @@ from myogestic.recipes.estimators import (
     sklearn_logistic_classifier,
 )
 from myogestic.remote import RemoteTarget
-from myogestic.session import iter_labeled_windows
+from myogestic.session import iter_labeled_windows, participant_dir
 from myogestic.sources import LSLSource
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
@@ -187,7 +187,10 @@ link = ControlLink(
     hz=32,
 )
 
-MODELS_DIR = Path("models")
+
+def _models_dir() -> Path:
+    """The current participant's `data/<ID>/models/`."""
+    return participant_dir("data", app.ctx.participant, "models")
 
 
 @pipeline.extract
@@ -228,19 +231,19 @@ def _slug(name: str) -> str:
 
 def _list_saved_models() -> list[Path]:
     """Saved models, newest first. Empty if the directory does not exist yet."""
-    if not MODELS_DIR.is_dir():
+    if not _models_dir().is_dir():
         return []
-    return sorted(MODELS_DIR.glob("*.joblib"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return sorted(_models_dir().glob("*.joblib"), key=lambda p: p.stat().st_mtime, reverse=True)
 
 
 def _save_current() -> Path | None:
-    """Save `pipeline.model` under `models/<recipe>_<timestamp>.joblib`."""
+    """Save `pipeline.model` under `data/<ID>/models/<recipe>_<timestamp>_model.joblib`."""
     if pipeline.model is None:
         return None
-    MODELS_DIR.mkdir(exist_ok=True)
+    _models_dir().mkdir(parents=True, exist_ok=True)
     slug = _slug(MODEL_NAMES[selected_model_idx])
     ts = _time.strftime("%Y%m%d_%H%M%S")
-    path = MODELS_DIR / f"{slug}_{ts}.joblib"
+    path = _models_dir() / f"{slug}_{ts}_model.joblib"
     save_pickle(pipeline.model, str(path))
     return path
 
@@ -259,9 +262,9 @@ def model_actions_ui() -> None:
     imgui.same_line()
     if imgui.small_button(f"{fa.ICON_FA_FOLDER_OPEN}##load_model"):
         # The native picker needs its initial directory to exist.
-        MODELS_DIR.mkdir(exist_ok=True)
-        _load_dialog = pfd.open_file("Load model", str(MODELS_DIR), ["Model", "*.joblib"])
-    imgui.set_item_tooltip(f"Load model · {len(_list_saved_models())} saved in {MODELS_DIR}")
+        _models_dir().mkdir(parents=True, exist_ok=True)
+        _load_dialog = pfd.open_file("Load model", str(_models_dir()), ["Model", "*.joblib"])
+    imgui.set_item_tooltip(f"Load model · {len(_list_saved_models())} saved in {_models_dir()}")
     imgui.same_line()
     _popout_open = render_log_buttons(_MODEL_WIDGET_ID, popped_out=_popout_open)
 
