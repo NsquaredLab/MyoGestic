@@ -36,9 +36,9 @@ Everything for one participant lives in one folder under `data/`, split by what 
 data/
 ├── P-014/
 │   ├── recordings/                 # takes started from idle: training data
-│   │   └── P-014_2026-05-06_18-46-47_Rest.session.zip
+│   │   └── P-014_2026-05-06_18-46-47_Rest.mg.zip
 │   ├── predictions/                # takes started while a model was predicting
-│   │   └── P-014_2026-05-06_18-52-10_Follow-run.session.zip
+│   │   └── P-014_2026-05-06_18-52-10_Follow-run.mg.zip
 │   └── models/                     # Pipeline.autosave_dir output
 │       └── P-014_2026-05-06_18-50-02_model.joblib
 ├── recordings/                     # takes recorded with no participant set
@@ -68,7 +68,7 @@ After `stop_recording`, the folder packs to a single archive:
 ```text
 data/P-014/recordings/
 ├── P-014_2026-05-06_18-46-47/            # original folder (kept until pack succeeds)
-└── P-014_2026-05-06_18-46-47.session.zip # archive - contains the same internal layout
+└── P-014_2026-05-06_18-46-47.mg.zip # archive - contains the same internal layout
 ```
 
 Both are loadable via [`open_session_store(path)`][myogestic.session.open_session_store] - readers don't need to know which they got.
@@ -84,8 +84,8 @@ kind="info")` from the UI or a worker thread; each toast also becomes a timestam
 from myogestic import Context
 
 ctx = Context()
-ctx.notify("Recording saved", "a.session.zip", "success")
-assert ctx.logs[-1].endswith("Recording saved — a.session.zip")
+ctx.notify("Recording saved", "a.mg.zip", "success")
+assert ctx.logs[-1].endswith("Recording saved — a.mg.zip")
 ```
 
 `success` and `info` last 6 seconds, `warning` lasts 10 seconds, and `danger` stays until
@@ -153,7 +153,7 @@ On stop, `App.finalize_hooks` run on the finalize thread before `meta.json` is w
 ```python
 from myogestic.session import open_session_store
 
-sess = open_session_store("data/P-014/recordings/P-014_2026-05-06_18-46-47.session.zip")
+sess = open_session_store("data/P-014/recordings/P-014_2026-05-06_18-46-47.mg.zip")
 
 # Continuous data
 data, ts = sess.get_continuous("emg")

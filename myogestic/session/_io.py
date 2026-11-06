@@ -14,7 +14,7 @@ from myogestic.stream import ChannelGrid, StreamInfo
 
 
 def open_session_store(path: str | Path) -> Session:
-    """Open a saved session folder or .session.zip as a read-only Session.
+    """Open a saved session folder or .mg.zip as a read-only Session.
 
     Folder sessions keep the existing layout and use
     `zarr.open_array(str(path / "<stream>.zarr"), mode="r")`. Zip sessions use
@@ -23,7 +23,7 @@ def open_session_store(path: str | Path) -> Session:
     Examples
     --------
     >>> from myogestic.session import open_session_store
-    >>> session = open_session_store("sessions/demo.session.zip")
+    >>> session = open_session_store("sessions/demo.mg.zip")
     >>> info = session.stream_info("emg")
     >>> session.close()
     """
@@ -37,7 +37,7 @@ def open_session_store(path: str | Path) -> Session:
         def open_array(name: str) -> zarr.Array:
             return zarr.open_array(str(p / name), mode="r")
 
-    elif p.name.endswith(".session.zip"):
+    elif p.suffix == ".zip":  # .mg.zip, and older .session.zip takes
         zip_store = zarr.storage.ZipStore(p, mode="r")
         with zipfile.ZipFile(p) as zf:
             names = set(zf.namelist())

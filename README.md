@@ -140,7 +140,7 @@ See every widget in the [widget gallery](https://nsquaredlab.github.io/MyoGestic
 ## What MyoGestic provides
 
 **MyoGestic provides** live Lab Streaming Layer (LSL) ingest, on-disk recording
-(Zarr → `.session.zip`), the machine-learning pipeline lifecycle with training
+(Zarr → `.mg.zip`), the machine-learning pipeline lifecycle with training
 and prediction on their own threads, Dear ImGui widgets, output filters, and
 gRPC plus LSL integration with the
 [Virtual Hand Interface](https://github.com/NsquaredLab/MyoGestic-VHI).

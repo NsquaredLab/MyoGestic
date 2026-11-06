@@ -178,7 +178,7 @@ def train(data: TrainingData):
 
 Runs on a one-shot training thread when the user clicks **Train**. Receives [`TrainingData`][myogestic.TrainingData] (with `paths`, `class_names`, `classes`) populated by [`SessionManager`][myogestic.widgets.SessionManager]. Return any object - it lands on `pipeline.model` and stays there.
 
-[`iter_labeled_windows`][myogestic.session.iter_labeled_windows] does the heavy lifting of opening sessions (folder or `.session.zip`), walking the label track, and slicing trials into overlapping windows. You only write the feature extraction.
+[`iter_labeled_windows`][myogestic.session.iter_labeled_windows] does the heavy lifting of opening sessions (folder or `.mg.zip`), walking the label track, and slicing trials into overlapping windows. You only write the feature extraction.
 
 → Deep dive: [Pipeline](concepts/pipeline.md), [Recording](concepts/recording.md).
 
@@ -273,7 +273,7 @@ The concept pages describe each component in more detail:
 
 - [Streams](concepts/streams.md) - ring buffer geometry, the channels-first contract, `get_display` decimation.
 - [Pipeline](concepts/pipeline.md) - state machine, decorator semantics, stale-tick guards.
-- [Recording](concepts/recording.md) - sessions, label tracks, the `.session.zip` archive.
+- [Recording](concepts/recording.md) - sessions, label tracks, the `.mg.zip` archive.
 - [Widgets](concepts/widgets.md) - the stateless-function pattern, `Grid` layout, pop-out windows.
 - [Architecture](concepts/architecture.md) - the runtime architecture (which thread runs what, the data flow diagram).
 - [Threading](concepts/threading.md) - GIL release, GPU contention rule, bridge subprocesses.

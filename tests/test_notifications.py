@@ -15,7 +15,7 @@ def test_notify_appends_and_mirrors_to_log(monkeypatch):
     ctx = Context()
     monkeypatch.setattr(time, "monotonic", lambda: 123.0)
 
-    ctx.notify("Recording saved", "a.session.zip", "success")
+    ctx.notify("Recording saved", "a.mg.zip", "success")
 
     from myogestic.widgets.panels.notifications import Notification
 
@@ -24,11 +24,11 @@ def test_notify_appends_and_mirrors_to_log(monkeypatch):
     assert isinstance(notification, Notification)
     assert (notification.title, notification.detail, notification.kind, notification.created) == (
         "Recording saved",
-        "a.session.zip",
+        "a.mg.zip",
         "success",
         123.0,
     )
-    assert ctx.logs[-1].endswith("Recording saved — a.session.zip")
+    assert ctx.logs[-1].endswith("Recording saved — a.mg.zip")
     ctx.notify("Ready")
     assert ctx.notifications[-1].kind == "info"
     assert ctx.logs[-1].endswith("Ready")
@@ -234,7 +234,7 @@ def test_stop_recording_notifies_saved(tmp_path, monkeypatch):
     saved = [n for n in app.ctx.notifications if n.title == "Recording saved"]
     assert len(saved) == 1
     assert saved[0].kind == "success"
-    assert saved[0].detail == next((tmp_path / "sessions").rglob("*.session.zip")).name
+    assert saved[0].detail == next((tmp_path / "sessions").rglob("*.mg.zip")).name
 
 
 def test_stop_recording_notifies_pack_failure(tmp_path, monkeypatch):

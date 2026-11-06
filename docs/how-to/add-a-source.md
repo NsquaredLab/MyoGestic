@@ -148,7 +148,7 @@ The vendor's callback runs on its own thread; the queue decouples it from the ac
 | Source | Where | Pattern |
 |--------|-------|---------|
 | [`LSLSource`](../api/sources.md#myogestic.sources.LSLSource) | `myogestic/sources/lsl.py` | LSL inlet polling with `pull_chunk(timeout=0.0)` |
-| [`ReplaySource`](../api/sources.md#myogestic.sources.ReplaySource) | `myogestic/sources/replay.py` | Reads from a `.session.zip`, paces with real-time clock |
+| [`ReplaySource`](../api/sources.md#myogestic.sources.ReplaySource) | `myogestic/sources/replay.py` | Reads from a `.mg.zip`, paces with real-time clock |
 | `SerialSource` | `myogestic/sources/serial_source.py` | pyserial loop with line-based parsing |
 
 Mirror whichever is closest to your transport.

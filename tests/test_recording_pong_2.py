@@ -293,4 +293,4 @@ def test_filename_preview_matches_archive_including_recorded_labels(tmp_path, cl
     preview = recorder._file_stem(ctx)
     session.name = recorder._name
     session.save_meta("test", classes)
-    assert session.pack_to_zip().name == preview + ".session.zip"
+    assert session.pack_to_zip().name == preview + ".mg.zip"

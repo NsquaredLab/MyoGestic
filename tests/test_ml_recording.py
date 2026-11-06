@@ -64,7 +64,7 @@ def _running_app(tmp_path: Path, *, save_model=None):
 
 def _zip(folder: Path, kind: str = "predictions") -> Path:
     # Takes started while predicting land in the root's predictions/ folder.
-    (zip_path,) = (folder / kind).glob("*.session.zip")
+    (zip_path,) = (folder / kind).glob("*.mg.zip")
     return zip_path
 
 

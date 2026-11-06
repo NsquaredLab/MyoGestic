@@ -126,12 +126,12 @@ One Record→Stop cycle yields one session with 8–10 trials. The framework's t
 
 ## Reading sessions programmatically
 
-Use [`open_session_store`][myogestic.session.open_session_store] for either layout (folder or `.session.zip`):
+Use [`open_session_store`][myogestic.session.open_session_store] for either layout (folder or `.mg.zip`). Older takes, named `.session.zip`, open the same way:
 
 ```python
 from myogestic.session import open_session_store
 
-sess = open_session_store("data/recordings/2026-05-06_18-46-47.session.zip")
+sess = open_session_store("data/recordings/2026-05-06_18-46-47.mg.zip")
 
 # Continuous data - sample-major as recorded
 data, ts = sess.get_continuous("emg")
@@ -199,7 +199,7 @@ for window, targets, ts in iter_aligned_windows(
 
 ## Replay as a Source
 
-[`ReplaySource`][myogestic.sources.ReplaySource] reads from a `.session.zip` (or folder) and re-emits the data at the original sample rate, just like a live device:
+[`ReplaySource`][myogestic.sources.ReplaySource] reads from a `.mg.zip` (or folder) and re-emits the data at the original sample rate, just like a live device:
 
 ```python
 from myogestic import App, Stream
@@ -210,7 +210,7 @@ app.streams(
     Stream(
         "emg",
         source=ReplaySource(
-            session_path="data/recordings/2026-05-06_18-46-47.session.zip",
+            session_path="data/recordings/2026-05-06_18-46-47.mg.zip",
             stream_name="emg",
             speed=1.0,  # 0.5 = half-speed, 2.0 = double-speed
         ),
@@ -240,7 +240,7 @@ Stop when done; the archive holds the raw streams *and* what the model saw and d
 from myogestic.session import open_session_store
 import numpy as np
 
-with open_session_store("data/P-014/predictions/P-014_2026-09-13_10-12-44.session.zip") as s:
+with open_session_store("data/P-014/predictions/P-014_2026-09-13_10-12-44.mg.zip") as s:
     print(s.event_streams)  # ('features.vec', 'prediction.pose', 'pipeline.tick', 'controls')
     pose = np.array(s.stores["prediction.pose"])  # (n_ticks, 5)
     t = np.array(s.ts_stores["prediction.pose"])  # data time of each tick
@@ -256,8 +256,8 @@ The model is pickled into the session when `pipeline.save_model` is set (the ML 
 Run the same app on the recording with `ReplaySource(path, "emg")` in place of the device, press Predict, press Record, and stop after the replay has looped once. `ReplaySource` returns the recorded timestamps, so both sessions are in the same clock. The ticks do **not** fall on the same samples: the predict loop is paced by wall time, and an app whose feature frames are anchored to ring position shifts phase too. Compare by nearest timestamp within half a tick:
 
 ```python
-live = open_session_store("live.session.zip")
-replay = open_session_store("replay.session.zip")
+live = open_session_store("live.mg.zip")
+replay = open_session_store("replay.mg.zip")
 tl, pl = np.array(live.ts_stores["prediction.pose"]), np.array(live.stores["prediction.pose"])
 tr, pr = np.array(replay.ts_stores["prediction.pose"]), np.array(replay.stores["prediction.pose"])
 j = np.searchsorted(tr, tl).clip(1, len(tr) - 1)

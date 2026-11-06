@@ -14,13 +14,13 @@ from myogestic.stream import StreamInfo
 class ReplaySource:
     """Replays a recorded session as if it were a live stream.
 
-    Accepts either a folder-format session or a `.session.zip` archive —
+    Accepts either a folder-format session or a `.mg.zip` archive —
     delegates to `open_session_store` so both layouts work transparently.
 
     Parameters
     ----------
     session_path
-        Session folder or ``.session.zip`` archive to read.
+        Session folder or ``.mg.zip`` archive to read.
     stream_name
         Which recorded stream to replay. `connect` raises `ValueError` listing
         what the session does contain if this is not one of them.
@@ -33,7 +33,7 @@ class ReplaySource:
     --------
     >>> from myogestic import Stream
     >>> from myogestic.sources import ReplaySource
-    >>> source = ReplaySource("sessions/demo.session.zip", "emg")
+    >>> source = ReplaySource("sessions/demo.mg.zip", "emg")
     >>> stream = Stream("emg", source, window_ms=1000)
     """
 
@@ -55,7 +55,7 @@ class ReplaySource:
         sess = open_session_store(self._path)
         # Hold the session: reads are lazy off its zarr/ZipStore, so it must stay
         # open until disconnect() — and we must close it there, or the
-        # .session.zip stays locked on Windows.
+        # .mg.zip stays locked on Windows.
         self._session = sess
         if self._stream_name not in sess.stores:
             sess.close()
@@ -101,7 +101,7 @@ class ReplaySource:
         """Close the session and rewind the replay position.
 
         Closing releases the ``ZipStore`` — on Windows an open handle keeps the
-        ``.session.zip`` locked, so the file couldn't be deleted or re-recorded
+        ``.mg.zip`` locked, so the file couldn't be deleted or re-recorded
         until the source was garbage-collected.
         """
         if self._session is not None:

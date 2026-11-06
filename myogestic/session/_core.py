@@ -207,6 +207,10 @@ class Recording:
 #: short enough to keep the whole path under filesystem limits.
 _SLUG_MAX = 40
 
+#: Suffix of a packed take. Readers accept any ``.zip`` holding a ``meta.json``, so
+#: older takes, named ``.session.zip`` (or renamed by hand), still open and list.
+ARCHIVE_SUFFIX = ".mg.zip"
+
 
 def _slug(name: str) -> str:
     """Filename-safe form of a user-typed session name, or ``""`` if nothing survives.
@@ -289,7 +293,7 @@ def _unique_stem(parent: Path, stem: str) -> str:
     """Find a stem unused by a recording folder or any of its named archives."""
     candidate = stem
     ordinal = 2
-    while (parent / candidate).exists() or any(parent.glob(f"{candidate}*.session.zip")):
+    while (parent / candidate).exists() or any(parent.glob(f"{candidate}*.zip")):
         candidate = f"{stem}-{ordinal}"
         ordinal += 1
     return candidate
@@ -376,10 +380,10 @@ class Session:
     While active, every acquisition thread with a registered stream appends to the
     session's Zarr stores; UI label clicks emit [`LabelEvent`][] entries onto the
     label track. Closing writes ``meta.json`` and ``labels.json`` alongside the
-    Zarr folders, and optionally packs the tree into a portable ``.session.zip``.
+    Zarr folders, and optionally packs the tree into a portable ``.mg.zip``.
 
     Layout on disk (one folder per recording, named with the start
-    timestamp, packed to ``<folder>.session.zip`` on stop)::
+    timestamp, packed to ``<folder>.mg.zip`` on stop)::
 
         data/P-014/recordings/P-014_2026-05-17_14-23-05/
             emg.zarr/                  # shape (n_samples, n_channels)
@@ -390,7 +394,7 @@ class Session:
             labels.json                # the LabelEvent list
 
     Read sessions back with [`open_session_store`][myogestic.session.open_session_store],
-    which handles both folders and ``.session.zip`` archives.
+    which handles both folders and ``.mg.zip`` archives.
 
     Parameters
     ----------
@@ -436,7 +440,7 @@ class Session:
             # Random suffix so two sessions started within the same wall-clock second
             # never share a folder: pack_to_zip() runs on a daemon thread and
             # shutil.rmtree()s its own folder, so a shared name lets the old session's
-            # pack thread wipe the new recording (and collide on the .session.zip path).
+            # pack thread wipe the new recording (and collide on the .mg.zip path).
             self.path = participant_dir(base_path, kind=kind) / f"{ts}_{uuid.uuid4().hex[:8]}"
             self.path.mkdir(parents=True, exist_ok=True)
         #: Free-form facts a widget contributed about this recording, merged into
@@ -455,7 +459,7 @@ class Session:
         self.label_track: list[LabelEvent] = []
         self.class_names: list[str] = []  # populated by save_meta / open_session_store
         self._streams_info: dict[str, StreamInfo] = {}
-        # Anchors a ZipStore's lifetime when opened from a .session.zip (see
+        # Anchors a ZipStore's lifetime when opened from a .mg.zip (see
         # open_session_store): zarr reads arrays lazily from the archive, so the
         # store handle must outlive this Session. Assigned there, never read.
         self._zip_store: zarr.storage.ZipStore | None = None
@@ -741,7 +745,7 @@ class Session:
         (self.path / "labels.json").write_text(json.dumps(labels, indent=2), encoding="utf-8")
 
     def pack_to_zip(self) -> Path:
-        """Pack the session folder into a single `<name>.session.zip` file.
+        """Pack the session folder into a single `<name>.mg.zip` file.
 
         Uses ZIP_STORED: zarr chunks are already compressed internally, so an outer
         compression layer would add CPU for little gain.
@@ -764,7 +768,7 @@ class Session:
         stem = f"{self.path.name}_{labels}" if labels else self.path.name
         if slug := _slug(self.name):
             stem = f"{stem}_{slug}"
-        zip_path = self.path.with_name(stem + ".session.zip")
+        zip_path = self.path.with_name(stem + ARCHIVE_SUFFIX)
         tmp_path = zip_path.with_suffix(zip_path.suffix + ".tmp")
         if tmp_path.exists():
             tmp_path.unlink()
@@ -867,9 +871,9 @@ class Session:
         """Release file handles held by this session.
 
         Closes the ``ZipStore`` opened by [`open_session_store`][] for a
-        ``.session.zip`` and drops the array references. Safe to call more than
+        ``.mg.zip`` and drops the array references. Safe to call more than
         once. On Windows an open ``ZipStore`` keeps the archive **locked**, so
-        close the session before moving or deleting the ``.session.zip`` — use it
+        close the session before moving or deleting the ``.mg.zip`` — use it
         as a context manager (``with open_session_store(p) as s: ...``).
         """
         store = getattr(self, "_zip_store", None)

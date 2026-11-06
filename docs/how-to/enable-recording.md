@@ -1,6 +1,6 @@
 # Enable on-disk recording
 
-Capture every registered `Stream`'s incoming biosignal data to a Zarr-backed `.session.zip` archive. Two flows (GUI button or headless API), one artifact, full programmatic control. This page covers configuration, the full lifecycle, the Zarr layout, the `Session` API, and read-back.
+Capture every registered `Stream`'s incoming biosignal data to a Zarr-backed `.mg.zip` archive. Two flows (GUI button or headless API), one artifact, full programmatic control. This page covers configuration, the full lifecycle, the Zarr layout, the `Session` API, and read-back.
 
 ## Quick-start: the four lines that enable recording
 
@@ -27,7 +27,7 @@ def ui(ctx):
 app.run()
 ```
 
-Click **Record** → data flows into `data/<ID>/recordings/<ID>_<timestamp>/` (or `data/recordings/<timestamp>/` with no participant set). Click **Stop** → that folder packs into `<ID>_<timestamp>[_<labels>].session.zip` beside it, with the recorded gesture labels included when available. No further setup required.
+Click **Record** → data flows into `data/<ID>/recordings/<ID>_<timestamp>/` (or `data/recordings/<timestamp>/` with no participant set). Click **Stop** → that folder packs into `<ID>_<timestamp>[_<labels>].mg.zip` beside it, with the recorded gesture labels included when available. No further setup required.
 
 ## Just capture, and name it afterwards
 
@@ -51,7 +51,7 @@ offers **Name (optional)**, a preview of the resulting file stem, **Save**, and 
 **Discard** labelled with the captured duration when a discard handler is supplied. If the app
 requires a participant, Record stays disabled with a visible reminder to set their ID first.
 
-The name is written to `meta.json` and appended to the archive filename, so a saved take is `<folder>[_<labels>][_<name>].session.zip` beside its original recording folder and appears in `SessionManager` with gesture chips, time, and duration; its tooltip preserves the take name and archive filename. The optional labels segment contains only classes with recorded time, in class-index order, joined with `+` (for example, `fist+open-hand`). Labels and the typed name are slugged down to ASCII letters, digits, `-` and `_`; empty label slugs are omitted. If the joined labels exceed 40 characters, the segment becomes `<n>-classes`. Naming is optional, and a take with no recorded labels keeps the existing filename format. The recording folder name, including its timestamp and any participant ID, stays the archive's prefix.
+The name is written to `meta.json` and appended to the archive filename, so a saved take is `<folder>[_<labels>][_<name>].mg.zip` beside its original recording folder and appears in `SessionManager` with gesture chips, time, and duration; its tooltip preserves the take name and archive filename. The optional labels segment contains only classes with recorded time, in class-index order, joined with `+` (for example, `fist+open-hand`). Labels and the typed name are slugged down to ASCII letters, digits, `-` and `_`; empty label slugs are omitted. If the joined labels exceed 40 characters, the segment becomes `<n>-classes`. Naming is optional, and a take with no recorded labels keeps the existing filename format. The recording folder name, including its timestamp and any participant ID, stays the archive's prefix.
 
 **Discard** deletes the take outright — the folder is removed and no archive is written. That is `app.discard_recording()`, and it is the counterpart to `stop_recording()` rather than a wrapper around it: nothing is saved and then cleaned up.
 
@@ -83,7 +83,7 @@ The name is written to `meta.json` and appended to the archive filename, so a sa
        │   │   ├─ Session.save_meta(class_names=...)      │   │
        │   │   ├─ writes meta.json + labels.json          │   │
        │   │   ├─ Session.pack_to_zip()  (daemon thread)  │   │
-       │   │   │    -> <timestamp>.session.zip            │   │
+       │   │   │    -> <timestamp>.mg.zip            │   │
        │   │   │    folder removed once pack succeeds     │   │
        │   │   └─ ctx.state = "idle"                      │   │
        │   └────────────────────────────────────────────────┘ │
@@ -95,7 +95,7 @@ The name is written to `meta.json` and appended to the archive filename, so a sa
 
 ```
 data/P-014/recordings/
-└── P-014_2026-05-17_14-23-05.session.zip # final packaged artifact
+└── P-014_2026-05-17_14-23-05.mg.zip # final packaged artifact
                                           # (after Stop completes)
 ```
 
@@ -220,7 +220,7 @@ When `ctx.state == "recording"`, `app.ctx.session` is a live [`Session`](../api/
 | `session.init_stream(name, info)`                    | Pre-allocate Zarr arrays for one stream (auto-called by `start_recording`). |
 | `session.append(name, data, timestamps)`              | Append a chunk (auto-called by the acquisition thread).                  |
 | `session.save_meta(app_name, class_names=None)`       | Write `meta.json` and `labels.json` (auto-called by `stop_recording`).   |
-| `session.pack_to_zip()`                               | Pack folder into `.session.zip` (auto-called on a daemon thread after stop). |
+| `session.pack_to_zip()`                               | Pack folder into `.mg.zip` (auto-called on a daemon thread after stop). |
 
 You typically only call `add_label` directly; everything else is wired by `start_recording` / `stop_recording`. The class is documented at [`myogestic.session.Session`](../api/session.md).
 
@@ -230,7 +230,7 @@ You typically only call `add_label` directly; everything else is wired by `start
 from myogestic.session import open_session_store
 
 # Works for both packed zips AND unpacked folders.
-sess = open_session_store("data/P-014/recordings/P-014_2026-05-17_14-23-05.session.zip")
+sess = open_session_store("data/P-014/recordings/P-014_2026-05-17_14-23-05.mg.zip")
 
 emg = sess.stores["emg"]  # zarr.Array, shape (n_samples, n_channels)
 emg_ts = sess.ts_stores["emg"]  # zarr.Array, shape (n_samples,) float64
@@ -271,7 +271,7 @@ These skip windows that straddle a label boundary and handle the window/hop math
 
 - **Calling `start_recording` before streams connect.** A `Stream` whose `info is None` is silently skipped (no Zarr schema yet). Either wait for `app.ctx.streams["emg"].info is not None` or trigger recording from a `before_run_hook` plus a short sleep, as in the headless example.
 - **Recording with the synthetic generator paused.** The generator only produces data while it's running. Click Launch in the `ProcessLauncher` panel before Record, or in headless flow start the generator subprocess before `app.run()`.
-- **Killing the process mid-recording.** The `.session.zip` is packed only at `stop_recording()`. Crashes leave the raw `data/<ID>/recordings/<ID>_<timestamp>/` folder; you can pack it later with `Session(base_path=...).pack_to_zip()` after re-attaching to it, or just load the folder directly with `open_session_store("data/<ID>/recordings/<ID>_<timestamp>/")` - both work.
+- **Killing the process mid-recording.** The `.mg.zip` is packed only at `stop_recording()`. Crashes leave the raw `data/<ID>/recordings/<ID>_<timestamp>/` folder; you can pack it later with `Session(base_path=...).pack_to_zip()` after re-attaching to it, or just load the folder directly with `open_session_store("data/<ID>/recordings/<ID>_<timestamp>/")` - both work.
 - **Forgetting `class_names` in `save_meta`**. `RecordingControls` passes them through automatically. If you call `add_label` directly from custom code, also call `app.ctx.session.save_meta(app_name="...", class_names=[...])` before `stop_recording` or your labels will only be integers in `labels.json` with no name lookup.
 
 ## See also

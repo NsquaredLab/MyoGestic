@@ -268,7 +268,7 @@ def _connected_app() -> tuple[App, Stream]:
 
 
 def _only_zip(folder: Path) -> Path:
-    zips = list(folder.rglob("*.session.zip"))
+    zips = list(folder.rglob("*.mg.zip"))
     assert len(zips) == 1, zips
     return zips[0]
 
@@ -405,7 +405,7 @@ def test_cleanup_waits_for_takes_stopped_by_a_hook(tmp_path, monkeypatch, take_c
     assert not app.ctx.recording
     assert not app.ctx.pending_saves
     assert pending_at_stream_stop == []
-    archives = list(tmp_path.rglob("*.session.zip"))
+    archives = list(tmp_path.rglob("*.mg.zip"))
     assert len(archives) == take_count
     for archive in archives:
         with zipfile.ZipFile(archive) as saved:

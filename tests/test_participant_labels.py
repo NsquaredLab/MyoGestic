@@ -153,10 +153,10 @@ def test_meta_records_participant_not_names(tmp_path, monkeypatch):
     app.ctx.session.append("emg", np.zeros((4, 2), dtype=np.float32), np.arange(4.0))
     app.stop_recording()
     deadline = time.monotonic() + 10
-    archives = list(base.rglob("*.session.zip"))
+    archives = list(base.rglob("*.mg.zip"))
     while not archives and time.monotonic() < deadline:
         time.sleep(0.01)
-        archives = list(base.rglob("*.session.zip"))
+        archives = list(base.rglob("*.mg.zip"))
     assert len(archives) == 1, "recording was never packed"
     assert stream._session is None
     with zipfile.ZipFile(archives[0]) as archive:
