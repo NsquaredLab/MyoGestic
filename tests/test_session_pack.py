@@ -40,6 +40,22 @@ def test_takes_saved_as_session_zip_still_open_and_list(tmp_path):
     assert listed == {str(new), str(legacy)}
 
 
+def test_signal_streams_use_blosc_lz4_and_event_streams_zstd(tmp_path):
+    s = Session(base_path=tmp_path)
+    s.init_stream("emg", StreamInfo(n_channels=2, fs=100.0, dtype=np.dtype("float32")))
+    s.append("emg", np.ones((10, 2), np.float32), np.arange(10.0))
+    s.append_event("prediction.class", [1.0], 0.5)
+    s.save_meta("codecs")
+    with zipfile.ZipFile(s.pack_to_zip()) as zf:
+
+        def codec(array):
+            return json.loads(zf.read(f"{array}/zarr.json"))["codecs"][-1]
+
+        assert codec("emg.zarr")["configuration"]["cname"] == "lz4"
+        assert codec("emg_timestamps.zarr")["name"] == "blosc"
+        assert codec("prediction.class.zarr")["name"] == "zstd"
+
+
 def test_pack_to_zip_roundtrip():
     """Write a session as folder zarr, pack to .mg.zip, verify the
     folder is gone and the zip is readable with the same data."""
