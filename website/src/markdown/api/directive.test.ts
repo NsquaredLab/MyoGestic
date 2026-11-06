@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
+import { remarkAdmonitions } from '../compat/admonitions';
+import { render as renderHtml } from '../compat/test-utils';
 import { remarkApiDirective } from './directive';
 import type { ApiData } from './render';
 
@@ -20,6 +22,17 @@ function render(source: string) {
 }
 
 describe('API directives', () => {
+    it('renders directives and their options after an admonition rewrites the source', async () => {
+        const result = await renderHtml('!!! note "Title"\n    Callout body.\n\n::: myogestic.ml.Pipeline\n    options:\n      show_root_heading: false\n      members: [run]', [remarkAdmonitions, [remarkApiDirective, { data }]], [], '/docs/api/ml.md');
+        expect(result).toContain('<span id="myogestic.ml.Pipeline"></span>');
+        expect(result).toContain('id="myogestic.ml.Pipeline.run"');
+        expect(result).not.toContain('myogestic.ml.Pipeline.stop');
+        expect(result).not.toContain('options:');
+        expect(result).not.toContain(':::');
+        expect(result).toContain('<p class="mg-callout__title">Title</p>');
+        expect(result).toContain('<p>Callout body.</p>');
+    });
+
     it('consumes the options block and renders only selected members', () => {
         const result = render('Before\n\n::: myogestic.ml.Pipeline\n    options:\n      members: [run]\n\nAfter');
         expect(result).toContain('myogestic.ml.Pipeline');

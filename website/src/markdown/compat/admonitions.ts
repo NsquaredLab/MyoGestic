@@ -44,7 +44,10 @@ export const remarkAdmonitions: Plugin<[], Root> = function () {
     const parse = this.parser as Parser<Root>;
     this.parser = (source, file) => {
         const callouts = new Map<number, Callout>();
-        const tree = parse(quoteCallouts(source.split(/\r?\n/), 1, callouts).join('\n'), file);
+        const parsedSource = quoteCallouts(source.split(/\r?\n/), 1, callouts).join('\n');
+        // Downstream transforms must slice the source that produced node offsets.
+        file.data.mgParsedSource = parsedSource;
+        const tree = parse(parsedSource, file);
         visit(tree, 'blockquote', (node: Blockquote) => {
             const titleNode = node.children[0];
             const callout = callouts.get(titleNode?.position?.start.line ?? -1);

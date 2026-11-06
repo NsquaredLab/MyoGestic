@@ -9,11 +9,12 @@ export const remarkApiDirective: Plugin<[{ data?: ApiData }?], Root> = (options 
     const data = options.data ?? loadApiData();
     return (tree, file) => {
         const filename = file.path || '<markdown>';
+        const parsedSource = String(file.data.mgParsedSource ?? file.value);
         const page = filename.replace(/\\/g, '/').match(/(?:^|\/docs\/)(api\/[^/]+)\.md$/)?.[1] ?? 'api/index';
         const seen = new Set<string>();
         visit(tree, 'paragraph', (node, index, parent) => {
             if (!parent || index === undefined) return;
-            const raw = String(file.value).slice(node.position?.start.offset, node.position?.end.offset);
+            const raw = parsedSource.slice(node.position?.start.offset, node.position?.end.offset);
             const source = raw || node.children.map((child) => child.type === 'text' ? child.value : '').join('');
             if (!/^::: [\w.]+(?:\s|$)/.test(source)) return;
             const lines = source.split('\n');
