@@ -36,11 +36,11 @@ Everything for one participant lives in one folder under `data/`, split by what 
 data/
 ├── P-014/
 │   ├── recordings/                 # takes started from idle: training data
-│   │   └── P-014_2026-05-06_18-46-47_Rest.mg.zip
+│   │   └── P-014_20260506-1846_R.mg.zip
 │   ├── predictions/                # takes started while a model was predicting
-│   │   └── P-014_2026-05-06_18-52-10_Follow-run.mg.zip
+│   │   └── P-014_20260506-1852_follow-F.mg.zip
 │   └── models/                     # Pipeline.autosave_dir output
-│       └── P-014_2026-05-06_18-50-02_model.joblib
+│       └── P-014_20260506-1850_spar-mlp.joblib
 ├── recordings/                     # takes recorded with no participant set
 └── predictions/
 ```
@@ -48,13 +48,14 @@ data/
 `app.start_recording()` picks `recordings/` or `predictions/` from `ctx.state` when the take
 starts, so a prediction run never lands among the training takes.
 [`participant_dir(root, participant, kind)`][myogestic.session.participant_dir] returns any
-of these folders.
+of these folders. How each file is named, gesture codes included, is in
+[File names](file-names.md).
 
 During recording, one folder per take:
 
 ```text
 data/P-014/recordings/
-└── P-014_2026-05-06_18-46-47/
+└── P-014_20260506-1846/
     ├── meta.json                   # class_names, started_at, model_meta
     ├── labels.json                 # label_track (timestamps + class indices)
     ├── emg.zarr/                   # (n_samples, n_channels) sample-major
@@ -67,8 +68,8 @@ After `stop_recording`, the folder packs to a single archive:
 
 ```text
 data/P-014/recordings/
-├── P-014_2026-05-06_18-46-47/            # original folder (kept until pack succeeds)
-└── P-014_2026-05-06_18-46-47.mg.zip # archive - contains the same internal layout
+├── P-014_20260506-1846/          # original folder (kept until pack succeeds)
+└── P-014_20260506-1846_R.mg.zip  # archive - contains the same internal layout
 ```
 
 Both are loadable via [`open_session_store(path)`][myogestic.session.open_session_store] - readers don't need to know which they got.
@@ -153,7 +154,7 @@ On stop, `App.finalize_hooks` run on the finalize thread before `meta.json` is w
 ```python
 from myogestic.session import open_session_store
 
-sess = open_session_store("data/P-014/recordings/P-014_2026-05-06_18-46-47.mg.zip")
+sess = open_session_store("data/P-014/recordings/P-014_20260506-1846_R.mg.zip")
 
 # Continuous data
 data, ts = sess.get_continuous("emg")

@@ -70,6 +70,7 @@ def open_session_store(path: str | Path) -> Session:
     # written to meta.json precisely so it survives this trip.
     session.name = str(meta.get("name") or "")
     session.participant = str(meta.get("participant") or "")
+    session.kind = p.parent.name if p.parent.name in ("recordings", "predictions") else ""
     # Always set (None for folder sessions): keeps Session.close() safe even
     # though open_session_store bypasses __init__ via Session.__new__.
     session._zip_store = zip_store

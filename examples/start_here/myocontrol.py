@@ -336,7 +336,7 @@ def _select_participant(ctx: Context, *, navigate: bool = True, load_model: bool
         folder = pathlib.Path("data", ctx.participant, "models")
         if load_model:
             try:
-                models = [path for path in folder.glob("*_model.joblib") if path.is_file()]
+                models = [path for path in folder.glob("*.joblib") if path.is_file()]
                 newest = max(models, key=lambda path: path.stat().st_mtime, default=None)
             except OSError:
                 newest = None
@@ -497,6 +497,7 @@ def _start_guided_run() -> None:
     order = list(range(len(CLASSES))) * guided_run["reps"]
     random.Random(seed).shuffle(order)
     session = app.ctx.session
+    session.name = "guided"  # the take's file name says guided, not free
     session.extras["guided"] = {
         "classes": list(CLASSES),
         "reps": guided_run["reps"],

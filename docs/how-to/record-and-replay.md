@@ -131,7 +131,7 @@ Use [`open_session_store`][myogestic.session.open_session_store] for either layo
 ```python
 from myogestic.session import open_session_store
 
-sess = open_session_store("data/recordings/2026-05-06_18-46-47.mg.zip")
+sess = open_session_store("data/recordings/20260506-1846_R+F.mg.zip")
 
 # Continuous data - sample-major as recorded
 data, ts = sess.get_continuous("emg")
@@ -210,7 +210,7 @@ app.streams(
     Stream(
         "emg",
         source=ReplaySource(
-            session_path="data/recordings/2026-05-06_18-46-47.mg.zip",
+            session_path="data/recordings/20260506-1846_R+F.mg.zip",
             stream_name="emg",
             speed=1.0,  # 0.5 = half-speed, 2.0 = double-speed
         ),
@@ -240,7 +240,7 @@ Stop when done; the archive holds the raw streams *and* what the model saw and d
 from myogestic.session import open_session_store
 import numpy as np
 
-with open_session_store("data/P-014/predictions/P-014_2026-09-13_10-12-44.mg.zip") as s:
+with open_session_store("data/P-014/predictions/P-014_20260913-1012_free.mg.zip") as s:
     print(s.event_streams)  # ('features.vec', 'prediction.pose', 'pipeline.tick', 'controls')
     pose = np.array(s.stores["prediction.pose"])  # (n_ticks, 5)
     t = np.array(s.ts_stores["prediction.pose"])  # data time of each tick

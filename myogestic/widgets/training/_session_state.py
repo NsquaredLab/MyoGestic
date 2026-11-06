@@ -3,11 +3,17 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from glob import escape
 from pathlib import Path
 from typing import cast
 
-from myogestic.session._core import KINDS, TAKE_KINDS, _read_session_metadata, _slug
+from myogestic.session._core import (
+    ARCHIVE_SUFFIX,
+    KINDS,
+    PACKED_FOLDERS,
+    TAKE_KINDS,
+    _read_session_metadata,
+    _slug,
+)
 
 
 @dataclass
@@ -46,15 +52,12 @@ def is_session_saving(base_path: str) -> bool:
     return any(_in_scope(path.parent, base) for path in _pending_packs.copy())
 
 
-def _packed_siblings(path: Path, suffix: str = ".zip") -> list[Path]:
-    return sorted(p for p in path.parent.glob(f"{escape(path.name)}*{suffix}") if p.is_file())
-
-
 def packed_session_path(path: Path) -> Path | None:
     """Find the archive that replaced a session folder, if it has finished."""
     if path.is_file():
         return None
-    return next(iter(_packed_siblings(path)), None)
+    archive = PACKED_FOLDERS.get(path.resolve())
+    return archive if archive is not None and archive.is_file() else None
 
 
 def scan_sessions(base_path: str) -> list[dict]:
@@ -71,10 +74,12 @@ def scan_sessions(base_path: str) -> list[dict]:
         for d in folder.iterdir():
             if d.name in KINDS:
                 continue
+            # Packing (here, or in another app: its temporary archive is named
+            # after the folder) or already packed, with the folder not yet removed.
             if d.is_dir() and (
                 d.resolve() in _pending_packs
-                or _packed_siblings(d)
-                or _packed_siblings(d, ".zip.tmp")
+                or d.resolve() in PACKED_FOLDERS
+                or d.with_name(d.name + ARCHIVE_SUFFIX + ".tmp").exists()
             ):
                 continue
             row = _session_row(d)

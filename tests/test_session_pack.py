@@ -128,7 +128,7 @@ def test_archive_labels_precede_typed_name_in_class_order(tmp_path, label_order,
 
     archive = session.pack_to_zip()
 
-    assert archive.name == f"{folder.name}_fist+open-hand_my-take.mg.zip"
+    assert archive.name == f"{folder.name}_F+Oh_my-take.mg.zip"
     assert not folder.exists()
     with zipfile.ZipFile(archive) as packed:
         assert packed.read("meta.json") == meta_bytes
@@ -172,16 +172,16 @@ def test_archive_without_recorded_labels_keeps_its_name(
 @pytest.mark.parametrize(
     ("class_names", "segment"),
     [
-        (["../fist", "open/hand", "___"], "_fist+open-hand"),
-        (["...", "___"], ""),
-        (["fist", "fist"], "_fist"),
-        (["a" * 19, "b" * 20], f"_{'a' * 19}+{'b' * 20}"),
-        (["a" * 20, "b" * 20], "_2-classes"),
-        ([f"gesture {index}" for index in range(7)], "_7-classes"),
+        (["../fist", "open/hand", "___"], "_F+Oh+C3"),
+        (["...", "___"], "_C1+C2"),
+        (["fist", "fist"], "_F"),
+        (["a" * 19, "b" * 20], "_A+B"),
+        ([f"gesture {index}" for index in range(7)], "_G0+G1+G2+G3+G4+G5+G6"),
+        ([f"gesture {index}" for index in range(14)], "_G0+G1+G2+11-more"),
     ],
 )
-def test_archive_label_slugs_and_length_limit(tmp_path, class_names, segment):
-    session = _archive_session(tmp_path)
+def test_archive_codes_and_length_limit(tmp_path, class_names, segment):
+    session = _archive_session(tmp_path, (0.0, 20.0))
     for index in reversed(range(len(class_names))):
         session.add_label(index, timestamp=float(len(class_names) - index - 1))
     session.save_meta("slugs", class_names=class_names)
@@ -198,26 +198,6 @@ def test_archive_labels_refresh_when_metadata_is_saved_again(tmp_path):
     stem = session.path.name
 
     assert session.pack_to_zip().name == f"{stem}.mg.zip"
-
-
-def test_labelled_archive_reserves_same_second_participant_stem(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "myogestic.session._core.time.strftime",
-        lambda *args: "2026-10-24_22-13-05",
-    )
-    first = _archive_session(tmp_path)
-    first.name = "my take"
-    first.add_label(0, timestamp=0.0)
-    first.save_meta("first", class_names=["fist"])
-    folder = first.path
-    archive = first.pack_to_zip()
-    assert archive.name == "P-001_2026-10-24_22-13-05_fist_my-take.mg.zip"
-    assert not folder.exists()
-
-    second = Session(str(tmp_path), participant="P-001")
-
-    assert second.path == folder.with_name(f"{folder.name}-2")
-    assert archive.exists() and second.path.is_dir()
 
 
 @pytest.mark.skipif(
@@ -586,19 +566,16 @@ def _quick_session(tmp: str) -> Session:
     return s
 
 
-def test_pack_to_zip_overwrites_existing_target():
-    """pack_to_zip uses os.replace, which overwrites a pre-existing .mg.zip.
-
-    On Windows ``Path.rename`` raises ``FileExistsError`` when the destination
-    exists; ``os.replace`` overwrites on every OS.
-    """
+def test_pack_to_zip_never_overwrites_a_file_of_the_same_name():
+    """Another take already has the name: this one gets ``-2``, the other is kept."""
     with tempfile.TemporaryDirectory() as tmp:
         s = _quick_session(tmp)
-        zip_path = s.path.with_name(s.path.name + ".mg.zip")
-        zip_path.write_bytes(b"stale")  # a leftover file at the destination
+        taken = s.path.with_name(s.path.name + ".mg.zip")
+        taken.write_bytes(b"another take")
         out = s.pack_to_zip()
-        assert out == zip_path
-        with open_session_store(out) as loaded:  # real, readable zip (not stale)
+        assert out == taken.with_name(f"{taken.name.removesuffix('.mg.zip')}-2.mg.zip")
+        assert taken.read_bytes() == b"another take"
+        with open_session_store(out) as loaded:
             assert np.array(loaded.stores["emg"]).shape == (16, 2)
 
 

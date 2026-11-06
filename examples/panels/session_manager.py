@@ -24,9 +24,9 @@ CLASSES = ["Rest", "Fist"]
 # base folder on start, and these are also selectable via "Load Files...".
 _tmp = Path(tempfile.mkdtemp(prefix="panel_sessions_"))
 _SESSIONS = (
-    ("2026-05-01_10-00-00", "2026-05-01T10:00:00", [0, 1, 0, 1, 0]),
-    ("2026-05-01_10-15-00", "2026-05-01T10:15:00", [1, 1, 0]),
-    ("2026-05-02_09-30-00", "2026-05-02T09:30:00", [0, 0, 1, 1]),
+    ("20260501-1000_R+F", "2026-05-01T10:00:00", [0, 1, 0, 1, 0]),
+    ("20260501-1015_R+F", "2026-05-01T10:15:00", [1, 1, 0]),
+    ("20260502-0930_R+F", "2026-05-02T09:30:00", [0, 0, 1, 1]),
 )
 for _name, _created, _labels in _SESSIONS:
     with zipfile.ZipFile(_tmp / f"{_name}.mg.zip", "w") as _zf:

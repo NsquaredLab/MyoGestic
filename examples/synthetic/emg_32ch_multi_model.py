@@ -22,10 +22,8 @@ Which hand controls the poses drive is declared in `examples/controls/multi_mode
 — our own alias on the left, the address VHI exports on the right.
 """
 
-import re
 import sys
 import threading
-import time as _time
 import tomllib
 from collections.abc import Callable
 from pathlib import Path
@@ -50,7 +48,7 @@ from myogestic.recipes.estimators import (
     sklearn_logistic_classifier,
 )
 from myogestic.remote import RemoteTarget
-from myogestic.session import iter_labeled_windows, participant_dir
+from myogestic.session import iter_labeled_windows, model_path, participant_dir
 from myogestic.sources import LSLSource
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
@@ -224,11 +222,6 @@ predict_button = PredictButton(pipeline, size=(-1, 0))
 training_log = TrainingLog(pipeline, height=80.0, widget_id=_MODEL_WIDGET_ID)
 
 
-def _slug(name: str) -> str:
-    """Filesystem-safe recipe slug — strip everything outside [A-Za-z0-9_-]."""
-    return re.sub(r"[^A-Za-z0-9_-]+", "_", name).strip("_") or "model"
-
-
 def _list_saved_models() -> list[Path]:
     """Saved models, newest first. Empty if the directory does not exist yet."""
     if not _models_dir().is_dir():
@@ -237,13 +230,10 @@ def _list_saved_models() -> list[Path]:
 
 
 def _save_current() -> Path | None:
-    """Save `pipeline.model` under `data/<ID>/models/<recipe>_<timestamp>_model.joblib`."""
+    """Save `pipeline.model` as `data/<ID>/models/<ID>_<YYYYMMDD-HHMM>_<recipe>.joblib`."""
     if pipeline.model is None:
         return None
-    _models_dir().mkdir(parents=True, exist_ok=True)
-    slug = _slug(MODEL_NAMES[selected_model_idx])
-    ts = _time.strftime("%Y%m%d_%H%M%S")
-    path = _models_dir() / f"{slug}_{ts}_model.joblib"
+    path = model_path("data", app.ctx.participant, MODEL_NAMES[selected_model_idx])
     save_pickle(pipeline.model, str(path))
     return path
 

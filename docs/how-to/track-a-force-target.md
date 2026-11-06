@@ -304,7 +304,7 @@ The target is a stream in the archive like any other, so everything in
 ```python
 from myogestic.session import open_session_store
 
-sess = open_session_store("data/recordings/2026-05-17_14-23-05.mg.zip")
+sess = open_session_store("data/recordings/20260517-1423.mg.zip")
 
 emg, emg_ts = sess.get_continuous("emg")  # (N, n_ch) sample-major
 target, target_ts = sess.get_continuous("target")  # (M, 2)
@@ -342,7 +342,7 @@ from myogestic.session import iter_aligned_windows
 
 X, Y = [], []
 for window, targets, ts in iter_aligned_windows(
-    paths=["data/recordings/2026-05-17_14-23-05.mg.zip"],
+    paths=["data/recordings/20260517-1423.mg.zip"],
     primary_stream_name="emg",
     aligned_stream_names=["target"],
     window_ms=200,

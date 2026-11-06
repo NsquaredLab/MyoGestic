@@ -146,6 +146,15 @@ def run(tmp_path, monkeypatch):
     widget.stop(app.ctx)
 
 
+@pytest.mark.parametrize(("class_names", "code"), [([], "F"), (["Fist", "Fast"], "Fi")])
+def test_a_follow_take_is_named_for_the_gesture_it_followed(run, class_names, code):
+    widget, app, now = run
+    app.ctx.class_names = class_names  # codes come from the app's classes when it has them
+    assert widget.start(app.ctx)
+    widget.stop(app.ctx)
+    assert app.ctx.session.path.name.endswith(f"_follow-{code}.mg.zip")
+
+
 @pytest.mark.parametrize("stop_at", [0.5, 3.5, 5.0])
 def test_record_saved_target_score_and_unticked_take(run, stop_at):
     from myogestic.session import open_session_store

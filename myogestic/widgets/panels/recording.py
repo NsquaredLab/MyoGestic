@@ -30,7 +30,7 @@ from imgui_bundle import imgui
 
 from myogestic._theme import mono_font
 from myogestic.core import RECORDABLE_STATES, AppState
-from myogestic.session._core import _SLUG_MAX, _slug
+from myogestic.session._core import class_codes, take_stem
 from myogestic.widgets.common import (
     DANGER,
     IDLE,
@@ -488,11 +488,9 @@ class RecordButton:
             end = session.label_track[i + 1].timestamp if i + 1 < len(session.label_track) else last
             if min(last, end) > max(first, event.timestamp):
                 recorded.add(ctx.class_names[index])
-        slugs = [_slug(name) for name in sorted(recorded, key=ctx.class_names.index) if _slug(name)]
-        labels = "+".join(slugs)
-        if len(labels) > _SLUG_MAX:
-            labels = f"{len(slugs)}-classes"
-        return "_".join(part for part in (session.path.name, labels, _slug(self._name)) if part)
+        codes = class_codes(ctx.class_names, ctx.class_codes) if recorded else {}
+        ordered = sorted(recorded, key=ctx.class_names.index)
+        return take_stem(session._stem, session.kind, [codes[name] for name in ordered], self._name)
 
     def _dialog(self, ctx: Context) -> None:
         """The naming modal. Deliberately has no way out but Save or Discard.

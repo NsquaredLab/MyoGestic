@@ -76,7 +76,7 @@ def test_session_without_participant_goes_in_the_root_kind_folder(tmp_path, part
     )
     assert session.path.parent == tmp_path / "recordings"
     assert Session(str(tmp_path), participant=participant, kind="").path.parent == tmp_path
-    assert re.fullmatch(r"\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d_[0-9a-f]{8}", session.path.name)
+    assert re.fullmatch(r"\d{8}-\d{4}", session.path.name)
 
 
 def test_session_with_participant_nests_and_labels(tmp_path, frozen_clock):
