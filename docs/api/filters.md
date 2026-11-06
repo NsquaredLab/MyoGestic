@@ -1,5 +1,6 @@
-# Filters
-
+---
+title: "Filters"
+---
 Output-side smoothing filters for prediction-output control vectors. Custom filters implement the [`VectorFilter`][myogestic.outputs.filters.VectorFilter] protocol below. See [Post-process predictions](../how-to/post-process-output.md) for tuning guidance.
 
 ## The protocol

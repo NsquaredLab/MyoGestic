@@ -1,5 +1,6 @@
-# Anatomy of a MyoGestic app
-
+---
+title: "Anatomy of a MyoGestic app"
+---
 Read this first. The deep-dive concept pages (Streams, Pipeline, Recording, Widgets) explain *each part* of the framework in detail; this page explains *how the parts fit together* in the order you write them.
 
 By the end, the 35-line script below will read like prose. Open it in your editor and read alongside.

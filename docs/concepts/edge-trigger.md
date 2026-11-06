@@ -1,5 +1,6 @@
-# Edge trigger - fire-on-change for discrete events
-
+---
+title: "Edge trigger - fire-on-change for discrete events"
+---
 A classifier emits a class index *every tick* (~30-60 Hz). If you wire that
 directly to a side-effect - a gRPC RPC to the Virtual Hand, a serial write,
 an audio cue - the side-effect re-fires every tick. That's wasteful at best,

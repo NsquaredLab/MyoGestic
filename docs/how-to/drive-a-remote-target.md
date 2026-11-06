@@ -1,5 +1,6 @@
-# Drive a remote target
-
+---
+title: "Drive a remote target"
+---
 A **remote target** is a separate application MyoGestic drives: a process of its own, reached
 over gRPC and driven over LSL. An [in-process target](add-a-target.md) is the opposite, and the
 simpler route: an object a `ControlBus` calls directly, on the thread MyoGestic already owns,

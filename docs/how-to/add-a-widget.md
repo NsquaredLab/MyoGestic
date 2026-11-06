@@ -1,5 +1,6 @@
-# Add a custom widget
-
+---
+title: "Add a custom widget"
+---
 A widget is a class with a `.ui()` method. You construct it once, then call `.ui(...)` inside `@app.ui` each frame. There's no list to register with, no base class to subclass, no decorator.
 
 ## The simplest widget

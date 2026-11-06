@@ -1,5 +1,6 @@
-# Controls
-
+---
+title: "Controls"
+---
 A **control** is one thing a person drives: a finger, a wrist, a cursor axis, a key. MyoGestic
 never hard-codes a list of them. Instead a device declares what it can drive, your application
 picks its own names for its model's outputs, and a TOML **control map** pairs the two.

@@ -1,5 +1,6 @@
-# Threading
-
+---
+title: "Threading"
+---
 stdlib `threading` only. No asyncio, no multiprocessing on the hot path. Subprocess isolation is reserved for "bridges" - heavy-data sources like webcams or ultrasound that would otherwise saturate a thread.
 
 ## What runs where

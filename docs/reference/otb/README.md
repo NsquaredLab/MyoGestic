@@ -1,5 +1,7 @@
-# OT Bioelettronica reference code & protocol notes
-
+---
+title: "OT Bioelettronica reference code & protocol notes"
+slug: reference/otb
+---
 Manufacturer reference material for the native OTB device sources
 (`myogestic/sources/otb/`). **Reference only — not imported or shipped.** These
 are OT Bioelettronica's own example scripts, kept here as the ground-truth decode

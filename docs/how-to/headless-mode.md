@@ -1,5 +1,6 @@
-# Run headless (no GUI)
-
+---
+title: "Run headless (no GUI)"
+---
 [`App.run(mode="headless")`][myogestic.App.run] starts the same acquisition / predict / output threads as the GUI mode but skips Dear ImGui. Useful for unattended overnight recordings, scripted experiments on remote machines, integration tests, or any case where a window would just be in the way.
 
 In headless mode, **there's no `@app.ui` callback**, so the user can't click Record. You drive the recording state machine yourself - typically from a script-level main, a thread, or an `app.before_run_hooks` hook.

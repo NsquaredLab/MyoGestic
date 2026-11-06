@@ -1,5 +1,6 @@
-# Connect OT Bioelettronica devices
-
+---
+title: "Connect OT Bioelettronica devices"
+---
 MyoGestic talks to OTB Muovi/Muovi+ and Quattrocento natively — no Qt, no
 external bridge. Each device is a `Source` you drop into a `Stream`.
 

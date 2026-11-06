@@ -1,9 +1,8 @@
 ---
+title: "Widget gallery"
 hide:
   - toc
 ---
-
-# Widget gallery
 
 Visual contact-sheet of every public widget. Each card shows the widget rendered in isolation.
 

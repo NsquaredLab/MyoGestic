@@ -1,5 +1,6 @@
-# API cheatsheet
-
+---
+title: "API cheatsheet"
+---
 The most-used public symbols, signatures only — hand-maintained and not exhaustive. Each name links to its full entry (prose, Args/Returns, source) in the [API reference](../api/index.md).
 
 ## Core

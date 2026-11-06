@@ -1,5 +1,6 @@
-# Add a custom model
-
+---
+title: "Add a custom model"
+---
 [`Pipeline`][myogestic.ml.Pipeline] doesn't care what your model is. Sklearn, CatBoost, PyTorch, a state machine, a lookup table - anything pickleable works, and even unpickleable models work if you provide your own `save_model` / `load_model`.
 
 The protocol is three decorators on plain functions:

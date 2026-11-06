@@ -1,5 +1,6 @@
-# Start here
-
+---
+title: "Start here"
+---
 Complete, runnable experiments. Each walks through a real file under `examples/` line by line — open the file in your editor and read alongside, since the code blocks are pulled from it and cannot drift.
 
 - [EMG classification](emg-classification.md) - `examples/synthetic/emg_classification.py`. Two-class Rest/Fist with CatBoost on RMS+MAV features. The best first read: it establishes the App + Stream + Pipeline pattern every other page assumes.

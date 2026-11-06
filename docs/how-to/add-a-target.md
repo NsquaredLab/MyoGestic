@@ -1,5 +1,6 @@
-# Drive your own device
-
+---
+title: "Drive your own device"
+---
 Anything MyoGestic moves — a prosthesis on a serial port, a motor controller, a cursor, a
 robot arm — is a **target**: a plain object with three methods that you hand to a
 [`ControlBus`][myogestic.controls.ControlBus]. Nothing registers, nothing subclasses,

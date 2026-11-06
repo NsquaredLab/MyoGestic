@@ -1,5 +1,6 @@
-# EMG classification (CatBoost)
-
+---
+title: "EMG classification (CatBoost)"
+---
 End-to-end walkthrough of [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py): synthetic 8-channel EMG → RMS+MAV features (from [`myogestic.recipes.features`][myogestic.recipes.features]) → CatBoost binary classifier, with optional LSL pose and gRPC movement outputs to VHI.
 
 !!! note "Code below is included from the example"

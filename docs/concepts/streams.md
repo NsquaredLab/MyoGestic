@@ -1,5 +1,6 @@
-# Streams
-
+---
+title: "Streams"
+---
 A [`Stream`][myogestic.Stream] wraps a `Source` plus a fixed-memory ring buffer. It owns one daemon acquisition thread, exposes one window-getter for predict code, and one decimated display getter for widgets.
 
 ## The data shape contract

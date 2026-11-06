@@ -1,5 +1,6 @@
-# EMG regression with the Virtual Hand
-
+---
+title: "EMG regression with the Virtual Hand"
+---
 End-to-end walkthrough of
 [`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression.py):
 8-channel synthetic EMG → MyoVerse RMS+MAV+WL features →

@@ -1,5 +1,6 @@
-# Pipeline
-
+---
+title: "Pipeline"
+---
 [`Pipeline(app, predict_hz=50)`][myogestic.ml.Pipeline] is the optional ML layer. It adds a predict thread, training/predicting states to `ctx.state`, and three function decorators that *are* your entire ML surface - no base classes, no registration, no config.
 
 ```python

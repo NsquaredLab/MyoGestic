@@ -1,5 +1,7 @@
-# Docs screenshots
-
+---
+title: "Docs screenshots"
+slug: images
+---
 The docs site references PNGs from this folder. There are two capture
 flows: **widgets** (automated, one script) and **examples** (manual, full
 window).

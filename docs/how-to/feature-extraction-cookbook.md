@@ -1,5 +1,6 @@
-# Feature-extraction cookbook
-
+---
+title: "Feature-extraction cookbook"
+---
 The framework deliberately ships nothing inside [`@pipeline.extract`][myogestic.ml.Pipeline.extract] - DSP and feature engineering belong to user code. Bringing your own scipy / MyoVerse / numpy is the design intent.
 
 That said, almost every EMG project starts with the same five or six features. This page is a copy-paste cookbook so you can drop them in and iterate.

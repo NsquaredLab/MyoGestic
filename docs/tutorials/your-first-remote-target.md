@@ -1,5 +1,6 @@
-# Your first remote target
-
+---
+title: "Your first remote target"
+---
 !!! danger "Most devices do not need this page"
     This builds a **separate program** that MyoGestic reaches over gRPC and LSL. You need it
     only if your device already is its own program — a game, a simulator, something in another

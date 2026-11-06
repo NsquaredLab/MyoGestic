@@ -1,5 +1,6 @@
-# Troubleshooting
-
+---
+title: "Troubleshooting"
+---
 Symptom-first reference for the things that go wrong. Each entry: what you see, what's actually happening, and how to fix it.
 
 The deep-dive concept and how-to pages have their own short "Common mistakes" admonitions that point back here.

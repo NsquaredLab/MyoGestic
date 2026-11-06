@@ -1,5 +1,6 @@
-# Enable on-disk recording
-
+---
+title: "Enable on-disk recording"
+---
 Capture every registered `Stream`'s incoming biosignal data to a Zarr-backed `.mg.zip` archive. Two flows (GUI button or headless API), one artifact, full programmatic control. This page covers configuration, the full lifecycle, the Zarr layout, the `Session` API, and read-back.
 
 ## Quick-start: the four lines that enable recording

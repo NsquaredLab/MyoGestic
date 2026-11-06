@@ -1,5 +1,6 @@
-# Publish a data stream
-
+---
+title: "Publish a data stream"
+---
 !!! warning "If something moves, you want a target"
     An `Outlet` has no aliases, no declared range, no clamp and no rest on shutdown. A hand, a
     motor, a haptic or a cursor is a **[target](add-a-target.md)**.

@@ -1,5 +1,6 @@
-# Examples directory
-
+---
+title: "Examples directory"
+---
 Every runnable example under [`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic),
 what it teaches, and what's tweakable, plus the complete protocols in
 [`examples/start_here/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/start_here).

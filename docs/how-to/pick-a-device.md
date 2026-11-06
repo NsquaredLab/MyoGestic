@@ -1,5 +1,6 @@
-# Pick a device from the UI
-
+---
+title: "Pick a device from the UI"
+---
 `DevicePicker` puts device choice in the running app instead of the source
 file. Pick hardware from a dropdown, set the few knobs it has, press
 **Connect**. Nothing attaches on its own, and nothing changes until you press

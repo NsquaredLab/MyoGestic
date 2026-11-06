@@ -1,5 +1,6 @@
-# Grid layout - Px and Fr
-
+---
+title: "Grid layout - Px and Fr"
+---
 `@app.ui` panels are placed with a `Grid` that borrows the units of CSS
 Grid. There are two track types - and **only** two - that mean the same
 thing on both axes:

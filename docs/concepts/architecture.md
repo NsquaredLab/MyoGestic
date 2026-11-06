@@ -1,5 +1,6 @@
-# Architecture
-
+---
+title: "Architecture"
+---
 MyoGestic is built around three orthogonal concerns: **acquisition** (sources feeding ring buffers), **decision** (the predict thread), and **rendering** (the main thread drawing widgets). **Actuation** is a fourth: a `Target` driving a device from a sanitised control frame. Outputs are the paced sender a target writes through, and are owned by user code.
 
 ```mermaid

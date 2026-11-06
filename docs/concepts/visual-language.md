@@ -1,5 +1,6 @@
-# Visual language
-
+---
+title: "Visual language"
+---
 [Design principles](design-principles.md) is the *code* contract: no base classes, one name one
 meaning, a public API that fits on a page. This page is the *visual* one, the small set of tokens
 and rules every widget already follows, so a new control looks like it belongs instead of like a

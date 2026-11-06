@@ -1,5 +1,6 @@
-# Add a custom source
-
+---
+title: "Add a custom source"
+---
 A `Source` is a [Protocol](https://docs.python.org/3/library/typing.html#typing.Protocol) - three methods, no inheritance. Implement them, hand the instance to `Stream(...)`, and the framework handles threading, buffering, and recording for you.
 
 ## The protocol

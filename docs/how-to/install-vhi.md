@@ -1,5 +1,6 @@
-# Install the Virtual Hand Interface
-
+---
+title: "Install the Virtual Hand Interface"
+---
 The Virtual Hand Interface (VHI) is a separate Godot 4.5 application. It
 isn't bundled in the MyoGestic wheel - you download the platform-specific
 release binary once and the framework's `virtual_hand()` registry picks

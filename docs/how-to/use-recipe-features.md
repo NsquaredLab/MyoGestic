@@ -1,5 +1,6 @@
-# Use the recipe feature set
-
+---
+title: "Use the recipe feature set"
+---
 `myogestic.recipes.features` ships five classic time-domain EMG features
 that every starter example used to copy-paste:
 

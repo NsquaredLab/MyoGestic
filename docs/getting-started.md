@@ -1,5 +1,6 @@
-# Getting started
-
+---
+title: "Getting started"
+---
 ## Install
 
 MyoGestic uses [uv](https://docs.astral.sh/uv/) for environment management. From a fresh clone:

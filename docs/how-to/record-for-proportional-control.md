@@ -1,5 +1,6 @@
-# Record for proportional control
-
+---
+title: "Record for proportional control"
+---
 A decoder is *proportional* when it answers **how hard** as well as **which way**: half a
 contraction moves the paddle half as fast. Getting that is a recording problem before it
 is a modelling one, and the short statement of it is this — a block that only ever cues

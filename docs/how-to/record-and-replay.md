@@ -1,5 +1,6 @@
-# Record and replay
-
+---
+title: "Record and replay"
+---
 End-to-end: capture sessions in the GUI, browse them in [`SessionManager`][myogestic.widgets.SessionManager], train on them, then replay one offline as a Source so you can debug the predict path without re-running the experiment.
 
 ## Live capture

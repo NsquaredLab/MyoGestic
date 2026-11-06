@@ -1,5 +1,6 @@
-# Reference
-
+---
+title: "Reference"
+---
 Information-oriented material: look up here, don't read end-to-end.
 
 - [API reference](../api/index.md) - auto-generated from docstrings via mkdocstrings, one page per subpackage (Core, Sources, Outputs, Bridges, ML pipeline, Widgets, Models, Session, Filters).

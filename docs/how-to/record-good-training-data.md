@@ -1,5 +1,6 @@
-# Record good training data
-
+---
+title: "Record good training data"
+---
 Most "my model doesn't work" reports come down to bad training data, not bad modelling. The framework can't compensate for a one-click recording any more than scikit-learn can. This page covers what cycle-style recording is, why it matters, and how to verify your data before training.
 
 ## The failure mode

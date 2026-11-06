@@ -1,5 +1,6 @@
-# Track a force target
-
+---
+title: "Track a force target"
+---
 Isometric force tracking: the subject holds a joint still against a transducer and
 squeezes to match a trapezoid drawn on screen — rest, ramp up, hold, ramp down,
 recover. It is the standard HD-EMG protocol for motor-unit work, because a slow

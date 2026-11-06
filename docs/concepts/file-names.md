@@ -1,5 +1,6 @@
-# File names
-
+---
+title: "File names"
+---
 Every file MyoGestic saves for a participant follows one pattern, short enough to read in
 Finder and Explorer and complete enough to tell takes apart without opening them:
 

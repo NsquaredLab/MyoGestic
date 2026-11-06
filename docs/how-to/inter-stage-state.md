@@ -1,5 +1,6 @@
-# Keep state between pipeline stages
-
+---
+title: "Keep state between pipeline stages"
+---
 `@pipeline.extract` and `@pipeline.predict` are plain functions called once per predict tick (`1 / predict_hz` seconds). They get no implicit context object - if you need data to *survive* between ticks, you store it yourself. This page covers the four patterns that come up.
 
 ## The base case: stateless tick

@@ -1,5 +1,6 @@
-# Integrate the Virtual Hand Interface
-
+---
+title: "Integrate the Virtual Hand Interface"
+---
 The **Virtual Hand Interface (VHI)** is the Godot-based 3-D hand visualisation that ships
 alongside MyoGestic. It is the [remote target](drive-a-remote-target.md) this project ships
 with: a separate application, read from over LSL and commanded over gRPC.

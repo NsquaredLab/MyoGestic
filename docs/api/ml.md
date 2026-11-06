@@ -1,5 +1,6 @@
-# ML pipeline
-
+---
+title: "ML pipeline"
+---
 ## Pipeline
 
 ::: myogestic.ml.Pipeline

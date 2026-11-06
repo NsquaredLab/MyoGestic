@@ -1,5 +1,6 @@
-# Post-process predictions
-
+---
+title: "Post-process predictions"
+---
 `myogestic.outputs.filters` smooths the **prediction output vector** before it leaves the app - the 9-float pose, the proportional control, the actuator command. It is *not* a DSP filter for raw EMG (that belongs upstream of `extract()` and the user's domain library, e.g. scipy).
 
 ## The fastest path: [`PostProcessor`][myogestic.widgets.PostProcessor] widget

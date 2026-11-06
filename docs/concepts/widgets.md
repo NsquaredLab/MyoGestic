@@ -1,5 +1,6 @@
-# Widgets
-
+---
+title: "Widgets"
+---
 A widget is a **class**. You construct it once with its configuration, then call `.ui(...)` each frame with the live per-frame inputs. No inheritance, no `Widget` base, no registration with the app — just a plain class with a `.ui()` method.
 
 ```python

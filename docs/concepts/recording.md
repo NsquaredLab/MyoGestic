@@ -1,5 +1,6 @@
-# Recording
-
+---
+title: "Recording"
+---
 Streams always flow. **Recording is just "start appending to Zarr."** Labels are a separate timestamped event track, not interleaved with the signal - that keeps the signal arrays cheap to slice and the labels cheap to scan.
 
 ## Mental model

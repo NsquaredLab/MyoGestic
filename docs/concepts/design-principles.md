@@ -1,5 +1,6 @@
-# Design principles
-
+---
+title: "Design principles"
+---
 The eight rules the codebase keeps to:
 
 1. **No base classes. No inheritance.** No registration. No config files. **One exception,
