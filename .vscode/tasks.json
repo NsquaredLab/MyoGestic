@@ -8,7 +8,7 @@
   "tasks": [
     {
       // `--inexact` is deliberate: a plain `uv sync` prunes anything outside the extras
-      // it was given, which would silently uninstall pytest/ruff/properdocs from a
+      // it was given, which would silently uninstall pytest/ruff/griffe from a
       // working checkout every time someone pressed F5.
       "label": "uv: sync (examples + grpc)",
       "detail": "Install the extras the examples and the gRPC control plane need.",
