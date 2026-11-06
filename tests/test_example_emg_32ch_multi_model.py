@@ -433,7 +433,7 @@ def test_classifier_caption_and_icon_actions_keep_model_persistence(
     ns["steps"].active = 2
     ns["pipeline"].model = {"fitted": "example"}
     calls, tooltips = [], []
-    monkeypatch.setattr("myogestic.session._core.time.strftime", lambda fmt: "20261025-1200")
+    monkeypatch.setattr("myogestic.session._core.time.strftime", lambda fmt, *_: "20261025-1200")
     monkeypatch.setattr(imgui, "set_item_tooltip", lambda text: tooltips.append(text))
     original_text = imgui.text_colored
     original_combo = imgui.combo

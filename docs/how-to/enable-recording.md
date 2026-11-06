@@ -113,7 +113,7 @@ P-014_20260517-1423_R+F.mg.zip
 │   └── chunks: (fs,)
 ├── vhi_control.zarr/               # one pair of arrays per registered Stream
 ├── vhi_control_timestamps.zarr/
-├── meta.json                       # app_name, created, streams (n_channels, fs, dtype), class_names
+├── meta.json                       # app_name, created (start time), streams (n_channels, fs, dtype), class_names
 └── labels.json                     # list of {timestamp, class_index}
 ```
 

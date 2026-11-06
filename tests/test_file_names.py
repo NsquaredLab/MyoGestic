@@ -1,7 +1,9 @@
 """The file-name standard: <ID>_<YYYYMMDD-HHMM>_<what>.mg.zip, with class codes."""
 
 import json
+import time
 import zipfile
+from datetime import datetime
 
 import numpy as np
 import pytest
@@ -149,3 +151,19 @@ def test_an_archive_being_claimed_is_empty_and_never_listed(tmp_path):
     (tmp_path / "recordings").mkdir()
     (tmp_path / "recordings" / "20261105-1533_F.mg.zip").touch()  # claimed, not yet written
     assert scan_sessions(str(tmp_path)) == []
+
+
+def test_the_name_and_meta_created_both_say_when_the_take_started(tmp_path, monkeypatch):
+    started = time.strptime("2026-11-05 15:33:59", "%Y-%m-%d %H:%M:%S")
+    monkeypatch.setattr("myogestic.session._core.time.localtime", lambda *a: started)
+    session = Session(str(tmp_path), participant="P-023")
+    monkeypatch.undo()  # Stop comes later: it must not move the take's time
+    session.init_stream("emg", StreamInfo(n_channels=1, fs=10.0))
+    session.save_meta("test")
+    archive = session.pack_to_zip()
+
+    assert archive.name == "P-023_20261105-1533.mg.zip"
+    with zipfile.ZipFile(archive) as packed:
+        assert json.loads(packed.read("meta.json"))["created"] == "2026-11-05T15:33:59"
+    (row,) = scan_sessions(str(tmp_path / "P-023"))
+    assert row["created"] == datetime(2026, 11, 5, 15, 33, 59)  # the take list shows the start

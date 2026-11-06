@@ -821,7 +821,7 @@ def _save_control_take(tmp_path, monkeypatch, *, operator=False):
     format_time = time.strftime
     monkeypatch.setattr(
         "myogestic.session._core.time.strftime",
-        lambda fmt: format_time(fmt, (2026, 10, 27, 12, 0, 0, 1, 300, -1)),
+        lambda fmt, *_: format_time(fmt, (2026, 10, 27, 12, 0, 0, 1, 300, -1)),
     )
     now = [100.0]
     monkeypatch.setattr("mne_lsl.lsl.local_clock", lambda: now[0])

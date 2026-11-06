@@ -442,7 +442,12 @@ def participant_dir(root: str | Path, participant: str = "", kind: str = "record
 
 
 def labelled_path(
-    base_path: str | Path, participant: str = "", suffix: str = "", *, kind: str = "recordings"
+    base_path: str | Path,
+    participant: str = "",
+    suffix: str = "",
+    *,
+    kind: str = "recordings",
+    when: time.struct_time | None = None,
 ) -> Path:
     """Build a timestamped path in a participant's folder for one kind of file.
 
@@ -458,6 +463,8 @@ def labelled_path(
         ``"spar-mlp.joblib"``.
     kind
         Subfolder, see `participant_dir`. Default ``"recordings"``.
+    when
+        Local time to stamp, from `time.localtime`. Default: now.
 
     Returns
     -------
@@ -467,7 +474,8 @@ def labelled_path(
         created and no name is reserved: two files in one minute share it.
     """
     participant = _slug(participant)
-    stem = "_".join(filter(None, (participant, time.strftime(STAMP_FORMAT), suffix)))
+    stamp = time.strftime(STAMP_FORMAT, when or time.localtime())
+    stem = "_".join(filter(None, (participant, stamp, suffix)))
     return participant_dir(base_path, participant, kind) / stem
 
 
@@ -607,7 +615,9 @@ class Session:
         self.participant: str = _slug(participant)
         #: ``"recordings"``, ``"predictions"`` or ``""``: decides how the archive is named.
         self.kind: str = kind
-        labelled = labelled_path(base_path, self.participant, kind=kind)
+        # One clock read for the name and meta.json's ``created``, so both say the same minute.
+        self._started = time.localtime()
+        labelled = labelled_path(base_path, self.participant, kind=kind, when=self._started)
         parent = labelled.parent
         parent.mkdir(parents=True, exist_ok=True)
         #: ``<ID>_<YYYYMMDD-HHMM>``: the archive's name starts with it.
@@ -872,7 +882,7 @@ class Session:
             "schema_version": _META_SCHEMA_VERSION,
             "pose_convention": POSE_CONVENTION,
             "app_name": app_name,
-            "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "created": time.strftime("%Y-%m-%dT%H:%M:%S", self._started),  # when it started
             "streams": {
                 name: {
                     "n_channels": info.n_channels,

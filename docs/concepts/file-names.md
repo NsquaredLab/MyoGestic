@@ -17,7 +17,7 @@ stays in the name, so a file copied out of `data/` still says whose it is.
 | Part | Example | Rule |
 | --- | --- | --- |
 | `<ID>` | `P-023` | The participant ID as typed, reduced to letters, digits, `-` and `_`. Left out when no participant is set. |
-| `<YYYYMMDD-HHMM>` | `20261105-1533` | Local time the take started, to the minute. The exact start stays in `meta.json`. |
+| `<YYYYMMDD-HHMM>` | `20261105-1533` | Local time the take started, to the minute. `meta.json`'s `created` keeps it to the second. |
 | `<what>` | `F`, `R+F`, `follow-F` | What happened in the take, see below. |
 | `<model>` | `spar-mlp` | The model's type, lowercase. |
 

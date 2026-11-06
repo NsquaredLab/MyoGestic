@@ -105,7 +105,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ctx.class_codes`; each take saves the whole map as `meta.json`'s `class_codes`. Models
   are named by `Pipeline.model_name` or the model's class, and `model_path()` gives the
   same name to apps that save their own. A name already taken gets `-2`; nothing is
-  overwritten, even when two takes pack at once. Older files keep their names and still
+  overwritten, even when two takes pack at once. `meta.json`'s `created` is now when the
+  take started, the same minute as its name, instead of when it was saved, so the take
+  list shows the start. Older files keep their names and still
   open. Code that finds models by `*_model.joblib` should match `*.joblib`. See
   [File names](https://nsquaredlab.github.io/MyoGestic/concepts/file-names/).
 
