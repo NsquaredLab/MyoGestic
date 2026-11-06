@@ -63,19 +63,42 @@ test('phone width contains long signatures and parameter tables', async ({ page 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(api);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-    // Task 3 lands separately. Exercise its published markup interface without a docs fixture.
+    // Stress the generated markup with a value wider than any current API table.
     await page.locator('.sl-markdown-content').evaluate(el => {
         el.insertAdjacentHTML('beforeend', `<pre class="mg-signature"><code>App(${('long_parameter: SomeType, ').repeat(20)})</code></pre>
-            <table class="mg-params"><thead><tr><th>Name</th><th>Type</th><th>Description</th></tr></thead>
-            <tbody><tr><td>${'parameter'.repeat(30)}</td><td>SomeType</td><td>Details</td></tr></tbody></table>`);
+            <div class="mg-params-scroll"><table class="mg-params"><thead><tr><th>Name</th><th>Type</th><th>Description</th><th>Default</th></tr></thead>
+            <tbody><tr><td><code>${'parameter'.repeat(30)}</code></td><td><code>SomeType</code></td><td>Details</td><td><code>None</code></td></tr></tbody></table></div>`);
     });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     expect(await page.locator('.mg-signature').last().evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+    expect(await page.locator('.mg-params-scroll').last().evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
     await page.getByRole('button', { name: 'Menu', exact: true }).click();
     await expect(page.locator('#starlight__sidebar')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.locator('#starlight__sidebar')).not.toBeVisible();
 });
+
+for (const width of [1440, 390]) {
+    test(`API parameter names and defaults stay whole at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 844 });
+        await page.goto('/MyoGestic/api/ml/');
+        await expect(page.locator('[id="myogestic.ml.Pipeline.app"]')).toHaveCount(0);
+        const table = page.locator('.mg-params').first();
+        await expect(table.locator('thead th').last()).toHaveText('Default');
+        await expect(table.locator('thead th').last()).toHaveCSS('white-space', 'nowrap');
+        const name = table.locator('tbody td:first-child code').filter({ hasText: /^predict_hz$/ });
+        await expect(name).toHaveCSS('white-space', 'nowrap');
+        await expect(table.locator('tbody td:nth-child(4) code').first()).toHaveCSS('white-space', 'nowrap');
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        if (width === 390) {
+            const scroller = page.getByRole('group', { name: 'Parameters for Pipeline', exact: true });
+            expect(await scroller.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+            await scroller.focus();
+            await page.keyboard.press('ArrowRight');
+            await expect.poll(() => scroller.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+        }
+    });
+}
 
 test('search opens with the keyboard and finds docs', async ({ page }) => {
     await page.goto(start);

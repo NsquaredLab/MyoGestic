@@ -74,8 +74,12 @@ h1.mg-page-title { margin-top: 14px; font: 400 64px/1.02 var(--mg-font-display);
 .sl-markdown-content pre:not(.expressive-code pre), .mg-signature { max-width: 100%; overflow-x: auto; background: var(--mg-console-bg); color: var(--mg-console-text); border: 1px solid var(--mg-border); border-radius: 8px; padding: 16px 18px; font: 400 14px/1.7 var(--mg-font-mono); white-space: pre; overflow-wrap: normal; }
 .sl-markdown-content pre code { background: transparent; color: inherit; }
 .mg-signature code { white-space: pre; word-break: normal; }
-.sl-markdown-content table.mg-params { display: block; table-layout: auto; font-size: 14px; }
-.mg-params code { overflow-wrap: anywhere; }
+.mg-params-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--mg-border); border-radius: 8px; }
+.mg-params-scroll:focus-visible { outline: 2px solid var(--mg-selected-line); outline-offset: 2px; }
+.sl-markdown-content .mg-params-scroll table.mg-params { margin: 0; border: 0; table-layout: auto; font-size: 14px; }
+.mg-params code { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+.mg-params :is(th, td):is(:nth-child(1), :nth-child(2), :nth-child(4)) { width: 1%; white-space: nowrap; }
+.mg-params :is(th, td):nth-child(3) { width: auto; min-width: 12rem; }
 /* Published interfaces from Markdown compatibility and griffe renderers. */
 .mg-callout { --mg-callout-tone: var(--mg-info); position: relative; margin-block: 14px; padding: 12px 14px 12px 32px; border: 0; border-radius: 6px; background: color-mix(in srgb, var(--mg-callout-tone) 14%, var(--mg-canvas)); color: var(--mg-text); font-size: 15px; }
 .mg-callout::before { content: ''; position: absolute; inset: 20px auto auto 14px; width: 7px; height: 7px; border-radius: 50%; background: var(--mg-callout-tone); }
