@@ -90,6 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The documentation site is rebuilt with Astro: the new brand, the app's visual language, a live signal field on the homepage, and Getting Started for 2.x.
+
 - **Takes are `.mg.zip`.** A stopped recording packs to `<name>.mg.zip` instead of
   `<name>.session.zip`. Readers take any `.zip` holding a `meta.json`, so older
   `.session.zip` takes still open, list in `SessionManager` and replay; nothing on disk is

@@ -65,17 +65,17 @@ Linux: `gnome-screenshot -w` (per-window) or `import` (ImageMagick).
 
 ## Style notes
 
-- Crop tightly - Material renders images full-width on phones; whitespace is wasted.
+- Crop tightly - the site renders images full-width on phones; whitespace is wasted.
 - PNG, < 1 MB each. Use `pngquant` if needed: `pngquant --quality=70-90 *.png`.
 - 16:10 is the safest aspect; the demo looks good at 1280×800. Fullscreen
   captures land at native monitor resolution - downsize before commit if
   you're on Retina (`sips -Z 1920 *.png`).
-- Light or dark theme is fine - Material renders both. Pick whichever
+- Light or dark theme is fine - the docs support both. Pick whichever
   looks cleaner per screenshot; mixing is fine.
 
 ## Once captured
 
-`properdocs serve` picks them up live - no config change. Reference
-paths in `docs/widget-gallery.md`, `docs/api/widgets.md`, `docs/index.md`,
-and the tutorials are already in place. Missing PNGs render as
+Run `cd website && npm run dev` after capturing to copy the images into the
+Astro site. Reference paths in `docs/widget-gallery.md`, `docs/api/widgets.md`,
+the homepage and the tutorials are already in place. Missing PNGs render as
 broken-image placeholders so the gap is visible.

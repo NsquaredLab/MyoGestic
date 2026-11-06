@@ -46,8 +46,9 @@ a loud one render identically.
   so the deselection only skips it locally piled onto the same long-running process; a GitHub
   runner gets a fresh process for it.
 - **Docs are tested.** `tests/test_docs.py` parses and *runs* Python blocks in `docs/`, so a code
-  block in a doc page must actually work. New doc pages go in `properdocs.yml` and the relevant
-  `index.md`.
+  block in a doc page must actually work. New doc pages go in the `sidebar` of
+  `website/astro.config.mjs` and the relevant `index.md`. Build the Astro site with
+  `cd website && npm run build`.
 - **Layout** is always `Grid` with `Px`/`Fr` tracks — widgets never position themselves.
 - Prefer extending a token/helper in `widgets/common.py` over adding a one-off in a widget file.
 
