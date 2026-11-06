@@ -42,6 +42,7 @@ import time
 import traceback
 from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from weakref import WeakKeyDictionary
 
@@ -202,6 +203,9 @@ class Pipeline:
         self._recorded_session: Any = None
         self._skipped: dict[str, str] = {}
         self._recordings: WeakKeyDictionary = WeakKeyDictionary()
+        # (model, take names, autosaved file) from the last `train`. A take names them only
+        # while that very object predicts, so a model loaded or set by hand never borrows them.
+        self._trained: tuple[Any, list[str], str | None] | None = None
 
         RECORDABLE_STATES.add(PipelineState.PREDICTING)
         app.finalize_hooks.append(self._on_finalize)
@@ -286,7 +290,10 @@ class Pipeline:
         def _worker() -> None:
             started = time.perf_counter()
             try:
-                self.model = on_train(data)
+                model = on_train(data)
+                takes = [Path(p).name for p in data.paths]
+                self._trained = (model, takes, None)
+                self.model = model
                 ctx.status_message = "Training complete"
                 self.train_log.append("Training complete")
                 detail = f"in {time.perf_counter() - started:.1f} s"
@@ -304,6 +311,7 @@ class Pipeline:
                         ctx.notify("Model not saved", str(e), "danger")
                     else:
                         self.last_saved_model = str(path)
+                        self._trained = (model, takes, path.name)
                         detail = path.name
                 ctx.notify("Training finished", detail, "success")
             except Exception as e:
@@ -462,6 +470,11 @@ class Pipeline:
             "model": None,
             "model_type": None,
         }
+        trained = self._trained
+        if model is not None and trained is not None and trained[0] is model:
+            info["trained_on"] = trained[1]
+            if trained[2] is not None:
+                info["model_file"] = trained[2]
         if model is not None:
             info["model_type"] = type(model).__qualname__
             if self.save_model is None:

@@ -262,3 +262,34 @@ def test_delayed_finalize_keeps_each_takes_model_and_skip_list(tmp_path):
     assert [model for model, path in saved] == ["first", "second"]
     assert set(sessions[0].extras["pipeline"]["skipped"]) == {"features.first"}
     assert set(sessions[1].extras["pipeline"]["skipped"]) == {"features.second"}
+
+
+def test_a_take_names_the_takes_that_trained_its_model_only_while_that_model_runs(tmp_path):
+    """A model loaded or set by hand, even an equal one, never borrows the training list."""
+    from myogestic import TrainingData
+    from myogestic.session import Session
+
+    app = App("provenance")
+    app.ctx.participant = "P-014"
+    pipeline = Pipeline(app)
+    pipeline.save_model = save_pickle
+    pipeline.autosave_dir = str(tmp_path / "data")
+    pipeline.training_data = TrainingData(paths=[str(tmp_path / "P-014_20261105-1533_R+F.mg.zip")])
+    pipeline.train(lambda data: {"weights": [1.0]})
+    pipeline.start_training()
+    deadline = time.monotonic() + 5.0
+    while app.ctx.state != "idle" and time.monotonic() < deadline:
+        time.sleep(0.01)
+    infos = []
+    for model in (pipeline.model, {"weights": [1.0]}):
+        session = Session(str(tmp_path / "takes"))
+        app.ctx.session, app.ctx.recording = session, True
+        pipeline.model = model
+        pipeline._record_tick(app, {}, {"pose": [0.0]}, 1.0)
+        session.freeze()
+        pipeline._on_finalize(session)
+        infos.append(session.extras["pipeline"])
+    trained, loaded = infos
+    assert trained["trained_on"] == ["P-014_20261105-1533_R+F.mg.zip"]
+    assert trained["model_file"] == Path(pipeline.last_saved_model).name
+    assert "trained_on" not in loaded and "model_file" not in loaded

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A prediction take names what trained its model. When the running model was trained in the app, `meta.json`'s `extras.pipeline.trained_on` lists the takes it learnt from and `model_file` names its autosaved file in `models/`. A model loaded from disk or set by hand records neither, so neither is ever wrong.
 - `TargetPanel(targets, connectors=)`: one card for the processes an app drives, a row each. A target with a `ControlLinkConnector` gets **Connect**, which binds to one already running and launches only when none answers; one without gets **Launch**. **Stop** appears only for what the card started, a launched target that exits drops its bus, and a target that cannot be launched says why on hover.
 - `ControlLinkConnector.disconnect()` tears down every link and keeps the connector usable, so the next attempt binds whatever answers then.
 - `mono_text(width=)` ellipsizes in the mono face.

@@ -249,7 +249,7 @@ with open_session_store("data/P-014/predictions/P-014_20260913-1012_free.mg.zip"
     print(s.extras["pipeline"]["model"])  # 'model.joblib', beside the arrays
 ```
 
-The model is pickled into the session when `pipeline.save_model` is set (the ML widgets' Save button uses the same callable). Values `extract` or `predict` returned that were not recordable — text, 2-D arrays — are named in `s.extras["pipeline"]["skipped"]` with the reason.
+The model is pickled into the session when `pipeline.save_model` is set (the ML widgets' Save button uses the same callable). Values `extract` or `predict` returned that were not recordable — text, 2-D arrays — are named in `s.extras["pipeline"]["skipped"]` with the reason. When the model running was trained in this app, `s.extras["pipeline"]["trained_on"]` lists the takes it learnt from, and `["model_file"]` names its file in `models/` if it was autosaved; a model loaded from disk or set by hand records neither.
 
 ## Check a replay against the live run
 
