@@ -33,7 +33,7 @@ describe('rendered API HTML', () => {
         expect(output).toContain('<pre class="mg-signature"><code>Item(');
         expect(output).toContain('<strong>item</strong>');
         expect(output).toContain('<code>code</code>');
-        expect(output).toContain('<table class="mg-params">');
+        expect(output).toContain('<div class="mg-params-scroll" tabindex="0" role="group" aria-label="Parameters for Item"><table class="mg-params">');
         expect(output).toContain('<td>\n<p>A <strong>value</strong>.</p>');
         expect(output).toContain('<li>One</li>');
         expect(output).toContain('class="language-python"');

@@ -62,18 +62,19 @@ export function renderSymbol(data: ApiData, directive: Directive, page: string, 
         return tree.children;
     }
     for (const section of symbol.docstring) {
-        if (section.kind !== 'text') output.push(heading(section.title ?? section.kind[0].toUpperCase() + section.kind.slice(1), depth + 1));
+        const title = section.title ?? section.kind[0].toUpperCase() + section.kind.slice(1);
+        if (section.kind !== 'text') output.push(heading(title, depth + 1));
         if (typeof section.value === 'string') {
             output.push(...markdown(section.value));
         } else {
             // Raw table boundaries allow Markdown paragraphs, lists and code in cells.
-            output.push({ type: 'html', value: '<table class="mg-params"><thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Description</th><th scope="col">Default</th></tr></thead><tbody>' });
+            output.push({ type: 'html', value: `<div class="mg-params-scroll" tabindex="0" role="group" aria-label="${escape(`${title} for ${symbol.name}`)}"><table class="mg-params"><thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Description</th><th scope="col">Default</th></tr></thead><tbody>` });
             for (const param of section.value) {
                 output.push({ type: 'html', value: `<tr><td><code>${escape(param.name)}</code></td><td><code>${escape(param.annotation)}</code></td><td>` });
                 output.push(...markdown(param.description));
                 output.push({ type: 'html', value: `</td><td>${param.default === null ? '' : `<code>${escape(param.default)}</code>`}</td></tr>` });
             }
-            output.push({ type: 'html', value: '</tbody></table>' });
+            output.push({ type: 'html', value: '</tbody></table></div>' });
         }
     }
     const chosen = options.members;

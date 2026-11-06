@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import logging
 import re
+from io import StringIO
 from pathlib import Path
 from textwrap import dedent
+from tokenize import OP, generate_tokens
 
 import griffe
 import yaml
@@ -93,6 +95,38 @@ def sections(obj: griffe.Object) -> list[dict]:
     return result
 
 
+def format_signature(signature: str) -> str:
+    """Break long signatures at parameter boundaries, preserving nested expressions."""
+    if len(signature) <= 80:
+        return signature
+    depth = 0
+    parameters = []
+    start = 0
+    opening = signature.index("(")
+    for token in generate_tokens(StringIO(signature).readline):
+        if token.type != OP:
+            continue
+        if token.string in "([{":
+            depth += 1
+            if depth == 1:
+                start = token.end[1]
+        elif token.string in ")]}":
+            depth -= 1
+            if depth == 0:
+                if signature[start:token.start[1]].strip():
+                    parameters.append(signature[start:token.start[1]].strip())
+                closing = token.start[1]
+                break
+        elif token.string == "," and depth == 1:
+            parameters.append(signature[start:token.start[1]].strip())
+            start = token.end[1]
+    return (
+        signature[:opening + 1] + "\n"
+        + "".join(f"    {parameter},\n" for parameter in parameters)
+        + signature[closing:]
+    )
+
+
 def build_api() -> dict:
     """Collect documented public objects, their members, and resolved aliases."""
     # Diagnostics in NumPy docstrings are not build failures. Keep real loader
@@ -111,6 +145,14 @@ def build_api() -> dict:
     symbols = {}
     inventory = {}
     canonical_urls = {}
+    # Keep the frozen inventory's actual destinations, including undocumented
+    # constants and any ancestors needed to reach them through a directive.
+    legacy_targets = set()
+    for line in (ROOT / "website/tests/legacy-symbols.txt").read_text().splitlines():
+        name, _, uri = line.split("\t")
+        target = uri.split("#")[1].replace("$", name)
+        parts = target.split(".")
+        legacy_targets.update(".".join(parts[:i]) for i in range(1, len(parts) + 1))
 
     def collect(obj, path: str, page: str, options: dict, ancestors: frozenset):
         canonical = obj.canonical_path
@@ -133,6 +175,12 @@ def build_api() -> dict:
                 if not member.canonical_path.startswith("myogestic."):
                     continue
                 member_path = f"{path}.{name}"
+                documented = member.has_docstring or (
+                    member.is_class and "__init__" in member.members
+                    and member.members["__init__"].has_docstring
+                )
+                if not documented and not isinstance(chosen, list) and member_path not in legacy_targets:
+                    continue
                 collect(member, member_path, page, {}, ancestors | {canonical})
                 if member_path in symbols:
                     paths.append(member_path)
@@ -140,7 +188,7 @@ def build_api() -> dict:
                 continue  # Optional external imports are not API members.
         signature = None
         if obj.is_class or obj.is_function:
-            signature = obj.signature(return_type=True, name=path.rsplit(".", 1)[-1])
+            signature = format_signature(obj.signature(return_type=True, name=path.rsplit(".", 1)[-1]))
         elif obj.is_attribute:
             signature = path.rsplit(".", 1)[-1]
             if obj.annotation is not None:
