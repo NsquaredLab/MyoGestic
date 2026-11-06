@@ -291,11 +291,14 @@ class Pipeline:
                 self.train_log.append("Training complete")
                 detail = f"in {time.perf_counter() - started:.1f} s"
                 if self.autosave_dir is not None and self.save_model is not None:
+                    path = None
                     try:
                         name = _model_file_name(self.model_name, self.model)
                         path = model_path(self.autosave_dir, participant, name)
                         self.save_model(self.model, str(path))
                     except Exception as e:
+                        if path is not None:  # never leave the claimed, empty file behind
+                            path.unlink(missing_ok=True)
                         ctx.status_message = f"Training complete; model save failed: {e}"
                         self.train_log.append(f"Model save failed: {e}")
                         ctx.notify("Model not saved", str(e), "danger")

@@ -143,3 +143,9 @@ def test_a_folder_finds_its_own_archive_not_another_take_of_that_minute(tmp_path
     # Packing elsewhere: the temporary archive is named after its folder.
     (second.path.parent / f"{second.path.name}.mg.zip.tmp").touch()
     assert {row["path"] for row in scan_sessions(str(tmp_path / "P-023"))} == {str(archive)}
+
+
+def test_an_archive_being_claimed_is_empty_and_never_listed(tmp_path):
+    (tmp_path / "recordings").mkdir()
+    (tmp_path / "recordings" / "20261105-1533_F.mg.zip").touch()  # claimed, not yet written
+    assert scan_sessions(str(tmp_path)) == []

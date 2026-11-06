@@ -143,3 +143,18 @@ def test_a_second_model_in_the_same_minute_gets_a_number(tmp_path, monkeypatch):
         "P-014_20261105-1535_dict-2.joblib",
         "P-014_20261105-1535_dict.joblib",
     ]
+
+
+def test_a_failed_save_leaves_no_empty_model_file(tmp_path):
+    pipeline = _pipeline(tmp_path)
+    pipeline.autosave_dir = str(tmp_path)
+
+    def broken(model, path):
+        raise OSError("disk full")
+
+    pipeline.save_model = broken
+
+    _train_and_wait(pipeline)
+
+    assert list((tmp_path / "P-014" / "models").iterdir()) == []
+    assert pipeline.last_saved_model is None
