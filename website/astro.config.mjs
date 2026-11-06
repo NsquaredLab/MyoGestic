@@ -1,7 +1,16 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import { readFileSync } from 'node:fs';
 import starlight from '@astrojs/starlight';
 import { remarkPlugins, rehypePlugins } from './src/markdown/plugins';
+
+// Syntax colours are read from the same checked tokens as the app chrome.
+const tokens = readFileSync(new URL('./src/styles/tokens.css', import.meta.url), 'utf8');
+const token = (name) => {
+    const value = tokens.match(new RegExp(`--mg-${name}:\\s*([^;]+);`))?.[1];
+    if (!value) throw new Error(`Missing colour token: ${name}`);
+    return value.trim();
+};
 
 export default defineConfig({
     site: 'https://nsquaredlab.github.io',
@@ -18,7 +27,57 @@ export default defineConfig({
                 { tag: 'link', attrs: { rel: 'icon', href: '/MyoGestic/favicon.ico', sizes: 'any' } },
                 { tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/MyoGestic/apple-touch-icon.png' } },
             ],
-            customCss: ['./src/styles/fonts.css', './src/styles/tokens.css'],
+            customCss: ['./src/styles/fonts.css', './src/styles/tokens.css', './src/styles/docs.css'],
+            expressiveCode: {
+                themes: [{
+                    name: 'myogestic-console', type: 'dark',
+                    colors: {
+                        'editor.background': token('console-bg'),
+                        'editor.foreground': token('console-text'),
+                    },
+                    tokenColors: [
+                        { scope: ['keyword', 'storage'], settings: { foreground: token('brand-violet') } },
+                        { scope: ['string'], settings: { foreground: token('brand-blue') } },
+                        { scope: ['constant', 'entity.name.function'], settings: { foreground: token('brand-amber') } },
+                        { scope: ['comment'], settings: { foreground: token('idle') } },
+                    ],
+                }],
+                useStarlightUiThemeColors: false,
+                useStarlightDarkModeSwitch: false,
+                styleOverrides: {
+                    codeBackground: 'var(--mg-console-bg)',
+                    codeForeground: 'var(--mg-console-text)',
+                    codeFontFamily: 'var(--mg-font-mono)',
+                    codeFontSize: '14px',
+                    codeLineHeight: '1.7',
+                    borderColor: 'var(--mg-border)',
+                    borderRadius: '8px',
+                    frames: {
+                        editorActiveTabBackground: 'var(--mg-console-bg)',
+                        editorActiveTabForeground: 'var(--mg-console-text)',
+                        editorTabBarBackground: 'var(--mg-console-bg)',
+                        editorTabBarBorderColor: 'var(--mg-border)',
+                        editorActiveTabIndicatorTopColor: 'transparent',
+                        terminalBackground: 'var(--mg-console-bg)',
+                        terminalTitlebarBackground: 'var(--mg-console-bg)',
+                        terminalTitlebarForeground: 'var(--mg-console-text)',
+                        terminalTitlebarBorderBottomColor: 'var(--mg-border)',
+                        inlineButtonForeground: 'var(--mg-console-text)',
+                        inlineButtonBackground: 'var(--mg-console-bg)',
+                        shadowColor: 'transparent',
+                    },
+                },
+                defaultProps: {
+                    // One console header for every fence, including plain text.
+                    frame: 'code',
+                    overridesByLang: {
+                        bash: { title: 'Shell' }, sh: { title: 'Shell' }, shell: { title: 'Shell' },
+                        python: { title: 'Python' }, py: { title: 'Python' },
+                        text: { title: 'Text' }, plaintext: { title: 'Text' },
+                        toml: { title: 'TOML' },
+                    },
+                },
+            },
             components: {
                 Head: './src/components/starlight/Head.astro',
                 Header: './src/components/starlight/Header.astro',

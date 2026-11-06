@@ -1,5 +1,30 @@
 ---
-import Default from '@astrojs/starlight/components/Footer.astro';
+import Pagination from '@astrojs/starlight/components/Pagination.astro';
+import AskTheDocs from '../AskTheDocs.astro';
+import icon from '../../assets/brand/myogestic-icon.svg';
 ---
 
-<Default {...Astro.props}><slot /></Default>
+<footer class="mg-footer">
+    <Pagination />
+    <div class="mg-footer__links">
+        <a class="mg-footer__identity" href={`${import.meta.env.BASE_URL}`}><img src={icon.src} width="28" height="28" alt="MyoGestic home" />n-squared lab · FAU</a>
+        <a href="https://github.com/NsquaredLab/MyoGestic">GitHub</a>
+        <a href="https://pypi.org/project/myogestic/">PyPI</a>
+        <a href="https://github.com/NsquaredLab/MyoGestic/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/NsquaredLab/MyoGestic/blob/main/LICENSE">GPL-3.0</a>
+    </div>
+</footer>
+<AskTheDocs />
+
+<script>
+    // Include generated API signatures and tables: their producers arrive in a
+    // separate task, and their overflowing regions must be keyboard-scrollable.
+    const regions = document.querySelectorAll<HTMLElement>('.sl-markdown-content pre, .sl-markdown-content table');
+    const updateScrollRegions = () => regions.forEach(region => {
+        if (region.scrollWidth > region.clientWidth) region.tabIndex = 0;
+        else region.removeAttribute('tabindex');
+    });
+    updateScrollRegions();
+    const main = document.querySelector('main');
+    if (main) new ResizeObserver(updateScrollRegions).observe(main);
+</script>

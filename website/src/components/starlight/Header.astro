@@ -1,5 +1,39 @@
 ---
-import Default from '@astrojs/starlight/components/Header.astro';
+import { readFileSync } from 'node:fs';
+import Search from '@astrojs/starlight/components/Search.astro';
+import SiteTitle from '@astrojs/starlight/components/SiteTitle.astro';
+import ThemeSelect from './ThemeSelect.astro';
+
+const version = readFileSync(new URL('../../../../pyproject.toml', import.meta.url), 'utf8')
+    .match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+if (!version) throw new Error('Could not read the package version from pyproject.toml');
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const path = Astro.url.pathname.slice(base.length);
+const sections = [
+    { label: 'Get started', href: 'getting-started/', active: /^\/(getting-started|anatomy)\//.test(path) },
+    { label: 'Guides', href: 'how-to/', active: /^\/(how-to|tutorials)\//.test(path) },
+    { label: 'Concepts', href: 'concepts/', active: path.startsWith('/concepts/') },
+    { label: 'Widgets', href: 'widget-gallery/', active: path.startsWith('/widget-gallery/') },
+    { label: 'API', href: 'api/', active: /^\/(api|reference)\//.test(path) },
+];
 ---
 
-<Default {...Astro.props}><slot /></Default>
+<div class="mg-header">
+    <div class="mg-header__brand"><SiteTitle /></div>
+    <nav class="mg-sections" aria-label="Sections">
+        {sections.map(section => (
+            <a href={`${base}/${section.href}`} aria-current={section.active ? 'page' : undefined}>
+                {section.label}
+            </a>
+        ))}
+    </nav>
+    <div class="mg-header__search"><Search /></div>
+    <a class="mg-version" href="https://github.com/NsquaredLab/MyoGestic">GitHub · {version}</a>
+    <ThemeSelect />
+</div>
+
+<script is:inline>
+    // Include the visible shortcut in the accessible label (WCAG label in name).
+    const searchButton = document.querySelector('site-search button[data-open-modal]');
+    if (searchButton) searchButton.setAttribute('aria-label', searchButton.textContent.trim());
+</script>

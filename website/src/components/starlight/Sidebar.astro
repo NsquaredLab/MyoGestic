@@ -1,5 +1,10 @@
 ---
-import Default from '@astrojs/starlight/components/Sidebar.astro';
+import SidebarPersister from '@astrojs/starlight/components/SidebarPersister.astro';
+import SidebarSublist from '@astrojs/starlight/components/SidebarSublist.astro';
+
+const { sidebar } = Astro.locals.starlightRoute;
 ---
 
-<Default {...Astro.props}><slot /></Default>
+<div class="mg-sidebar">
+    <SidebarPersister><SidebarSublist sublist={sidebar} /></SidebarPersister>
+</div>

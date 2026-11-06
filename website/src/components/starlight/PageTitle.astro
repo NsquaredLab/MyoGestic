@@ -1,5 +1,11 @@
 ---
-import Default from '@astrojs/starlight/components/PageTitle.astro';
+const { entry } = Astro.locals.starlightRoute;
+const id = entry.id;
+const section = id.startsWith('api') || id.startsWith('reference') ? 'Reference'
+    : id.startsWith('concepts') ? 'Concepts'
+    : id.startsWith('how-to') || id.startsWith('tutorials') ? 'Guides'
+    : id.startsWith('widget-gallery') ? 'Widgets' : 'Get started';
 ---
 
-<Default {...Astro.props}><slot /></Default>
+<p class="mg-eyebrow">{section}</p>
+<h1 id="_top" class="mg-page-title">{entry.data.title}</h1>

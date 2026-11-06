@@ -1,5 +1,42 @@
----
-import Default from '@astrojs/starlight/components/ThemeSelect.astro';
----
+<mg-theme-toggle>
+    <button type="button" aria-label="Switch to light theme" title="Switch to light theme">
+        <svg class="mg-theme-light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
+        </svg>
+        <svg class="mg-theme-dark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z" />
+        </svg>
+    </button>
+</mg-theme-toggle>
 
-<Default {...Astro.props}><slot /></Default>
+<script>
+    class ThemeToggle extends HTMLElement {
+        connectedCallback() {
+            const button = this.querySelector('button')!;
+            const system = matchMedia('(prefers-color-scheme: light)');
+            const storedTheme = () => {
+                try { return localStorage.getItem('starlight-theme'); } catch { return null; }
+            };
+            const update = () => {
+                const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+                button.setAttribute('aria-label', `Switch to ${next} theme`);
+                button.title = `Switch to ${next} theme`;
+            };
+            button.addEventListener('click', () => {
+                const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+                document.documentElement.dataset.theme = next;
+                try { localStorage.setItem('starlight-theme', next); } catch { /* Private storage may be unavailable. */ }
+                update();
+            });
+            system.addEventListener('change', () => {
+                const stored = storedTheme();
+                if (stored !== 'light' && stored !== 'dark') {
+                    document.documentElement.dataset.theme = system.matches ? 'light' : 'dark';
+                    update();
+                }
+            });
+            update();
+        }
+    }
+    customElements.define('mg-theme-toggle', ThemeToggle);
+</script>

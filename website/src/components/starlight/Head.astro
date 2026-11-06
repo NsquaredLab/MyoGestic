@@ -1,5 +1,6 @@
 ---
 import Default from '@astrojs/starlight/components/Head.astro';
+import displayFont from '../../assets/fonts/InstrumentSerif-Regular.woff2?url';
 
 // Astro emits its error page as 404.html even with trailingSlash: 'always'.
 // Keep the canonical URL pointing at the file that GitHub Pages will serve.
@@ -14,3 +15,5 @@ if (Astro.url.pathname.replace(/\/$/, '').endsWith('/404')) {
 ---
 
 <Default {...Astro.props}><slot /></Default>
+
+<link rel="preload" href={displayFont} as="font" type="font/woff2" crossorigin />
