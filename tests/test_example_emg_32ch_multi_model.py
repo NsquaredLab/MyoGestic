@@ -433,7 +433,7 @@ def test_classifier_caption_and_icon_actions_keep_model_persistence(
     ns["steps"].active = 2
     ns["pipeline"].model = {"fitted": "example"}
     calls, tooltips = [], []
-    monkeypatch.setattr(ns["_time"], "strftime", lambda fmt: "20261025_120000")
+    monkeypatch.setattr("myogestic.session._core.time.strftime", lambda fmt, *_: "20261025-1200")
     monkeypatch.setattr(imgui, "set_item_tooltip", lambda text: tooltips.append(text))
     original_text = imgui.text_colored
     original_combo = imgui.combo
@@ -473,9 +473,9 @@ def test_classifier_caption_and_icon_actions_keep_model_persistence(
     implot_frame(lambda: ns["app"]._ui_fn(ns["app"].ctx))
     assert calls.index("recipe") < calls.index("train")
     assert globals_["selected_model_idx"] == 3
-    saved = tmp_path / "data" / "models" / "CatBoost_20261025_120000_model.joblib"
+    saved = tmp_path / "data" / "models" / "20261025-1200_catboost.joblib"
     assert ns["load_pickle"](str(saved)) == ns["pipeline"].model
-    assert ns["_save_current"]().name == "Logistic_Regression_20261025_120000_model.joblib"
+    assert ns["_save_current"]().name == "20261025-1200_logistic-regression.joblib"
     clicked.add("load_model")
     implot_frame(lambda: ns["app"]._ui_fn(ns["app"].ctx))
     assert ("Load model", str(Path("data", "models")), ["Model", "*.joblib"]) in calls

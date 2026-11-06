@@ -21,6 +21,10 @@
   "class_seconds": {
     "Fist": 1.0
   },
+  "class_codes": {
+    "Rest": "R",
+    "Fist": "F"
+  },
   "class_names": [
     "Rest",
     "Fist"

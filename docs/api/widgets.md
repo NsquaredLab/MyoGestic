@@ -65,7 +65,7 @@ through the recording controls. The chip is disabled during recording, training 
 prediction, and an open dialog closes when the app becomes busy.
 
 Pass `on_drive=callback` to offer **Drive with saved model** for participants with a
-saved `*_model.joblib`. The callback receives `(participant_id, model_path)` after
+saved `.joblib` model. The callback receives `(participant_id, model_path)` after
 `ctx.participant` has been set; `model_path` is a `Path` to the most recently modified
 model in that participant's `models/` folder. Takes are scanned once each time the dialog
 opens, using the same pending-save exclusions as `SessionManager`.

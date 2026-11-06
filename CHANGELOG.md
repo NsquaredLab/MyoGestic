@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A prediction take names what trained its model. When the running model was trained in the app, `meta.json`'s `extras.pipeline.trained_on` lists the takes it learnt from and `model_file` names its autosaved file in `models/`. A model loaded from disk or set by hand records neither, so neither is ever wrong.
 - `TargetPanel(targets, connectors=)`: one card for the processes an app drives, a row each. A target with a `ControlLinkConnector` gets **Connect**, which binds to one already running and launches only when none answers; one without gets **Launch**. **Stop** appears only for what the card started, a launched target that exits drops its bus, and a target that cannot be launched says why on hover.
 - `ControlLinkConnector.disconnect()` tears down every link and keeps the connector usable, so the next attempt binds whatever answers then.
 - `mono_text(width=)` ellipsizes in the mono face.
@@ -93,6 +94,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `<name>.session.zip`. Readers take any `.zip` holding a `meta.json`, so older
   `.session.zip` takes still open, list in `SessionManager` and replay; nothing on disk is
   renamed. The suffix lives in `myogestic.session._core.ARCHIVE_SUFFIX`.
+
+- **One file-name standard.** Takes are `<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip` and models
+  `<ID>_<YYYYMMDD-HHMM>_<model>.joblib`, in local time to the minute. `<what>` is the
+  recorded gestures as short codes joined by `+` (`R+F`, `Re+T+I+M+Ri+L`; past 40
+  characters the first three and a count), or, for a take in `predictions/`, `free`,
+  `free-F`, `guided` or `follow-F`. `FollowRun` names its take for the gesture it followed,
+  and Myocontrol names guided runs. New `class_codes(class_names, pinned)` works the codes
+  out: the first letter, more only where two would match (`Rest`/`Ring` → `Re`/`Ri`), the
+  first letter of each word for a longer name (`Tfp`). Apps pin codes with
+  `ctx.class_codes`; each take saves the whole map as `meta.json`'s `class_codes`. Models
+  are named by `Pipeline.model_name` or the model's class, and `model_path()` gives the
+  same name to apps that save their own. A name already taken gets `-2`; nothing is
+  overwritten, even when two takes pack at once. `meta.json`'s `created` is now when the
+  take started, the same minute as its name, instead of when it was saved, so the take
+  list shows the start. Older files keep their names and still
+  open. Code that finds models by `*_model.joblib` should match `*.joblib`. See
+  [File names](https://nsquaredlab.github.io/MyoGestic/concepts/file-names/).
 
 - **Smaller, cheaper signal recordings.** Signal streams and their timestamps are stored
   with Blosc LZ4 and byte shuffle instead of zarr's default zstd. On a 320-channel

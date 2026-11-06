@@ -30,7 +30,7 @@ def ui(ctx):
                 "App started",
                 "Stream 'emg' connected — 8 ch · 2048 Hz",
                 "Recording started",
-                "Recording saved → data/recordings/2026-05-01_10-00-00",
+                "Recording saved → data/recordings/20260501-1000_R+F.mg.zip",
                 "Model loaded ← models/rf.joblib",
             ):
                 ctx.log(line)

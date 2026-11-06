@@ -50,7 +50,7 @@ Setting `class_names` as an attribute on the session object after the fact doesn
 `app.stop_recording()` kicks off a daemon thread that packs the session folder. If the script exits immediately, the zip may not finish.
 
 !!! tip "Fix"
-    Sleep 1-2 seconds after `stop_recording()` in headless scripts, or check `data/recordings/<timestamp>.mg.zip` exists before exiting.
+    Sleep 1-2 seconds after `stop_recording()` in headless scripts, or check `data/recordings/<YYYYMMDD-HHMM>.mg.zip` exists before exiting.
 
 See: [Recording concept page](concepts/recording.md), [Record and replay](how-to/record-and-replay.md), [Run headless](how-to/headless-mode.md).
 

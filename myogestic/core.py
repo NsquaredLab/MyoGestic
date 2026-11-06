@@ -213,6 +213,11 @@ class Context:
     class_names
         Names for the label class indices, mirrored here by the recording
         widgets so `App.stop_recording` can persist them in ``meta.json``.
+    class_codes
+        Codes this app fixes for some classes in its file names, by class name
+        (``{"Rest": "R"}``). The rest are worked out by
+        `myogestic.session.class_codes`. Pin them once an app has data: adding a
+        class can otherwise change the code of one it clashes with.
     control_space
         Optional `myogestic.controls.ControlMap` this app commands. Set once at
         setup (``app.ctx.control_space = CONTROLS``); every recording then
@@ -248,6 +253,7 @@ class Context:
     recording: bool = False
     pending_saves: set[Path] = field(default_factory=set)
     class_names: list[str] = field(default_factory=list)
+    class_codes: dict[str, str] = field(default_factory=dict)
     control_space: Any = None
     control_spaces: dict[str, Any] = field(default_factory=dict)
     current_label: int = -1
@@ -567,8 +573,8 @@ class App:
 
         Detaches every stream and freezes the session on the calling thread, then on a
         daemon thread runs `finalize_hooks`, writes ``meta.json`` and ``labels.json``,
-        packs the folder into ``<timestamp>.mg.zip`` (the folder is kept until the
-        pack succeeds) and registers the archive with the session browser. ``wait=True``
+        packs the folder into ``<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip`` (the folder is kept
+        until the pack succeeds) and registers the archive with the session browser. ``wait=True``
         does that work inline instead — for tests, and for shutdown, where a daemon would
         die with the archive half written. Refuses if no recording is open.
         """
@@ -595,6 +601,7 @@ class App:
         controls = self.ctx.control_space
         control_spaces = dict(self.ctx.control_spaces)
         class_names = self.ctx.class_names or None
+        pinned_codes = dict(self.ctx.class_codes)
         hooks = list(self.finalize_hooks)
         self.ctx.status_message = "Finalizing…"
 
@@ -615,6 +622,7 @@ class App:
                 session.save_meta(
                     self.name,
                     class_names=class_names,
+                    class_codes=pinned_codes,
                     control_space=controls.as_control_space() if controls is not None else None,
                     control_spaces={
                         name: control_map.as_control_space()

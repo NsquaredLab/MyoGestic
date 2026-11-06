@@ -27,7 +27,7 @@ def ui(ctx):
 app.run()
 ```
 
-Click **Record** → data flows into `data/<ID>/recordings/<ID>_<timestamp>/` (or `data/recordings/<timestamp>/` with no participant set). Click **Stop** → that folder packs into `<ID>_<timestamp>[_<labels>].mg.zip` beside it, with the recorded gesture labels included when available. No further setup required.
+Click **Record** → data flows into `data/<ID>/recordings/<ID>_<YYYYMMDD-HHMM>/` (or `data/recordings/<YYYYMMDD-HHMM>/` with no participant set). Click **Stop** → that folder packs into `<ID>_<YYYYMMDD-HHMM>_<codes>.mg.zip` beside it, named for the gestures it recorded (`P-014_20260517-1423_R+F.mg.zip`). No further setup required. [File names](../concepts/file-names.md) has the whole standard.
 
 ## Just capture, and name it afterwards
 
@@ -51,7 +51,7 @@ offers **Name (optional)**, a preview of the resulting file stem, **Save**, and 
 **Discard** labelled with the captured duration when a discard handler is supplied. If the app
 requires a participant, Record stays disabled with a visible reminder to set their ID first.
 
-The name is written to `meta.json` and appended to the archive filename, so a saved take is `<folder>[_<labels>][_<name>].mg.zip` beside its original recording folder and appears in `SessionManager` with gesture chips, time, and duration; its tooltip preserves the take name and archive filename. The optional labels segment contains only classes with recorded time, in class-index order, joined with `+` (for example, `fist+open-hand`). Labels and the typed name are slugged down to ASCII letters, digits, `-` and `_`; empty label slugs are omitted. If the joined labels exceed 40 characters, the segment becomes `<n>-classes`. Naming is optional, and a take with no recorded labels keeps the existing filename format. The recording folder name, including its timestamp and any participant ID, stays the archive's prefix.
+The name is written to `meta.json` and appended to the archive filename, so a saved take is `<ID>_<YYYYMMDD-HHMM>[_<codes>][_<name>].mg.zip` beside its original recording folder and appears in `SessionManager` with gesture chips, time, and duration; its tooltip preserves the take name and archive filename. The optional codes segment holds a short code for each class with recorded time, in class-index order, joined with `+` (`Fist` and `Open hand` give `F+Oh`); past 40 characters it becomes the first three codes and a count (`R+F+P+6-more`). The typed name is slugged down to ASCII letters, digits, `-` and `_`. Naming is optional; a take with neither codes nor a name is just `<ID>_<YYYYMMDD-HHMM>.mg.zip`. A second take with the same name in the same minute gets `-2`. See [File names](../concepts/file-names.md) for how codes are chosen and pinned.
 
 **Discard** deletes the take outright — the folder is removed and no archive is written. That is `app.discard_recording()`, and it is the counterpart to `stop_recording()` rather than a wrapper around it: nothing is saved and then cleaned up.
 
@@ -83,7 +83,7 @@ The name is written to `meta.json` and appended to the archive filename, so a sa
        │   │   ├─ Session.save_meta(class_names=...)      │   │
        │   │   ├─ writes meta.json + labels.json          │   │
        │   │   ├─ Session.pack_to_zip()  (daemon thread)  │   │
-       │   │   │    -> <timestamp>.mg.zip            │   │
+       │   │   │    -> <stamp>_<what>.mg.zip         │   │
        │   │   │    folder removed once pack succeeds     │   │
        │   │   └─ ctx.state = "idle"                      │   │
        │   └────────────────────────────────────────────────┘ │
@@ -95,7 +95,7 @@ The name is written to `meta.json` and appended to the archive filename, so a sa
 
 ```
 data/P-014/recordings/
-└── P-014_2026-05-17_14-23-05.mg.zip # final packaged artifact
+└── P-014_20260517-1423_R+F.mg.zip       # final packaged artifact
                                           # (after Stop completes)
 ```
 
@@ -106,18 +106,18 @@ A take started while a model is predicting goes to `data/P-014/predictions/` ins
 Inside the zip:
 
 ```
-P-014_2026-05-17_14-23-05/
+P-014_20260517-1423_R+F.mg.zip
 ├── emg.zarr/                       # shape (n_samples, n_channels), dtype = stream dtype
 │   └── chunks: (fs, n_channels)    # 1 second per chunk
 ├── emg_timestamps.zarr/            # shape (n_samples,) float64 LSL clock seconds
 │   └── chunks: (fs,)
 ├── vhi_control.zarr/               # one pair of arrays per registered Stream
 ├── vhi_control_timestamps.zarr/
-├── meta.json                       # app_name, created, streams (n_channels, fs, dtype), class_names
+├── meta.json                       # app_name, created (start time), streams (n_channels, fs, dtype), class_names
 └── labels.json                     # list of {timestamp, class_index}
 ```
 
-While recording is in progress and before `stop_recording()` completes, the same content lives as an unpacked folder `data/P-014/recordings/P-014_2026-05-17_14-23-05/`. The folder is deleted only after the zip is verified.
+While recording is in progress and before `stop_recording()` completes, the same content lives as an unpacked folder `data/P-014/recordings/P-014_20260517-1423/`. The folder is deleted only after the zip is verified.
 
 ## Zarr configuration (what defaults you get)
 
@@ -230,7 +230,7 @@ You typically only call `add_label` directly; everything else is wired by `start
 from myogestic.session import open_session_store
 
 # Works for both packed zips AND unpacked folders.
-sess = open_session_store("data/P-014/recordings/P-014_2026-05-17_14-23-05.mg.zip")
+sess = open_session_store("data/P-014/recordings/P-014_20260517-1423_R+F.mg.zip")
 
 emg = sess.stores["emg"]  # zarr.Array, shape (n_samples, n_channels)
 emg_ts = sess.ts_stores["emg"]  # zarr.Array, shape (n_samples,) float64

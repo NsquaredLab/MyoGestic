@@ -35,12 +35,14 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sys
 import threading
 import time
 import traceback
 from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from weakref import WeakKeyDictionary
 
@@ -48,7 +50,8 @@ import numpy as np
 
 from myogestic.contracts import TrainingData
 from myogestic.core import RECORDABLE_STATES, AppState
-from myogestic.session import labelled_path
+from myogestic.session import model_path
+from myogestic.session._core import _slug
 
 if TYPE_CHECKING:
     from myogestic.core import App
@@ -59,6 +62,14 @@ log = logging.getLogger("myogestic.ml")
 # Pyodide reports sys.platform == "emscripten" and forbids OS threads.
 # When detected, the predict loop runs as an asyncio task instead.
 _IS_BROWSER = sys.platform == "emscripten"
+
+
+def _model_file_name(model_name: str | None, model: Any) -> str:
+    """``model_name``, else the model's class in kebab case: MLPDirectV3 → mlp-direct-v3."""
+    if model_name:
+        return _slug(model_name.lower()) or "model"
+    words = re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "-", type(model).__name__)
+    return _slug(words.lower()) or "model"
 
 
 def _event_row(value: Any) -> np.ndarray | None:
@@ -140,8 +151,11 @@ class Pipeline:
     ----------
     autosave_dir : str or None
         Data root to save each successfully trained model under, as
-        ``autosave_dir/<ID>/models/<ID>_<timestamp>_model.joblib``, when
+        ``autosave_dir/<ID>/models/<ID>_<YYYYMMDD-HHMM>_<model>.joblib``, when
         ``save_model`` is set. ``None`` disables automatic saving (the default).
+    model_name : str or None
+        Names the model's type in its file name, such as ``"spar-mlp"``. ``None``
+        uses the trained object's class, ``MLPDirectV3`` → ``mlp-direct-v3``.
     last_saved_model : str or None
         Path of the most recent successful auto-save, or ``None`` before one
         succeeds. A save failure leaves the trained model usable in memory.
@@ -177,6 +191,7 @@ class Pipeline:
         self.save_model: Callable | None = None
         self.load_model: Callable | None = None
         self.autosave_dir: str | None = None
+        self.model_name: str | None = None
         self.last_saved_model: str | None = None
         # Set this from inside `@app.ui` to publish what the user picked
         # in `session_manager(...)` to `@pipeline.train`.
@@ -188,6 +203,9 @@ class Pipeline:
         self._recorded_session: Any = None
         self._skipped: dict[str, str] = {}
         self._recordings: WeakKeyDictionary = WeakKeyDictionary()
+        # (model, take names, autosaved file) from the last `train`. A take names them only
+        # while that very object predicts, so a model loaded or set by hand never borrows them.
+        self._trained: tuple[Any, list[str], str | None] | None = None
 
         RECORDABLE_STATES.add(PipelineState.PREDICTING)
         app.finalize_hooks.append(self._on_finalize)
@@ -272,23 +290,28 @@ class Pipeline:
         def _worker() -> None:
             started = time.perf_counter()
             try:
-                self.model = on_train(data)
+                model = on_train(data)
+                takes = [Path(p).name for p in data.paths]
+                self._trained = (model, takes, None)
+                self.model = model
                 ctx.status_message = "Training complete"
                 self.train_log.append("Training complete")
                 detail = f"in {time.perf_counter() - started:.1f} s"
                 if self.autosave_dir is not None and self.save_model is not None:
+                    path = None
                     try:
-                        path = labelled_path(
-                            self.autosave_dir, participant, "model.joblib", kind="models"
-                        )
-                        path.parent.mkdir(parents=True, exist_ok=True)
+                        name = _model_file_name(self.model_name, self.model)
+                        path = model_path(self.autosave_dir, participant, name)
                         self.save_model(self.model, str(path))
                     except Exception as e:
+                        if path is not None:  # never leave the claimed, empty file behind
+                            path.unlink(missing_ok=True)
                         ctx.status_message = f"Training complete; model save failed: {e}"
                         self.train_log.append(f"Model save failed: {e}")
                         ctx.notify("Model not saved", str(e), "danger")
                     else:
                         self.last_saved_model = str(path)
+                        self._trained = (model, takes, path.name)
                         detail = path.name
                 ctx.notify("Training finished", detail, "success")
             except Exception as e:
@@ -447,6 +470,11 @@ class Pipeline:
             "model": None,
             "model_type": None,
         }
+        trained = self._trained
+        if model is not None and trained is not None and trained[0] is model:
+            info["trained_on"] = trained[1]
+            if trained[2] is not None:
+                info["model_file"] = trained[2]
         if model is not None:
             info["model_type"] = type(model).__qualname__
             if self.save_model is None:

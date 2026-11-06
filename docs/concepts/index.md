@@ -11,6 +11,7 @@ Drill in:
 - [Pipeline](pipeline.md) - `extract` / `train` / `predict` decorators, `TrainingData`, the predict thread.
 - [Controls](controls.md) - the control map, the `[-1, 1]` standard, in-process vs. remote targets, deferred binding.
 - [Recording](recording.md) - sessions, label tracks, the `.mg.zip` archive layout.
+- [File names](file-names.md) - `<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip`, gesture codes, model names.
 - [Widgets](widgets.md) - the stateless-function contract, ImGui immediate mode, `Grid` layout.
 - [Threading](threading.md) - daemon threads, GIL release, the GPU contention rule.
 - [Design principles](design-principles.md) - the eight rules the codebase keeps to.

@@ -12,6 +12,7 @@ from myogestic import App, _browser, core
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.session import Session
+from myogestic.session._core import PACKED_FOLDERS
 from myogestic.widgets import SessionManager
 from myogestic.widgets.common import muted
 from myogestic.widgets.training import _session_state
@@ -23,19 +24,19 @@ def isolated_sessions(monkeypatch):
     monkeypatch.setattr(_session_state, "_states", {})
 
 
-@pytest.mark.parametrize("suffix", ["", "_Rest+Fist_Practice"])
 @pytest.mark.parametrize("packing", [True, False])
-def test_scan_hides_a_folder_with_a_packing_or_packed_sibling(tmp_path, suffix, packing):
-    folder = tmp_path / "take"
+def test_scan_hides_a_folder_while_it_packs_or_once_packed(tmp_path, monkeypatch, packing):
+    folder = tmp_path / "P-001_20261105-1533"
     folder.mkdir()
     (folder / "meta.json").write_text("{}")
-    archive = tmp_path / f"take{suffix}.session.zip"
-    if packing:
-        archive.with_suffix(".zip.tmp").touch()
+    if packing:  # in any app: the temporary archive is named after its folder
+        (tmp_path / "P-001_20261105-1533.mg.zip.tmp").touch()
         assert scan_sessions(str(tmp_path)) == []
-    else:
+    else:  # packed here, but removing the folder failed
+        archive = tmp_path / "P-001_20261105-1533_R+F_practice.mg.zip"
         with zipfile.ZipFile(archive, "w") as saved:
             saved.writestr("meta.json", "{}")
+        monkeypatch.setitem(PACKED_FOLDERS, folder.resolve(), archive)
         assert [row["path"] for row in scan_sessions(str(tmp_path))] == [str(archive.resolve())]
 
 

@@ -821,7 +821,7 @@ def _save_control_take(tmp_path, monkeypatch, *, operator=False):
     format_time = time.strftime
     monkeypatch.setattr(
         "myogestic.session._core.time.strftime",
-        lambda fmt: format_time(fmt, (2026, 10, 27, 12, 0, 0, 1, 300, -1)),
+        lambda fmt, *_: format_time(fmt, (2026, 10, 27, 12, 0, 0, 1, 300, -1)),
     )
     now = [100.0]
     monkeypatch.setattr("mne_lsl.lsl.local_clock", lambda: now[0])
@@ -860,7 +860,8 @@ def test_single_link_meta_matches_pre_change_bytes(tmp_path, monkeypatch):
     from pathlib import Path
 
     _, metadata = _save_control_take(tmp_path, monkeypatch)
-    # Generated with the identical take helper against PR #25's 8afc8a1.
+    # Generated with the identical take helper against PR #25's 8afc8a1; the
+    # class_codes block came later, with the file-name standard.
     expected = Path(__file__).parent / "fixtures" / "control_meta_8afc8a1.json"
     # save_meta has always used native text-file newlines, including CRLF on Windows.
     baseline = expected.read_text(encoding="utf-8").replace("\n", os.linesep).encode("utf-8")

@@ -14,7 +14,7 @@ from numpy.typing import ArrayLike
 
 from myogestic.controls import ControlLink
 from myogestic.core import Context
-from myogestic.session import Session
+from myogestic.session import Session, class_codes
 from myogestic.sources.target import PHASE_CODES
 from myogestic.tracking import Sinusoid, blend_pose
 from myogestic.widgets._follow_state import FollowState, score_take
@@ -162,6 +162,10 @@ class FollowRun:
             return False
         with s.lock:
             s.session, s.started = ctx.session, local_clock()
+            # The take is named for what it followed: follow-F for Fist.
+            gesture = self.gestures[s.gesture]
+            names = ctx.class_names if gesture in ctx.class_names else self.gestures
+            s.session.name = f"follow-{class_codes(names, ctx.class_codes)[gesture]}"
             s.source_path = s.session.path.resolve()
             s.ended = None
             s.elapsed, s.score, s.last_timestamp = 0.0, None, -math.inf

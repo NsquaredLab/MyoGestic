@@ -5,6 +5,7 @@ import gc
 import json
 import logging
 import os
+import re
 import shutil
 import stat
 import sys
@@ -233,6 +234,178 @@ def _slug(name: str) -> str:
     return "-".join(filter(None, kept.split("-")))[:_SLUG_MAX].strip("-_")
 
 
+#: The time part of every file name, local time to the minute. The exact start
+#: stays in ``meta.json``.
+STAMP_FORMAT = "%Y%m%d-%H%M"
+
+
+def _code(name: str, width: int, position: int) -> str:
+    """``width`` letters of the first word, then one per further word: Rest → R, Re.
+
+    A number stays whole (Pose 10 → P10). A name with no ASCII letter or digit is
+    called by its position: C3.
+    """
+    words = re.findall(r"[A-Za-z0-9]+", name)
+    if not words:
+        return f"C{position}"
+    rest = "".join(w if w.isdigit() else w[0].lower() for w in words[1:])
+    return words[0][:width].capitalize() + rest
+
+
+def class_codes(
+    class_names: Sequence[str], pinned: Mapping[str, str] | None = None
+) -> dict[str, str]:
+    """Give every class a short code for file names: Rest → R, Three-Finger-Pinch → Tfp.
+
+    A code is the first letter of the first word, plus the first letter of each
+    further word (a number stays whole). Where two codes would match, ignoring
+    case, both take more letters of their first word until they differ: Rest and
+    Ring become Re and Ri. Codes are worked out over the whole list, so a class
+    keeps its code in every take of an app. Classes alike to the last letter
+    (``Rest`` and ``rest``) get their position appended, ``Rest1`` and ``Rest2``:
+    pin a code to choose better.
+
+    Parameters
+    ----------
+    class_names
+        The app's classes, usually ``ctx.class_names``.
+    pinned
+        Codes the app fixes itself, by class name; the rest are worked out
+        around them. Pin the codes once an app has recorded data: adding a class
+        later can otherwise change the codes of the ones it clashes with.
+
+    Returns
+    -------
+    dict
+        Class name to code, in ``class_names`` order.
+
+    Raises
+    ------
+    ValueError
+        A pinned code is not ASCII letters and digits, or two pinned codes match.
+
+    Examples
+    --------
+    >>> class_codes(["Rest", "Thumb", "Index", "Middle", "Ring", "Little"])
+    {'Rest': 'Re', 'Thumb': 'T', 'Index': 'I', 'Middle': 'M', 'Ring': 'Ri', 'Little': 'L'}
+    >>> class_codes(["Rest", "Fist", "Three-Finger-Pinch"], {"Rest": "0"})
+    {'Rest': '0', 'Fist': 'F', 'Three-Finger-Pinch': 'Tfp'}
+    """
+    pinned = dict(pinned or {})
+    taken: set[str] = set()
+    for code in pinned.values():
+        if not re.fullmatch(r"[A-Za-z0-9]+", code) or code.lower() in taken:
+            raise ValueError(
+                f"class_codes: pin distinct codes of ASCII letters and digits, not {code!r}"
+            )
+        taken.add(code.lower())
+    codes = {name: pinned[name] for name in class_names if name in pinned}
+    position: dict[str, int] = {}
+    for i, name in enumerate(class_names):
+        position.setdefault(name, i + 1)
+    todo = [name for name in position if name not in codes]
+    width = 1
+    while todo:
+        if width > max(len(_code(name, 99, position[name])) for name in todo):
+            for name in todo:  # alike to the last letter: number them by position
+                code = _code(name, 99, position[name]) + str(position[name])
+                while code.lower() in taken:
+                    code += "0"
+                codes[name] = code
+                taken.add(code.lower())
+            break
+        candidates = {name: _code(name, width, position[name]) for name in todo}
+        counts: dict[str, int] = {}
+        for code in candidates.values():
+            counts[code.lower()] = counts.get(code.lower(), 0) + 1
+        clashing = []
+        for name, code in candidates.items():
+            if counts[code.lower()] == 1 and code.lower() not in taken:
+                codes[name] = code
+                taken.add(code.lower())
+            else:
+                clashing.append(name)
+        todo, width = clashing, width + 1
+    return {name: codes[name] for name in class_names}
+
+
+_class_codes = class_codes  # for methods whose parameter shadows the name
+
+
+def _joined_codes(codes: Sequence[str]) -> str:
+    """``R+F+P`` while it fits the slug limit, else the first three and a count."""
+    joined = "+".join(codes)
+    if len(joined) > _SLUG_MAX:
+        joined = "+".join(codes[:3]) + f"+{len(codes) - 3}-more"
+    return joined
+
+
+def take_stem(stem: str, kind: str, codes: Sequence[str], name: str) -> str:
+    """The one place a take's archive name is built, before ``-2`` and the suffix.
+
+    ``stem`` is ``<ID>_<YYYYMMDD-HHMM>``. In ``predictions`` the take's ``name``
+    (``follow-F``, ``guided``) or else ``free`` plus the recorded codes
+    (``free-F``); anywhere else the recorded codes then the name (``R+F_practice``).
+    """
+    joined, slug = _joined_codes(codes), _slug(name)
+    if kind == "predictions":
+        what = slug or (f"free-{joined}" if joined else "free")
+    else:
+        what = "_".join(filter(None, (joined, slug)))
+    return f"{stem}_{what}" if what else stem
+
+
+def _claim_path(parent: Path, stem: str, suffix: str) -> Path:
+    """Claim ``parent/stem+suffix``, or ``stem-2``, ``stem-3`` … when that is taken.
+
+    Creates the file empty and exclusively, so two takes packing at once (two
+    stops in one minute, or every pending take at shutdown) never share a name.
+    """
+    ordinal = 1
+    while True:
+        path = parent / (f"{stem}{suffix}" if ordinal == 1 else f"{stem}-{ordinal}{suffix}")
+        try:
+            path.open("x").close()
+        except FileExistsError:
+            ordinal += 1
+            continue
+        return path
+
+
+def model_path(root: str | Path, participant: str, model: str) -> Path:
+    """Claim a new model file, ``root/ID/models/<ID>_<YYYYMMDD-HHMM>_<model>.joblib``.
+
+    Parameters
+    ----------
+    root
+        Data root, usually ``"data"``.
+    participant
+        Pseudonymised ID; empty puts the model in ``root/models``.
+    model
+        The model's type, such as ``"spar-mlp"``, lowercased into the name.
+
+    Returns
+    -------
+    pathlib.Path
+        A new, empty file, ``-2``, ``-3`` … when another model of that type was
+        saved in the same minute, never overwriting one. Save the model over it.
+
+    Examples
+    --------
+    >>> model_path("data", "P-023", "SPAR MLP").name  # doctest: +SKIP
+    'P-023_20261105-1535_spar-mlp.joblib'
+    """
+    stamp = labelled_path(root, participant, kind="models")
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    return _claim_path(stamp.parent, f"{stamp.name}_{_slug(model.lower()) or 'model'}", ".joblib")
+
+
+#: Each packed folder (resolved) to the archive it became, for this process. The
+#: archive's name no longer starts with its folder's, so this is how a folder path
+#: still finds its take, and how the take list hides a folder whose removal failed.
+PACKED_FOLDERS: dict[Path, Path] = {}
+
+
 #: The folders under ``data/<ID>/`` that hold takes: ``recordings/`` for takes
 #: made while idle, ``predictions/`` for takes made beside a live model. Trained
 #: models go in ``models/``.
@@ -269,7 +442,12 @@ def participant_dir(root: str | Path, participant: str = "", kind: str = "record
 
 
 def labelled_path(
-    base_path: str | Path, participant: str = "", suffix: str = "", *, kind: str = "recordings"
+    base_path: str | Path,
+    participant: str = "",
+    suffix: str = "",
+    *,
+    kind: str = "recordings",
+    when: time.struct_time | None = None,
 ) -> Path:
     """Build a timestamped path in a participant's folder for one kind of file.
 
@@ -282,27 +460,30 @@ def labelled_path(
         slug drops the participant level and the filename prefix.
     suffix
         Optional filename suffix, appended after an underscore, such as
-        ``"model.joblib"``.
+        ``"spar-mlp.joblib"``.
     kind
         Subfolder, see `participant_dir`. Default ``"recordings"``.
+    when
+        Local time to stamp, from `time.localtime`. Default: now.
 
     Returns
     -------
     pathlib.Path
-        ``base/ID/kind/ID_timestamp[_suffix]`` or ``base/kind/timestamp[_suffix]``.
-        No directories are created and no name is reserved. `Session` adds
-        its collision guard when it creates the recording folder.
+        ``base/ID/kind/ID_YYYYMMDD-HHMM[_suffix]`` or
+        ``base/kind/YYYYMMDD-HHMM[_suffix]``, in local time. No directories are
+        created and no name is reserved: two files in one minute share it.
     """
     participant = _slug(participant)
-    stem = "_".join(filter(None, (participant, time.strftime("%Y-%m-%d_%H-%M-%S"), suffix)))
+    stamp = time.strftime(STAMP_FORMAT, when or time.localtime())
+    stem = "_".join(filter(None, (participant, stamp, suffix)))
     return participant_dir(base_path, participant, kind) / stem
 
 
 def _unique_stem(parent: Path, stem: str) -> str:
-    """Find a stem unused by a recording folder or any of its named archives."""
+    """Find a folder name no live recording uses and none packed earlier in this process."""
     candidate = stem
     ordinal = 2
-    while (parent / candidate).exists() or any(parent.glob(f"{candidate}*.zip")):
+    while (parent / candidate).exists() or (parent / candidate).resolve() in PACKED_FOLDERS:
         candidate = f"{stem}-{ordinal}"
         ordinal += 1
     return candidate
@@ -391,10 +572,11 @@ class Session:
     label track. Closing writes ``meta.json`` and ``labels.json`` alongside the
     Zarr folders, and optionally packs the tree into a portable ``.mg.zip``.
 
-    Layout on disk (one folder per recording, named with the start
-    timestamp, packed to ``<folder>.mg.zip`` on stop)::
+    Layout on disk (one folder per recording, named with the start minute,
+    packed on stop to ``<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip``, see
+    [File names](../concepts/file-names.md))::
 
-        data/P-014/recordings/P-014_2026-05-17_14-23-05/
+        data/P-014/recordings/P-014_20260517-1423/
             emg.zarr/                  # shape (n_samples, n_channels)
             emg_timestamps.zarr/       # shape (n_samples,) float64
             vhi_control.zarr/          # any additional stream
@@ -413,7 +595,7 @@ class Session:
     participant
         Pseudonymised ID. A safe slug labels the folder and ``meta.json`` and
         nests the recording under ``base_path/ID/kind``. Empty by default,
-        which puts a timestamp and random suffix directly in ``base_path/kind``.
+        which puts the recording directly in ``base_path/kind``.
     kind
         ``"recordings"`` (default) or ``"predictions"``, see `participant_dir`.
         ``""`` writes straight into ``base_path`` (or ``base_path/ID``), for a
@@ -431,27 +613,26 @@ class Session:
     ) -> None:
         #: Pseudonymised ID only; personal names belong in the local key file.
         self.participant: str = _slug(participant)
-        if self.participant:
-            labelled = labelled_path(base_path, self.participant, kind=kind)
-            parent = labelled.parent
-            parent.mkdir(parents=True, exist_ok=True)
-            # Archives keep a stem reserved after packing removes its folder.
-            # Exclusive mkdir handles two recorders choosing the same free stem.
-            while True:
-                self.path = parent / _unique_stem(parent, labelled.name)
-                try:
-                    self.path.mkdir(exist_ok=False)
-                except FileExistsError:
-                    continue
-                break
-        else:
-            ts = time.strftime("%Y-%m-%d_%H-%M-%S")
-            # Random suffix so two sessions started within the same wall-clock second
-            # never share a folder: pack_to_zip() runs on a daemon thread and
-            # shutil.rmtree()s its own folder, so a shared name lets the old session's
-            # pack thread wipe the new recording (and collide on the .mg.zip path).
-            self.path = participant_dir(base_path, kind=kind) / f"{ts}_{uuid.uuid4().hex[:8]}"
-            self.path.mkdir(parents=True, exist_ok=True)
+        #: ``"recordings"``, ``"predictions"`` or ``""``: decides how the archive is named.
+        self.kind: str = kind
+        # One clock read for the name and meta.json's ``created``, so both say the same minute.
+        self._started = time.localtime()
+        labelled = labelled_path(base_path, self.participant, kind=kind, when=self._started)
+        parent = labelled.parent
+        parent.mkdir(parents=True, exist_ok=True)
+        #: ``<ID>_<YYYYMMDD-HHMM>``: the archive's name starts with it.
+        self._stem: str = labelled.name
+        # A folder never shares a name with a live one or prefixes an archive, so
+        # one take's pack thread (which rmtree()s its folder) never touches another
+        # take, and the take list can pair a folder with its own archive.
+        # Exclusive mkdir handles two recorders choosing the same free name.
+        while True:
+            self.path = parent / _unique_stem(parent, labelled.name)
+            try:
+                self.path.mkdir(exist_ok=False)
+            except FileExistsError:
+                continue
+            break
         #: Free-form facts a widget contributed about this recording, merged into
         #: ``meta.json`` under ``"extras"``. For anything the raw arrays cannot
         #: express on their own — a force calibration is the motivating case: the
@@ -670,6 +851,7 @@ class Session:
         class_names: list[str] | None = None,
         control_space: Mapping[str, object] | None = None,
         control_spaces: Mapping[str, Mapping[str, object]] | None = None,
+        class_codes: Mapping[str, str] | None = None,
     ) -> None:
         """Write meta.json + labels.json to the session folder.
 
@@ -691,12 +873,16 @@ class Session:
             Additional control configurations keyed by recording stream name. Each
             entry has the same format as ``control_space``. Omitted from metadata
             when empty, preserving the single-link recording format.
+        class_codes
+            Codes the app pins for some classes, usually ``ctx.class_codes``. The
+            rest are worked out by `class_codes`; the whole map is saved as
+            ``meta.json``'s ``class_codes`` and names the archive.
         """
         meta: dict[str, object] = {
             "schema_version": _META_SCHEMA_VERSION,
             "pose_convention": POSE_CONVENTION,
             "app_name": app_name,
-            "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "created": time.strftime("%Y-%m-%dT%H:%M:%S", self._started),  # when it started
             "streams": {
                 name: {
                     "n_channels": info.n_channels,
@@ -737,7 +923,11 @@ class Session:
                     seconds[name] = seconds.get(name, 0.0) + elapsed
             meta["class_seconds"] = seconds
         # Reuse the recorded-time keys, ordered by class index rather than event order.
-        self._recorded_classes = sorted(seconds, key=class_names.index) if class_names else []
+        recorded = sorted(seconds, key=class_names.index) if class_names else []
+        codes = _class_codes(class_names, class_codes) if class_names else {}
+        self._recorded_codes = [codes[name] for name in recorded]
+        if codes:
+            meta["class_codes"] = codes
         if self.name:
             meta["name"] = self.name
         if self.participant:
@@ -757,7 +947,12 @@ class Session:
         (self.path / "labels.json").write_text(json.dumps(labels, indent=2), encoding="utf-8")
 
     def pack_to_zip(self) -> Path:
-        """Pack the session folder into a single `<name>.mg.zip` file.
+        """Pack the session folder into one ``<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip``.
+
+        ``<what>`` comes from `take_stem`: the recorded classes' codes (``R+F``,
+        the first three and a count past 40 characters) and the `name`, or
+        ``free``, ``guided`` or ``follow-F`` for a take in ``predictions/``.
+        ``-2``, ``-3`` … are added only when that whole name is taken.
 
         Uses ZIP_STORED: zarr chunks are already compressed internally, so an outer
         compression layer would add CPU for little gain.
@@ -771,17 +966,9 @@ class Session:
         self.ts_stores.clear()
         gc.collect()
 
-        label_slugs = [
-            slug for name in getattr(self, "_recorded_classes", []) if (slug := _slug(name))
-        ]
-        labels = "+".join(label_slugs)
-        if len(labels) > _SLUG_MAX:
-            labels = f"{len(label_slugs)}-classes"
-        stem = f"{self.path.name}_{labels}" if labels else self.path.name
-        if slug := _slug(self.name):
-            stem = f"{stem}_{slug}"
-        zip_path = self.path.with_name(stem + ARCHIVE_SUFFIX)
-        tmp_path = zip_path.with_suffix(zip_path.suffix + ".tmp")
+        stem = take_stem(self._stem, self.kind, getattr(self, "_recorded_codes", []), self.name)
+        # Named after the folder, which no other live take shares.
+        tmp_path = self.path.with_name(self.path.name + ARCHIVE_SUFFIX + ".tmp")
         if tmp_path.exists():
             tmp_path.unlink()
 
@@ -811,9 +998,15 @@ class Session:
             tmp_path.unlink(missing_ok=True)
             raise
 
-        # os.replace (not Path.rename): atomic overwrite on both OSes - Windows
-        # rename raises if the destination already exists.
-        os.replace(tmp_path, zip_path)
+        zip_path = _claim_path(self.path.parent, stem, ARCHIVE_SUFFIX)
+        try:
+            # os.replace (not Path.rename): Windows rename refuses an existing
+            # destination, and the claimed name exists, empty.
+            os.replace(tmp_path, zip_path)
+        except Exception:
+            zip_path.unlink(missing_ok=True)
+            raise
+        PACKED_FOLDERS[self.path.resolve()] = zip_path
         _robust_rmtree(self.path)
         self.path = zip_path
         return zip_path

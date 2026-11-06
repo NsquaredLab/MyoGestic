@@ -618,7 +618,7 @@ def main() -> None:
     parser.add_argument("--probe", action="store_true", help="Print each button label once")
     parser.add_argument(
         "--replay", nargs="+", type=Path, default=[], metavar="SESSION",
-        help="signal_viewer: replay these .session.zip takes, in order, instead of synthetic bursts",
+        help="signal_viewer: replay these .mg.zip takes, in order, instead of synthetic bursts",
     )
     args = parser.parse_args()
     if args.all:

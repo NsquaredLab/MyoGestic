@@ -155,7 +155,7 @@ def _recorded_participants(base: Path, key_file: Path) -> list[_RecordedParticip
             )
             models = [
                 (path.stat().st_mtime, path)
-                for path in participant_dir(base, folder.name, "models").glob("*_model.joblib")
+                for path in participant_dir(base, folder.name, "models").glob("*.joblib")
                 if path.is_file()
             ]
             saved, model = max(models, default=(None, None))
@@ -233,7 +233,7 @@ class ParticipantPanel:
         discovered once each time the dialog opens, excluding pending saves.
     on_drive : callable or None, optional
         Called as ``on_drive(participant_id, model_path)`` after selecting
-        the ID with **Drive with saved model**. The newest ``*_model.joblib``
+        the ID with **Drive with saved model**. The newest ``.joblib`` model
         in ``<ID>/models`` by modification time is offered. None hides that action.
 
     Notes
@@ -750,10 +750,10 @@ def _input_row(label: str, value: str, *, mono: bool = False) -> tuple[bool, str
 def _preview(pid: str, sessions_dir: Path = Path("data")) -> None:
     """Show shared recording paths without widening the dialog to fit them."""
     take = labelled_path(sessions_dir, pid)
-    model = labelled_path(sessions_dir, pid, "model.joblib", kind="models")
+    model = labelled_path(sessions_dir, pid, "<model>.joblib", kind="models")
     lines = (
         f"Folder: {take.parent.parent.as_posix()}/",
-        f"Recording: {take.as_posix()}{ARCHIVE_SUFFIX}",
+        f"Recording: {take.as_posix()}_<what>{ARCHIVE_SUFFIX}",
         f"Model: {model.as_posix()}",
     )
     imgui.push_style_color(imgui.Col_.child_bg, CONSOLE_BG)

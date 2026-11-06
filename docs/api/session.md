@@ -21,11 +21,16 @@ Three window iterators, differing only in what each window is paired with. `iter
 ## Where takes are saved
 
 Everything for one participant lives under `data/<ID>/`, in `recordings/`, `predictions/` and
-`models/`. See [On-disk layout](../concepts/recording.md#on-disk-layout).
+`models/`. See [On-disk layout](../concepts/recording.md#on-disk-layout) and how each file is
+named in [File names](../concepts/file-names.md).
 
 ::: myogestic.session.participant_dir
 
 ::: myogestic.session.labelled_path
+
+::: myogestic.session.class_codes
+
+::: myogestic.session.model_path
 
 ## Data model
 

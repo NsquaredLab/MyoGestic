@@ -32,11 +32,13 @@ def test_autosave_writes_labelled_model(tmp_path):
     pipeline = _pipeline(tmp_path)
     pipeline.save_model = save_pickle
     pipeline.autosave_dir = str(tmp_path)
+    pipeline.model_name = "SPAR MLP"
 
     _train_and_wait(pipeline)
 
-    files = list((tmp_path / "P-014" / "models").glob("P-014_*_model.joblib"))
+    files = list((tmp_path / "P-014" / "models").glob("P-014_*_spar-mlp.joblib"))
     assert len(files) == 1
+    assert re.fullmatch(r"P-014_\d{8}-\d{4}_spar-mlp\.joblib", files[0].name)
     assert pipeline.last_saved_model == str(files[0])
     assert load_pickle(files[0]) == pipeline.model == {"classes": [0, 1]}
     notice = pipeline.app.ctx.notifications[-1]
@@ -123,6 +125,36 @@ def test_autosave_without_participant_uses_the_root_models_folder(tmp_path):
 
     _train_and_wait(pipeline)
 
-    files = list((tmp_path / "models").glob("*_model.joblib"))
+    files = list((tmp_path / "models").glob("*_dict.joblib"))  # named after its class
     assert len(files) == 1
     assert Path(pipeline.last_saved_model) == files[0]
+
+
+def test_a_second_model_in_the_same_minute_gets_a_number(tmp_path, monkeypatch):
+    monkeypatch.setattr("myogestic.session._core.time.strftime", lambda *a: "20261105-1535")
+    pipeline = _pipeline(tmp_path)
+    pipeline.save_model = save_pickle
+    pipeline.autosave_dir = str(tmp_path)
+
+    _train_and_wait(pipeline)
+    _train_and_wait(pipeline)
+
+    assert sorted(p.name for p in (tmp_path / "P-014" / "models").iterdir()) == [
+        "P-014_20261105-1535_dict-2.joblib",
+        "P-014_20261105-1535_dict.joblib",
+    ]
+
+
+def test_a_failed_save_leaves_no_empty_model_file(tmp_path):
+    pipeline = _pipeline(tmp_path)
+    pipeline.autosave_dir = str(tmp_path)
+
+    def broken(model, path):
+        raise OSError("disk full")
+
+    pipeline.save_model = broken
+
+    _train_and_wait(pipeline)
+
+    assert list((tmp_path / "P-014" / "models").iterdir()) == []
+    assert pipeline.last_saved_model is None
