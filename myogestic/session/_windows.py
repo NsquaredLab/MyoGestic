@@ -53,13 +53,13 @@ def split_sessions_by_stream[P: str | Path](paths: Iterable[P], stream: str) -> 
     stream train against it, the rest fall back to synthetic targets from their labels.
 
     Each session is opened only to read its store list and is **closed again straight
-    away** — an open `zarr.storage.ZipStore` keeps a lock on the ``.session.zip``, which
+    away** — an open `zarr.storage.ZipStore` keeps a lock on the ``.mg.zip``, which
     on Windows blocks deleting or moving the file afterwards.
 
     Parameters
     ----------
     paths
-        Session locations — folders or ``.session.zip`` archives, e.g. ``data.paths``.
+        Session locations — folders or ``.mg.zip`` archives, e.g. ``data.paths``.
     stream
         The stream name to test for, e.g. ``"vhi_control"``.
 
@@ -106,13 +106,13 @@ def iter_labeled_windows(
     timestamp array. Walks each session's label track, finds the time
     interval each label covers (this label's timestamp to next label's
     timestamp), and chops that interval into fixed-size windows. Works
-    for folders and ``.session.zip`` sessions.
+    for folders and ``.mg.zip`` sessions.
 
     Examples
     --------
     >>> from myogestic.session import iter_labeled_windows
     >>> for window, timestamps, class_index in iter_labeled_windows(
-    ...     ["sessions/demo.session.zip"], "emg", 200, 100
+    ...     ["sessions/demo.mg.zip"], "emg", 200, 100
     ... ):
     ...     print(window.shape, class_index)
     """
@@ -128,7 +128,7 @@ def iter_labeled_windows(
             log.warning("skipping %s: %s", path, e)
             continue
         # finally: close the session each iteration so its zarr/ZipStore handles
-        # are released — on Windows an open ZipStore locks the .session.zip, so a
+        # are released — on Windows an open ZipStore locks the .mg.zip, so a
         # leaked handle blocks deleting/moving the file after training.
         try:
             if stream_name not in sess.stores:
@@ -280,7 +280,7 @@ def iter_target_windows(
     Parameters
     ----------
     paths
-        Session locations — folders or ``.session.zip`` archives.
+        Session locations — folders or ``.mg.zip`` archives.
     stream_name
         The signal to window, e.g. ``"emg"``.
     target_stream_name
@@ -310,7 +310,7 @@ def iter_target_windows(
     --------
     >>> from myogestic.session import iter_target_windows
     >>> for window, timestamps, target in iter_target_windows(
-    ...     ["sessions/demo.session.zip"], "emg", "target", 200, 100
+    ...     ["sessions/demo.mg.zip"], "emg", "target", 200, 100
     ... ):
     ...     print(window.shape, target)
     """
@@ -338,7 +338,7 @@ def iter_target_windows(
             log.warning("skipping %s: %s", path, e)
             continue
         # finally: release the session's handles each iteration (see
-        # iter_labeled_windows) — a leaked ZipStore locks the .session.zip on Windows.
+        # iter_labeled_windows) — a leaked ZipStore locks the .mg.zip on Windows.
         try:
             if stream_name not in sess.stores:
                 log.info("skipping %s: stream %r not present", path, stream_name)
@@ -486,7 +486,7 @@ def iter_aligned_windows(
     --------
     >>> from myogestic.session import iter_aligned_windows
     >>> for window, aligned, timestamps in iter_aligned_windows(
-    ...     ["sessions/demo.session.zip"], "emg", ["vhi_control"], 200, 50
+    ...     ["sessions/demo.mg.zip"], "emg", ["vhi_control"], 200, 50
     ... ):
     ...     target = aligned["vhi_control"]
     """
@@ -507,7 +507,7 @@ def iter_aligned_windows(
             log.warning("skipping %s: %s", path, e)
             continue
         # finally: release the session's handles each iteration (see
-        # iter_labeled_windows) — a leaked ZipStore locks the .session.zip on
+        # iter_labeled_windows) — a leaked ZipStore locks the .mg.zip on
         # Windows.
         try:
             if primary_stream_name not in sess.stores:

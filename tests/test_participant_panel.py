@@ -133,9 +133,9 @@ def test_start_sets_participant_and_writes_key_only(tmp_path, imgui_frame):
     app.ctx.session.append("emg", np.zeros((4, 2), dtype=np.float32), np.arange(4.0))
     app.stop_recording()
     deadline = time.monotonic() + 10
-    while time.monotonic() < deadline and not list(sessions.rglob("*.session.zip")):
+    while time.monotonic() < deadline and not list(sessions.rglob("*.mg.zip")):
         time.sleep(0.01)
-    archives = list(sessions.rglob("*.session.zip"))
+    archives = list(sessions.rglob("*.mg.zip"))
     assert len(archives) == 1
     with zipfile.ZipFile(archives[0]) as archive:
         assert json.loads(archive.read("meta.json"))["participant"] == "P-014"

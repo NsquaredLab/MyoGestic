@@ -563,11 +563,11 @@ class App:
             self.ctx.log(f"Recording → {self.ctx.session.path}")
 
     def stop_recording(self, *, wait: bool = False) -> None:
-        """Stop the active recording and pack the session to a ``.session.zip``.
+        """Stop the active recording and pack the session to a ``.mg.zip``.
 
         Detaches every stream and freezes the session on the calling thread, then on a
         daemon thread runs `finalize_hooks`, writes ``meta.json`` and ``labels.json``,
-        packs the folder into ``<timestamp>.session.zip`` (the folder is kept until the
+        packs the folder into ``<timestamp>.mg.zip`` (the folder is kept until the
         pack succeeds) and registers the archive with the session browser. ``wait=True``
         does that work inline instead — for tests, and for shutdown, where a daemon would
         die with the archive half written. Refuses if no recording is open.

@@ -40,7 +40,7 @@ One labelled segment of a recorded session - the data between two consecutive la
 
 ### Recording / Session
 
-One `app.start_recording()` → `app.stop_recording()` cycle. Persisted as a folder during capture, packed to a `.session.zip` archive on stop. Both layouts loadable via `myogestic.session.open_session_store(path)`.
+One `app.start_recording()` → `app.stop_recording()` cycle. Persisted as a folder during capture, packed to a `.mg.zip` archive on stop. Both layouts loadable via `myogestic.session.open_session_store(path)`.
 
 ### DOF
 

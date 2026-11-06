@@ -1,4 +1,4 @@
-"""Round-trip test: write Session → pack to .session.zip → read via open_session_store."""
+"""Round-trip test: write Session → pack to .mg.zip → read via open_session_store."""
 
 import json
 import shutil
@@ -18,8 +18,46 @@ from myogestic.session import (
 from myogestic.stream import StreamInfo
 
 
+def test_takes_saved_as_session_zip_still_open_and_list(tmp_path):
+    """Older takes are named .session.zip; they open and list beside .mg.zip."""
+    from myogestic.widgets.training._session_state import scan_sessions
+
+    def take(name):
+        s = Session(base_path=tmp_path, participant="P-001")
+        s.init_stream("emg", StreamInfo(n_channels=2, fs=100.0, dtype=np.dtype("float32")))
+        s.append("emg", np.ones((10, 2), np.float32), np.arange(10.0))
+        s.save_meta(name)
+        return s.pack_to_zip()
+
+    new = take("new")
+    old = take("old")
+    legacy = old.with_name(old.name.removesuffix(".mg.zip") + ".session.zip")
+    old.rename(legacy)
+
+    with open_session_store(legacy) as loaded:
+        assert np.array(loaded.stores["emg"]).shape == (10, 2)
+    listed = {row["path"] for row in scan_sessions(str(tmp_path / "P-001"))}
+    assert listed == {str(new), str(legacy)}
+
+
+def test_signal_streams_use_blosc_lz4_and_event_streams_zstd(tmp_path):
+    s = Session(base_path=tmp_path)
+    s.init_stream("emg", StreamInfo(n_channels=2, fs=100.0, dtype=np.dtype("float32")))
+    s.append("emg", np.ones((10, 2), np.float32), np.arange(10.0))
+    s.append_event("prediction.class", [1.0], 0.5)
+    s.save_meta("codecs")
+    with zipfile.ZipFile(s.pack_to_zip()) as zf:
+
+        def codec(array):
+            return json.loads(zf.read(f"{array}/zarr.json"))["codecs"][-1]
+
+        assert codec("emg.zarr")["configuration"]["cname"] == "lz4"
+        assert codec("emg_timestamps.zarr")["name"] == "blosc"
+        assert codec("prediction.class.zarr")["name"] == "zstd"
+
+
 def test_pack_to_zip_roundtrip():
-    """Write a session as folder zarr, pack to .session.zip, verify the
+    """Write a session as folder zarr, pack to .mg.zip, verify the
     folder is gone and the zip is readable with the same data."""
     with tempfile.TemporaryDirectory() as tmp:
         session = Session(base_path=tmp)
@@ -43,7 +81,7 @@ def test_pack_to_zip_roundtrip():
         # Folder gone, zip exists
         assert zip_path.exists()
         assert zip_path.suffix == ".zip"
-        assert zip_path.name.endswith(".session.zip")
+        assert zip_path.name.endswith(".mg.zip")
         assert not original_folder.exists()
         assert session.path == zip_path
 
@@ -90,7 +128,7 @@ def test_archive_labels_precede_typed_name_in_class_order(tmp_path, label_order,
 
     archive = session.pack_to_zip()
 
-    assert archive.name == f"{folder.name}_fist+open-hand_my-take.session.zip"
+    assert archive.name == f"{folder.name}_fist+open-hand_my-take.mg.zip"
     assert not folder.exists()
     with zipfile.ZipFile(archive) as packed:
         assert packed.read("meta.json") == meta_bytes
@@ -128,7 +166,7 @@ def test_archive_without_recorded_labels_keeps_its_name(
     stem = session.path.name
     suffix = "_my-take" if name else ""
 
-    assert session.pack_to_zip().name == f"{stem}{suffix}.session.zip"
+    assert session.pack_to_zip().name == f"{stem}{suffix}.mg.zip"
 
 
 @pytest.mark.parametrize(
@@ -149,7 +187,7 @@ def test_archive_label_slugs_and_length_limit(tmp_path, class_names, segment):
     session.save_meta("slugs", class_names=class_names)
     stem = session.path.name
 
-    assert session.pack_to_zip().name == f"{stem}{segment}.session.zip"
+    assert session.pack_to_zip().name == f"{stem}{segment}.mg.zip"
 
 
 def test_archive_labels_refresh_when_metadata_is_saved_again(tmp_path):
@@ -159,7 +197,7 @@ def test_archive_labels_refresh_when_metadata_is_saved_again(tmp_path):
     session.save_meta("no-labels")
     stem = session.path.name
 
-    assert session.pack_to_zip().name == f"{stem}.session.zip"
+    assert session.pack_to_zip().name == f"{stem}.mg.zip"
 
 
 def test_labelled_archive_reserves_same_second_participant_stem(tmp_path, monkeypatch):
@@ -173,7 +211,7 @@ def test_labelled_archive_reserves_same_second_participant_stem(tmp_path, monkey
     first.save_meta("first", class_names=["fist"])
     folder = first.path
     archive = first.pack_to_zip()
-    assert archive.name == "P-001_2026-10-24_22-13-05_fist_my-take.session.zip"
+    assert archive.name == "P-001_2026-10-24_22-13-05_fist_my-take.mg.zip"
     assert not folder.exists()
 
     second = Session(str(tmp_path), participant="P-001")
@@ -549,14 +587,14 @@ def _quick_session(tmp: str) -> Session:
 
 
 def test_pack_to_zip_overwrites_existing_target():
-    """pack_to_zip uses os.replace, which overwrites a pre-existing .session.zip.
+    """pack_to_zip uses os.replace, which overwrites a pre-existing .mg.zip.
 
     On Windows ``Path.rename`` raises ``FileExistsError`` when the destination
     exists; ``os.replace`` overwrites on every OS.
     """
     with tempfile.TemporaryDirectory() as tmp:
         s = _quick_session(tmp)
-        zip_path = s.path.with_name(s.path.name + ".session.zip")
+        zip_path = s.path.with_name(s.path.name + ".mg.zip")
         zip_path.write_bytes(b"stale")  # a leftover file at the destination
         out = s.pack_to_zip()
         assert out == zip_path

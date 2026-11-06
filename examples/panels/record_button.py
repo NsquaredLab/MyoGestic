@@ -8,7 +8,7 @@ name lands in the session's ``meta.json`` and in the archive filename, so
 
 Wired to a live synthetic stream and a **throwaway temp directory**, so the
 whole loop performs a real recording without leaving anything in the repo's
-``data/``. The path is printed on start — the named ``.session.zip``
+``data/``. The path is printed on start — the named ``.mg.zip``
 appears there when you save.
 
 Run with:

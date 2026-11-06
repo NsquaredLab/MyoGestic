@@ -45,12 +45,12 @@ Setting `class_names` as an attribute on the session object after the fact doesn
 !!! tip "Fix"
     `RecordingControls` calls `app.start_recording` which handles this for you. Only relevant if you're constructing sessions manually.
 
-### `.session.zip` truncated when script exits
+### `.mg.zip` truncated when script exits
 
 `app.stop_recording()` kicks off a daemon thread that packs the session folder. If the script exits immediately, the zip may not finish.
 
 !!! tip "Fix"
-    Sleep 1-2 seconds after `stop_recording()` in headless scripts, or check `data/recordings/<timestamp>.session.zip` exists before exiting.
+    Sleep 1-2 seconds after `stop_recording()` in headless scripts, or check `data/recordings/<timestamp>.mg.zip` exists before exiting.
 
 See: [Recording concept page](concepts/recording.md), [Record and replay](how-to/record-and-replay.md), [Run headless](how-to/headless-mode.md).
 

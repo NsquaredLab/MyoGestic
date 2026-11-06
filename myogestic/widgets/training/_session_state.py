@@ -46,7 +46,7 @@ def is_session_saving(base_path: str) -> bool:
     return any(_in_scope(path.parent, base) for path in _pending_packs.copy())
 
 
-def _packed_siblings(path: Path, suffix: str = ".session.zip") -> list[Path]:
+def _packed_siblings(path: Path, suffix: str = ".zip") -> list[Path]:
     return sorted(p for p in path.parent.glob(f"{escape(path.name)}*{suffix}") if p.is_file())
 
 
@@ -74,7 +74,7 @@ def scan_sessions(base_path: str) -> list[dict]:
             if d.is_dir() and (
                 d.resolve() in _pending_packs
                 or _packed_siblings(d)
-                or _packed_siblings(d, ".session.zip.tmp")
+                or _packed_siblings(d, ".zip.tmp")
             ):
                 continue
             row = _session_row(d)

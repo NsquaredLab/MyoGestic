@@ -28,7 +28,7 @@ class TrainingData:
     Attributes
     ----------
     paths
-        Session locations (folders or ``.session.zip`` archives).
+        Session locations (folders or ``.mg.zip`` archives).
     class_names
         Human-readable labels — same list passed to
         ``recording_controls`` / ``session_manager``.
@@ -40,7 +40,7 @@ class TrainingData:
     --------
     >>> from myogestic import TrainingData
     >>> data = TrainingData(
-    ...     paths=["sessions/demo.session.zip"],
+    ...     paths=["sessions/demo.mg.zip"],
     ...     class_names=["Rest"],
     ...     classes={0},
     ... )

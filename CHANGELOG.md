@@ -89,6 +89,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Takes are `.mg.zip`.** A stopped recording packs to `<name>.mg.zip` instead of
+  `<name>.session.zip`. Readers take any `.zip` holding a `meta.json`, so older
+  `.session.zip` takes still open, list in `SessionManager` and replay; nothing on disk is
+  renamed. The suffix lives in `myogestic.session._core.ARCHIVE_SUFFIX`.
+
+- **Smaller, cheaper signal recordings.** Signal streams and their timestamps are stored
+  with Blosc LZ4 and byte shuffle instead of zarr's default zstd. On a 320-channel
+  2048 Hz take: 7% smaller, 14% less time per append, timestamps 2-4x smaller. Event
+  streams keep zstd, which suits them better. Older takes read as before; each array
+  records its own codec.
+
 - **One folder per participant.** Data now goes under `data/<ID>/`, split by kind:
   `recordings/` for takes started from idle, `predictions/` for takes started while a model
   is predicting (chosen from `ctx.state`), and `models/` for `Pipeline.autosave_dir`. Takes

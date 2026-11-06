@@ -47,7 +47,7 @@ TrainingData(paths=[], class_names=[], classes=set())
 <!--docs:skip-->
 ```python
 LSLSource(stream_name)
-ReplaySource(session_path, stream_name, speed=1.0)  # accepts .session.zip
+ReplaySource(session_path, stream_name, speed=1.0)  # accepts .mg.zip
 SerialSource(
     port, baud, n_channels, fs
 )  # extras:[serial]; from myogestic.sources.serial_source import SerialSource
@@ -113,7 +113,7 @@ save_pickle(model, path) / load_pickle(path)
 
 <!--docs:skip-->
 ```python
-open_session_store(path) -> Session                # folder OR .session.zip
+open_session_store(path) -> Session                # folder OR .mg.zip
 iter_labeled_windows(paths, stream_name, window_ms, hop_ms,
                      classes=None)
   -> Iterator[(window, ts, class_index)]            # window: (n_ch, n_samp)

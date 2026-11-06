@@ -19,7 +19,7 @@ from myogestic.widgets import AppHeader, SessionManager
 
 CLASSES = ["Rest", "Fist"]
 
-# Mock a few recorded sessions on disk as real ``.session.zip`` archives — the
+# Mock a few recorded sessions on disk as real ``.mg.zip`` archives — the
 # same format App.stop_recording writes. The picker lists everything in the
 # base folder on start, and these are also selectable via "Load Files...".
 _tmp = Path(tempfile.mkdtemp(prefix="panel_sessions_"))
@@ -29,7 +29,7 @@ _SESSIONS = (
     ("2026-05-02_09-30-00", "2026-05-02T09:30:00", [0, 0, 1, 1]),
 )
 for _name, _created, _labels in _SESSIONS:
-    with zipfile.ZipFile(_tmp / f"{_name}.session.zip", "w") as _zf:
+    with zipfile.ZipFile(_tmp / f"{_name}.mg.zip", "w") as _zf:
         _zf.writestr(
             "meta.json",
             json.dumps(

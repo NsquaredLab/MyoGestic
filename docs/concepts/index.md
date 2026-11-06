@@ -10,7 +10,7 @@ Drill in:
 - [Streams](streams.md) - the ring buffer, `get_window` vs `get_display`, channels-first convention.
 - [Pipeline](pipeline.md) - `extract` / `train` / `predict` decorators, `TrainingData`, the predict thread.
 - [Controls](controls.md) - the control map, the `[-1, 1]` standard, in-process vs. remote targets, deferred binding.
-- [Recording](recording.md) - sessions, label tracks, the `.session.zip` archive layout.
+- [Recording](recording.md) - sessions, label tracks, the `.mg.zip` archive layout.
 - [Widgets](widgets.md) - the stateless-function contract, ImGui immediate mode, `Grid` layout.
 - [Threading](threading.md) - daemon threads, GIL release, the GPU contention rule.
 - [Design principles](design-principles.md) - the eight rules the codebase keeps to.

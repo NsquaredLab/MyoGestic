@@ -420,7 +420,7 @@ def score_guided_run(path: str | pathlib.Path) -> dict:
     Parameters
     ----------
     path
-        Saved session folder or ``.session.zip`` with ``extras.guided``.
+        Saved session folder or ``.mg.zip`` with ``extras.guided``.
 
     Returns
     -------

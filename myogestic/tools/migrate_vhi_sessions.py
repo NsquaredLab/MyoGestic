@@ -59,7 +59,7 @@ def _convention(meta: dict) -> str:
 
 
 def migrate(path: Path, *, dry_run: bool = False) -> str:
-    """Convert one ``.session.zip`` in place. Returns a one-line report."""
+    """Convert one ``.mg.zip`` in place. Returns a one-line report."""
     with zipfile.ZipFile(path) as zf:
         names = zf.namelist()
         if f"{_STREAM}.zarr/zarr.json" not in names:
@@ -123,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     targets: list[Path] = []
     for path in args.paths:
         if path.is_dir():
-            targets.extend(sorted(path.glob("*.session.zip")))
+            targets.extend(sorted(path.glob("*.zip")))
         elif path.is_file():
             targets.append(path)
         else:

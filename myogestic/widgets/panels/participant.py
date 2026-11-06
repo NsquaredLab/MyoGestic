@@ -16,7 +16,7 @@ from imgui_bundle import imgui
 from myogestic._theme import mono_font
 from myogestic.core import Context
 from myogestic.session import labelled_path, participant_dir
-from myogestic.session._core import KINDS, _slug
+from myogestic.session._core import ARCHIVE_SUFFIX, KINDS, _slug
 from myogestic.widgets.common import (
     CONSOLE_BG,
     CONSOLE_TEXT,
@@ -753,7 +753,7 @@ def _preview(pid: str, sessions_dir: Path = Path("data")) -> None:
     model = labelled_path(sessions_dir, pid, "model.joblib", kind="models")
     lines = (
         f"Folder: {take.parent.parent.as_posix()}/",
-        f"Recording: {take.as_posix()}.session.zip",
+        f"Recording: {take.as_posix()}{ARCHIVE_SUFFIX}",
         f"Model: {model.as_posix()}",
     )
     imgui.push_style_color(imgui.Col_.child_bg, CONSOLE_BG)

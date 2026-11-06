@@ -3,7 +3,7 @@
 > MyoGestic turns a short Python script into a live biosignal experiment. A `Source` wraps a
 > device, file or transport; a `Stream` buffers it; an optional ML `Pipeline` adds a predict
 > thread and three decorated functions (`extract` / `train` / `predict`); imgui/implot widgets
-> render it in a `Grid`; recording appends to a Zarr `.session.zip`; and a TOML **control map**
+> render it in a `Grid`; recording appends to a Zarr `.mg.zip`; and a TOML **control map**
 > drives a prosthesis, the Godot Virtual Hand Interface, a keyboard or a cursor. There are no
 > base classes, no inheritance, no registration and no config files: a widget is a class with a
 > `.ui()` method, a source is three methods, a target is three more.
@@ -78,7 +78,7 @@ its own program, which most are not.
 
 **Recording**
 
-- [Enable on-disk recording](https://nsquaredlab.github.io/MyoGestic/how-to/enable-recording/): capture every registered stream to a Zarr-backed `.session.zip`, from the GUI button or headlessly, plus the on-disk layout and the read-back API.
+- [Enable on-disk recording](https://nsquaredlab.github.io/MyoGestic/how-to/enable-recording/): capture every registered stream to a Zarr-backed `.mg.zip`, from the GUI button or headlessly, plus the on-disk layout and the read-back API.
 - [Record and replay](https://nsquaredlab.github.io/MyoGestic/how-to/record-and-replay/): capture sessions, browse them in `SessionManager`, train on them, then replay one as a `Source` to debug the predict path offline.
 - [Record good training data](https://nsquaredlab.github.io/MyoGestic/how-to/record-good-training-data/): cycle-style recording, why one-click sessions produce bad models, and how to check your data before training.
 

@@ -45,7 +45,7 @@ Runs on a one-shot training thread when the user clicks **Train**. Receives one 
 ```python
 @dataclass
 class TrainingData:
-    paths: list[str]  # selected session paths (folders or .session.zip)
+    paths: list[str]  # selected session paths (folders or .mg.zip)
     class_names: list[str]  # ordered class labels
     classes: set[int]  # subset selected in the UI
 ```
