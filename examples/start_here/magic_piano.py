@@ -21,7 +21,7 @@ strikes once and an ambiguous prediction stays silent.
 the take holds the features and class scores of every prediction, the key the gate let
 through (``prediction.note``), the key the song asked for (``prediction.cue``), the
 model that played (``model.joblib``) and each finished song's score (``meta.json``,
-under ``piano``). Every trained model is also saved under ``sessions/``.
+under ``piano``). Every trained model is also saved under ``data/<ID>/models/``.
 
 Run with:
     uv run --extra examples python examples/start_here/magic_piano.py
@@ -173,9 +173,10 @@ app = App("MyoGestic — magic piano", require_participant=True)
 app.ctx.class_names = CLASSES
 app.streams(Stream("emg", source=QUATTROCENTO.factory(), window_ms=WINDOW_MS))
 pipeline = Pipeline(app, predict_hz=PREDICT_HZ, input_streams=("emg",))
-# Saves every trained model under sessions/, and the playing model into each take.
+# Saves every trained model under data/<ID>/models/, and the playing model into each take.
 pipeline.save_model = save_pickle
-pipeline.autosave_dir = "sessions"
+pipeline.autosave_dir = "data"
+pipeline.model_name = "catboost"
 features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
     default=["RMS", "MAV", "WL"],
@@ -319,7 +320,7 @@ status = StatusBar("emg", pipeline=pipeline)
 device = DevicePicker("emg", devices=DEVICES, show_header=False)
 viewer = SignalViewer("emg", show_connect=False, show_title=True)
 log = LogPanel(title="Activity log")
-sessions = SessionManager("sessions", class_names=CLASSES)
+sessions = SessionManager("data", class_names=CLASSES)
 train_button = TrainButton(pipeline, size=(-1, 0))
 training_log = TrainingLog(pipeline)
 scores = PredictionLabel(pipeline, CLASSES, title="Class scores", font_scale=1.4)
@@ -575,7 +576,7 @@ def _step_done(ctx: Context) -> list[bool]:
     return [
         _connected(ctx),
         bool(ctx.participant)
-        and any(pathlib.Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
+        and any(pathlib.Path("data", ctx.participant, "recordings").glob(f"{ctx.participant}_*")),
         pipeline.model is not None,
         ctx.state == "predicting",
     ]
