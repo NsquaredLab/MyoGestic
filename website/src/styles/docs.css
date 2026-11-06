@@ -96,7 +96,7 @@ h1.mg-page-title { margin-top: 14px; font: 400 64px/1.02 var(--mg-font-display);
 .mg-card strong { font: 400 26px/1.15 var(--mg-font-display); color: var(--mg-text); }
 .mg-card a { color: var(--mg-link); }
 .mg-icon { display: inline-block; width: 1.2em; height: 1.2em; vertical-align: -0.2em; fill: currentColor; }
-.mg-diagram { display: block; max-width: 100%; height: auto; margin-inline: auto; }
+.mg-diagram { display: block; max-width: 100%; height: auto; margin-inline: auto; background: var(--mg-console-bg); border-radius: 8px; padding: 16px; }
 .right-sidebar { border-inline-start: 0; }
 .mg-toc { padding: 32px 20px; font: 400 12.5px/1.5 var(--mg-font-mono); }
 .mg-toc h2 { padding: 6px 0; margin-bottom: 8px; color: var(--mg-text-dim); font: 400 11px/1.5 var(--mg-font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
