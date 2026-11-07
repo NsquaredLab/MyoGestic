@@ -31,9 +31,9 @@ class SyntheticSource:
     Timestamps come from the ``mne_lsl`` ``local_clock()`` domain rather than a
     relative counter, so "now" and last-sample age read correctly.
 
-    ``read`` blocks until the next chunk is due, the way a real inlet's blocking
-    pull does. Without that the acquire thread spins and squashes thousands of
-    chunks onto one x-position.
+    On desktop, ``read`` blocks until the next chunk is due, the way a real
+    inlet's blocking pull does. In a browser it returns ``(None, None)`` until
+    then, so the frame scheduler can keep drawing without a sleep.
 
     Parameters
     ----------
@@ -128,8 +128,10 @@ class SyntheticSource:
         return StreamInfo(n_channels=self._n, fs=self._fs, dtype=np.dtype("float32"))
 
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
-        """Return the next chunk, blocking until it is due."""
+        """Return the next chunk; in a browser, return no data until it is due."""
         from mne_lsl.lsl import local_clock
+
+        from myogestic._browser import IS_BROWSER
 
         # Block until the next chunk is due, so the acquire thread paces to
         # `fs` instead of spinning and squashing thousands of chunks onto one
@@ -138,6 +140,8 @@ class SyntheticSource:
         target = self._next_tick + self._CHUNK / self._fs
         now = local_clock()
         if target > now:
+            if IS_BROWSER:
+                return None, None
             time.sleep(target - now)
         self._next_tick = target
 
