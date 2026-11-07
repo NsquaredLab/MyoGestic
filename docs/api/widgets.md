@@ -1,5 +1,6 @@
-# Widgets
-
+---
+title: "Widgets"
+---
 Widget classes you construct once and render with `.ui(...)` from inside `@app.ui`. See the [Widgets concept page](../concepts/widgets.md) for the contract and the [widget gallery](../widget-gallery.md) for a visual index of all of them on one page.
 
 ## Signal viewers

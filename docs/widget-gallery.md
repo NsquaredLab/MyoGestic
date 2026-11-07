@@ -1,11 +1,10 @@
 ---
+title: "Widget gallery"
 hide:
   - toc
 ---
 
-# Widget gallery
-
-Visual contact-sheet of every public widget. Each card shows the widget rendered in isolation.
+Visual contact-sheet of selected public widgets. Each card shows the widget rendered in isolation.
 
 Widgets are composable parts; a typical app combines four or five of them. See [Anatomy of an app](anatomy.md) and [Getting started](getting-started.md) for end-to-end examples that wire several widgets together.
 
@@ -38,7 +37,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![signal_viewer](images/widgets/signal_viewer.png){ .widget-thumb loading=lazy }
 
-    Renders a stream's ring buffer as a min/max envelope decimated for 60 fps. Per-channel toggles, a 50/60 Hz mains-hum notch, optional display filters (rectify, DC removal, RMS envelope), pause/rescale. Keyed by `stream_name`.
+    Renders a stream's ring buffer as a min/max envelope decimated for 60 fps. Per-channel toggles, a 50/60 Hz mains-hum notch, optional display filters (rectify, DC removal, RMS envelope), pause/rescale. State is keyed by `widget_id`, defaulting to `stream_name`.
 
 </div>
 
@@ -50,7 +49,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![AppHeader](images/widgets/AppHeader.png){ .widget-thumb loading=lazy }
 
-    Shared application header with the line logo, title and state pill. Session apps add four-step navigation and an optional participant chip. Place it in a bare `Px(52)` Grid row.
+    Shared application header with the line logo, title and state pill. Pass a `StepBar` for workflow navigation and a `ParticipantPanel` for a participant chip. `StepBar` accepts any nonempty list of steps; completion flags add checkmarks without locking navigation. Place it in a bare `Px(52)` Grid row.
 
 -   __[StatusBar][myogestic.widgets.StatusBar]__
 
@@ -68,7 +67,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![SimulatorControls](images/widgets/SimulatorControls.png){ .widget-thumb loading=lazy }
 
-    Persistent Rest/Fist presets that steer the synthetic EMG generator on every workflow step. During recording the gesture callback sets the signal, and manual controls lock with a visible explanation.
+    Configurable presets, such as Rest/Fist, that steer the LSL synthetic EMG generator independently of the workflow step. Call `set()` from the recording gesture callback to keep the signal and chip in sync; manual controls lock while recording with a visible explanation.
 
 </div>
 
@@ -116,7 +115,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![pipeline_panel](images/widgets/pipeline_panel.png){ .widget-thumb loading=lazy }
 
-    Train / Predict button row plus state indicator. Buttons grey out automatically based on `pipeline.state` (no Train while Predicting). Individual buttons: [`TrainButton`][myogestic.ml.widgets.TrainButton], [`PredictButton`][myogestic.ml.widgets.PredictButton].
+    Model state row, a full-width **Train** action and a **Predict** toggle. Buttons disable based on `pipeline.app.ctx.state`, selected takes, pending saves, callbacks and the loaded model; captions explain how to enable them. Individual buttons: [`TrainButton`][myogestic.ml.widgets.TrainButton], [`PredictButton`][myogestic.ml.widgets.PredictButton].
 
 </div>
 
@@ -197,7 +196,7 @@ uv run python tools/widget_screenshot.py --all
 
 ## Other widgets
 
-These need richer fixtures (live data, trained models, recorded trials) than the screenshot script produces, so they're listed here and documented in full on the [Widgets API](api/widgets.md) page.
+These have no captures in the gallery's screenshot registry, so they are listed here and documented in full on the [Widgets API](api/widgets.md) page.
 
 <div class="other-widgets" markdown>
 

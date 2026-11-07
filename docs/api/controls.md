@@ -1,5 +1,6 @@
-# Control standard
-
+---
+title: "Control standard"
+---
 A control space is a **mapping**, in a file: your name for a model output on the left, a
 control the target declares on the right. The left side is yours and arbitrary. The right
 side belongs to the target, which also declares what the control *is*: a number or a held

@@ -1,5 +1,6 @@
-# Guides
-
+---
+title: "Guides"
+---
 Every task guide, grouped by what you are trying to do. If you are new, start with
 [EMG classification](../tutorials/emg-classification.md): it runs in one command and
 establishes the App + Stream + Pipeline pattern everything else assumes.

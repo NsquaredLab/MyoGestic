@@ -1,0 +1,65 @@
+---
+const base = import.meta.env.BASE_URL;
+// Static preview paths match the approved mockup; only the hero animates.
+let seed = 7;
+const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+const traces = Array.from({ length: 8 }, (_, channel) => {
+    let path = '';
+    for (let i = 0; i <= 300; i++) {
+        const t = i / 300;
+        const envelope = 0.12 + 0.88 * Math.exp(-0.5 * ((t - 0.62) / 0.12) ** 2) * (channel % 3 === 1 ? 0.5 : 1);
+        const value = (random() + random() + random() - 1.5) * envelope * 26;
+        path += `${i ? 'L' : 'M'}${i * 2} ${(20 + channel * 40 - value).toFixed(1)}`;
+    }
+    return path;
+});
+---
+
+<section id="playground" style="margin-top: 100px; background: var(--mg-console-bg); border-top: 1px solid color-mix(in srgb, var(--mg-home-hairline) 45%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--mg-home-hairline) 45%, transparent)">
+  <div class="pad-x" style="max-width: 1360px; margin: 0 auto; padding: 110px 40px">
+    <div style="display: flex; align-items: center; gap: 16px; font: 500 12px/1 var(--mg-font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent)"><span>07 · Playground</span><span style="flex: 1 1 auto; border-top: 1px solid color-mix(in srgb, var(--mg-home-hairline) 60%, transparent)"></span></div>
+    <div style="display: flex; flex-wrap: wrap; gap: 24px 64px; align-items: flex-end; margin-top: 26px">
+      <h2 class="h2" style="flex: 1 1 520px; margin: 0; font-family: var(--mg-font-display); font-weight: 400; font-size: 56px; line-height: 1.04">The real app, running in this tab.</h2>
+      <p style="flex: 1 1 380px; margin: 0; font-size: 17px; line-height: 1.6; color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent)">Pick a gesture, record a few seconds, train an LDA and watch the prediction flip. No install and no Python on your machine.</p>
+    </div>
+    <div style="margin-top: 44px; background: var(--mg-canvas); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 60%, transparent); border-radius: 12px; overflow: hidden">
+      <div style="height: 44px; display: flex; align-items: center; gap: 14px; padding: 0 14px; background: var(--mg-raised); border-bottom: 1px solid color-mix(in srgb, var(--mg-home-black) 50%, transparent)">
+        <span aria-hidden="true" style="display: flex; gap: 7px"><span style="width: 11px; height: 11px; border-radius: 50%; background: var(--mg-home-window-dot)"></span><span style="width: 11px; height: 11px; border-radius: 50%; background: var(--mg-home-window-dot)"></span><span style="width: 11px; height: 11px; border-radius: 50%; background: var(--mg-home-window-dot)"></span></span>
+        <span style="flex: 1 1 auto; max-width: 520px; height: 28px; display: flex; align-items: center; padding: 0 12px; border-radius: 6px; background: var(--mg-canvas); font: 400 12px/1 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent); overflow: hidden; white-space: nowrap">nsquaredlab.github.io/MyoGestic/playground</span>
+      </div>
+      <div style="position: relative; display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; min-height: 460px">
+        <div style="flex: 1 1 240px; min-width: 0; max-width: 300px; display: flex; flex-direction: column; gap: 10px">
+          <div style="background: var(--mg-card); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent); border-radius: 8px; padding: 12px">
+            <div style="font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 60%, transparent)">Recording</div>
+            <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; font-size: 12.5px">
+              <span style="height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: var(--mg-home-control)">Rest</span>
+              <span style="height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: color-mix(in srgb, var(--mg-selected-line) 28%, transparent); box-shadow: inset 0 -2px 0 var(--mg-selected-line)">Fist</span>
+              <span style="height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: var(--mg-home-control)">Pinch</span>
+              <span style="height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: var(--mg-home-control)">Index</span>
+            </div>
+          </div>
+          <div style="background: var(--mg-card); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent); border-radius: 8px; padding: 12px">
+            <div style="font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 60%, transparent)">Model</div>
+            <div style="margin-top: 10px; height: 32px; display: flex; align-items: center; padding: 0 10px; border-radius: 6px; background: color-mix(in srgb, var(--mg-success) 14%, transparent); font-size: 12.5px">Trained · LDA</div>
+          </div>
+          <div style="flex: 1 1 auto; background: var(--mg-card); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent); border-radius: 8px; padding: 12px">
+            <div style="font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 60%, transparent)">Prediction</div>
+            <div style="margin-top: 6px; font-family: var(--mg-font-display); font-size: 64px; line-height: 1">Fist</div>
+          </div>
+        </div>
+        <div style="flex: 999 1 360px; min-width: 0; background: var(--mg-card); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent); border-radius: 8px; padding: 12px; min-height: 360px">
+          <svg viewBox="0 0 600 320" preserveAspectRatio="none" style="width: 100%; height: 100%; display: block" aria-hidden="true">
+            {traces.map((d, index) => <path d={d} style={`stroke: var(--mg-palette-${index})`} fill="none" stroke-width="1.1" vector-effect="non-scaling-stroke" />)}
+          </svg>
+        </div>
+        <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--mg-field-bg) 55%, transparent)">
+          <a href={`${base}playground/`} style="display: inline-flex; align-items: center; gap: 12px; height: 56px; padding: 0 28px; background: var(--mg-primary-fill); color: var(--mg-text); border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"></path></svg>
+            Launch the Playground
+          </a>
+        </div>
+      </div>
+    </div>
+    <p style="margin: 14px 0 0; font: 400 12px/1.6 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 55%, transparent)">Pyodide + imgui-bundle WASM + scikit-learn · about 30 s on first load, cached after</p>
+  </div>
+</section>

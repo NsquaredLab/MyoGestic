@@ -1,5 +1,6 @@
-# Core API
-
+---
+title: "Core API"
+---
 ## App lifecycle
 
 ::: myogestic.App

@@ -1,5 +1,6 @@
-# Your first remote target
-
+---
+title: "Your first remote target"
+---
 !!! danger "Most devices do not need this page"
     This builds a **separate program** that MyoGestic reaches over gRPC and LSL. You need it
     only if your device already is its own program — a game, a simulator, something in another
@@ -150,12 +151,7 @@ class Antique(Rig):
 
 
 if __name__ == "__main__":
-    # `--rest-after 1.0` arms the liveness policy in stage 5; without it the rig holds its
-    # last commanded value for ever, which is the default and the other valid choice.
-    rest_after = None
-    if "--rest-after" in sys.argv:
-        rest_after = float(sys.argv[sys.argv.index("--rest-after") + 1])
-    rig = Antique() if "--antique" in sys.argv else Rig(rest_after_s=rest_after)
+    rig = Antique() if "--antique" in sys.argv else Rig()
     print(f"{type(rig).__name__} on 127.0.0.1:50051 — Ctrl-C to stop")
     rig.serve()
     try:
@@ -686,7 +682,8 @@ rig: rig.gripper.closure is published 9 channels wide; this contract is one chan
 ```
 
 Once per resolve sweep, for as long as the bad producer is up. Loud, on purpose. The same
-script with `n_channels=1` and *two* outlets under one name gets you the other refusal:
+script with `n_channels=1`, one-element samples, and *two* outlets under one
+name gets you the other refusal:
 
 ```
 rig: rig.gripper.closure is published by 2 outlets at once. One address, one producer — not opening any of them.
@@ -804,14 +801,32 @@ sample is accepted (`_apply` already does, in `self._fresh`) and add an optional
                             self.pose[address] = REST
 ```
 
+Replace the `rig = ...` line in `my_target.py`'s main block with the flag parser:
+
+```python
+    rest_after = None
+    if "--rest-after" in sys.argv:
+        rest_after = float(sys.argv[sys.argv.index("--rest-after") + 1])
+    rig = Antique() if "--antique" in sys.argv else Rig(rest_after_s=rest_after)
+```
+
+Add `import os` to `drive.py` and print its Python PID before `link.ensure()`:
+
+```python
+    print(f"producer PID: {os.getpid()}", flush=True)
+```
+
 Restart the rig with the policy armed, then kill the producer mid-grip:
 
 ```bash
 uv run --extra grpc python my_target.py --rest-after 1.0    # terminal 1
-uv run --extra grpc python drive.py                          # terminal 2, then Ctrl-C it
+uv run --extra grpc python drive.py                          # terminal 2
+kill -KILL <PID>                                              # terminal 3; use the printed Python PID
 ```
 
-The rig lets go on its own about a second later:
+Unlike Ctrl-C, `SIGKILL` skips the producer's `finally` block, so this tests
+the rig's timeout rather than orderly rest delivery. With both inlets connected,
+the rig lets go about a second after the last accepted samples:
 
 ```
 rig: gripper.closure=+1.00  wrist.pronation=-1.00
@@ -998,7 +1013,8 @@ True
 False
 ```
 
-and on the target, **four** lines, in this order, every run:
+and, with successful RPC delivery, the target normally prints these four
+command lines in this order (alongside its status lines):
 
 ```
 rig: mode -> rest
@@ -1011,9 +1027,9 @@ The middle two are your `select` calls. The first is the push loop: `mode` is ab
 you push, so it settles on its declared rest and is delivered once, as an edge. The last is
 `link.stop()` delivering the neutral frame.
 
-`select()` returns `True` once the state is one this DOF declares and a frame is queued. It is
-fire-and-forget on a worker thread, so it never blocks the predict thread and never raises;
-whether the rig *applied* it is a fact on the target's side, which is why the target prints
+`select()` returns `True` for a valid state after handing the frame to the target. For
+`RemoteTarget`, the gRPC command is queued on its client and sent on a worker
+thread. Whether the rig *applied* it is a fact on the target's side, which is why the target prints
 what it applied. `banana` never reaches the wire: the bus checks it against your declared
 states and drops it locally. Delivery timing is not guaranteed — see
 [Design notes](../how-to/drive-a-remote-target.md#design-notes).
@@ -1289,6 +1305,7 @@ button handlers. The wiring above them is the same.
 ```python
 """drive.py — the MyoGestic side."""
 
+import os
 import time
 import tomllib
 
@@ -1308,6 +1325,7 @@ with open("my-rig.toml", "rb") as handle:  # "rb" — tomllib requires binary
 link = ControlLink(control_map, [RemoteTarget(client=client, interface=rig)], hz=32)
 
 try:
+    print(f"producer PID: {os.getpid()}", flush=True)
     bus = link.ensure()
     print(bus)
     if bus is not None:
@@ -1331,7 +1349,7 @@ The whole contract, plus the four things running one asks for that no client can
 
 The shortest possible version of all of it is
 [`examples/synthetic/reference_target.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/reference_target.py):
-eighty lines, six addresses, no discrete controls, hold-last and nothing else. Read it now
+six addresses, no discrete controls, hold-last and a minimal inlet reader. Read it now
 that you know why each part is there, and what each part it leaves out would have cost.
 
 ## See also

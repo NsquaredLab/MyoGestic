@@ -1,5 +1,6 @@
-# Feature-extraction cookbook
-
+---
+title: "Feature-extraction cookbook"
+---
 The framework deliberately ships nothing inside [`@pipeline.extract`][myogestic.ml.Pipeline.extract] - DSP and feature engineering belong to user code. Bringing your own scipy / MyoVerse / numpy is the design intent.
 
 That said, almost every EMG project starts with the same five or six features. This page is a copy-paste cookbook so you can drop them in and iterate.
@@ -48,7 +49,7 @@ def extract(windows):
 
 ## 2. scipy bandpass + envelope
 
-Classic EMG pipeline: notch out mains hum, bandpass to the EMG band, rectify, low-pass envelope.
+Bandpass to the EMG band, rectify, then low-pass the envelope. Add a notch if needed.
 
 ```python
 import numpy as np
@@ -70,7 +71,7 @@ def extract(windows):
 
 The 20-450 Hz band is the standard EMG range; 6 Hz is the standard envelope cutoff for slow gesture control. Add a `iirnotch` at 50/60 Hz if you have mains hum.
 
-`scipy.signal` is already a transitive dep through other libraries; if not, `uv pip install scipy`.
+`scipy` is a direct MyoGestic dependency; no extra install is needed.
 
 ## 3. Spectral features (numpy.fft)
 
@@ -152,7 +153,7 @@ def extract(windows):
     return np.array([n_active], dtype=np.float32)
 ```
 
-Returns a single int per tick (number of channels above onset threshold). Combine with another feature set or use as a gate.
+Returns a one-element `float32` array per tick (number of channels above onset threshold). Combine with another feature set or use as a gate.
 
 ## 6. Multi-stream concatenation
 
@@ -184,6 +185,6 @@ The `windows` dict is keyed by stream name. Add a second `app.streams(Stream("im
 | Cheap on/off gate before prediction | Onset detection (#5) |
 | Sensor fusion | Multi-stream (#6) |
 
-`extract()` is called twice per project: once from inside `train()` over recorded windows, and once per tick on the predict thread. Whichever feature set you pick, **the return shape must be stable** - same dimensionality every call - or your model will see a shape mismatch live.
+The pipeline calls `extract()` on each predict tick with available input. Your `train()` callback must apply the same feature code to recorded windows; it is not called automatically during training. Whichever feature set you pick, **the return shape must be stable** - same dimensionality every call - or your model will see a shape mismatch live.
 
 See also: [Add a custom model](add-a-model.md), [Pipeline concept page](../concepts/pipeline.md), [EMG classification tutorial](../tutorials/emg-classification.md).

@@ -1,5 +1,6 @@
-# Track a force target
-
+---
+title: "Track a force target"
+---
 Isometric force tracking: the subject holds a joint still against a transducer and
 squeezes to match a trapezoid drawn on screen — rest, ramp up, hold, ramp down,
 recover. It is the standard HD-EMG protocol for motor-unit work, because a slow
@@ -8,7 +9,7 @@ rates readable, and it is the task OT Bioelettronica's own acquisition software
 provides. `TrackingTask` is that task inside your app, against whichever amplifier
 the [device picker](pick-a-device.md) is holding.
 
-`examples/panels/tracking_task.py` runs the whole loop against a synthetic sine if
+`examples/panels/tracking_task.py` runs the whole loop against a synthetic force channel if
 you want to see it before wiring a load cell. This is the real version:
 
 ```python
@@ -166,12 +167,17 @@ from myogestic.sources import SyntheticForceSource, TargetSource
 
 target = TargetSource()  # bare: `TrackingTask` owns the shape
 force = SyntheticForceSource()  # 0.30 V at rest, 2.30 V at full effort
-app.streams(Stream("force", source=force), Stream("target", source=target))
+app.streams(
+    Stream("force", source=force, window_ms=200),
+    Stream("target", source=target, window_ms=200),
+)
+for name in ("force", "target"):
+    app.ctx.streams[name].reconnect()
 ```
 
-`SyntheticSource` cannot stand in for this. Its channels are fixed sine waves —
-no resting level to zero, no peak to calibrate against, nothing that responds to
-a target.
+`SyntheticSource` generates oscillating signals: sine by default, or stochastic
+signals with `waveform="emg"`. Use `SyntheticForceSource` here for a steady resting
+offset and a force level that responds to `effort`.
 
 Two details it gets deliberately right, so a rehearsal behaves like the real
 thing rather than flattering you:

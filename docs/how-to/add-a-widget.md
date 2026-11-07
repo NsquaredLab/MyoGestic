@@ -1,5 +1,6 @@
-# Add a custom widget
-
+---
+title: "Add a custom widget"
+---
 A widget is a class with a `.ui()` method. You construct it once, then call `.ui(...)` inside `@app.ui` each frame. There's no list to register with, no base class to subclass, no decorator.
 
 ## The simplest widget
@@ -142,7 +143,7 @@ Read scalar fields directly. If you need a coherent snapshot of multiple fields 
 See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
 
 - **Constructing the widget inside `@app.ui`.** `MyWidget().ui(ctx)` in the frame loop rebuilds it every frame and resets its state. Build it once, outside the render function.
-- **Capturing `ctx` or a `Stream` in `__init__`.** `ctx.streams` is populated (and mutated on reconnect) after construction, so re-read `ctx.streams.get(name)` fresh each frame in `.ui(ctx)` instead of holding a `Stream`.
+- **Holding a removed `Stream`.** Apps can add or remove streams while running. Re-read `ctx.streams.get(name)` each frame in `.ui(ctx)` if your widget must follow those changes.
 - **Computing in the widget.** Heavy compute (FFT, convolution, model evaluation) belongs on the predict thread. Cache results on `ctx` or your own object; `.ui()` just reads the cached value.
 - **Calling `imgui.set_next_window_size(...)` inside a `Grid` cell.** The grid manages sizes; per-window calls fight it. If you need a non-grid window, render outside the grid and use `popout_panel` or `imgui.begin/end` directly.
 - **Using mutable defaults in the constructor.** Standard Python pitfall: `def __init__(self, names=[])` shares the default list across instances. Use `names: list[str] | None = None` and `if names is None: names = []` inside.

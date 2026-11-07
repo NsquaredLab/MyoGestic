@@ -929,7 +929,12 @@ class DevicePicker:
             finally:
                 self._scanning = False
 
-        threading.Thread(target=run, daemon=True).start()
+        from myogestic._browser import IS_BROWSER
+
+        if IS_BROWSER:
+            run()
+        else:
+            threading.Thread(target=run, daemon=True).start()
 
     def _live_ui(self, stream: Stream, dev: DeviceSpec, among: Sequence[str]) -> None:
         """Sliders that retune the running source, with no reconnect.
@@ -1078,6 +1083,8 @@ class DevicePicker:
 
         Off-thread because ``accept_timeout`` on the OTB sources defaults to
         30 s: a device that never dials in would otherwise freeze the app.
+        Browser apps must offer non-blocking in-process sources; those run
+        inline because Pyodide cannot start a worker thread.
         """
         if self._connecting:
             # The button reads Abort while an attempt is in flight, so the UI
@@ -1133,7 +1140,13 @@ class DevicePicker:
                 if generation == state.connect_gen:
                     state.connecting = False
 
-        threading.Thread(target=run, daemon=True).start()
+        from myogestic._browser import IS_BROWSER
+
+        if IS_BROWSER:
+            # Browser apps offer in-process sources whose connect is immediate.
+            run()
+        else:
+            threading.Thread(target=run, daemon=True).start()
 
     # --- status -------------------------------------------------------------
     def _state(self, stream: Stream | None) -> tuple[imgui.ImVec4, str]:

@@ -142,3 +142,25 @@ def test_direction_is_live():
     source.direction = 1.0
     first, second = _half_rms(np.concatenate([source.read()[0] for _ in range(_CHUNKS)]))
     assert second > 1.5 * first
+
+
+def test_browser_read_catches_up_after_a_slow_frame(monkeypatch):
+    """In a browser one read per frame must still deliver `fs` samples per second."""
+    import mne_lsl.lsl
+
+    from myogestic.sources import SyntheticSource
+
+    monkeypatch.setattr("myogestic._browser.IS_BROWSER", True)
+    clock = [100.0]
+    monkeypatch.setattr(mne_lsl.lsl, "local_clock", lambda: clock[0])
+    src = SyntheticSource(n_channels=2, fs=1024.0)
+    src.connect()
+    assert src.read() == (None, None)  # nothing due yet
+    clock[0] += 0.5  # one slow frame
+    data, ts = src.read()
+    assert data.shape == (512, 2)  # every due chunk, not just one
+    assert np.all(np.diff(ts) > 0) and ts[-1] <= clock[0]
+    clock[0] += 30.0  # a hidden tab: catch up at most one second, keep the clock
+    data, ts = src.read()
+    assert data.shape == (1024, 2)
+    assert abs(ts[-1] - clock[0]) < 64 / 1024

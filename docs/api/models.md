@@ -1,5 +1,6 @@
-# Estimator recipes
-
+---
+title: "Estimator recipes"
+---
 `myogestic.recipes.estimators` ships **constructor recipes** for third-party estimators - thin wrappers that return a fitted-or-fittable object (`.fit(X, y)` + `.predict(X)`) with sane defaults. The library never owns the model lifecycle; that stays in your `@pipeline.train`. Optional dependencies are imported lazily, and each constructor raises a clear `ImportError` naming the extra to install.
 
 To persist a trained model, use `myogestic.ml.save_pickle` / `load_pickle` (see the [ML API](ml.md)).

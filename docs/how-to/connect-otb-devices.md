@@ -1,5 +1,6 @@
-# Connect OT Bioelettronica devices
-
+---
+title: "Connect OT Bioelettronica devices"
+---
 MyoGestic talks to OTB Muovi/Muovi+ and Quattrocento natively — no Qt, no
 external bridge. Each device is a `Source` you drop into a `Stream`.
 
@@ -14,6 +15,8 @@ The PC is the TCP **server**; the probe connects to it.
    from myogestic.sources.otb import MuoviSource
    stream = Stream("emg", source=MuoviSource(plus=False, emg=True, mode=0),
                    window_ms=1000)
+   if not stream.reconnect():
+       raise RuntimeError(stream.last_error)
    stream.start()
    ```
 
@@ -32,6 +35,8 @@ The PC is the TCP **server** on port 45454; the device connects in.
    from myogestic.sources.otb import SessantaquattroSource
    stream = Stream("emg", source=SessantaquattroSource(nch_mode=3, fs_mode=2),
                    window_ms=1000)
+   if not stream.reconnect():
+       raise RuntimeError(stream.last_error)
    stream.start()
    ```
 
@@ -63,11 +68,14 @@ The PC is the TCP **client** to the amplifier (default `169.254.1.10:23456`).
 Give the PC NIC a `169.254.x.x` address on that segment.
 
 ```python
+from myogestic import Stream
 from myogestic.sources.otb import QuattrocentoSource
 
 stream = Stream(
     "emg", source=QuattrocentoSource(fs_mode=1, nch_mode=1), window_ms=1000
-)  # 2048 Hz, 216 streamed ch
+)  # 2048 Hz, 192 biosignal channels (216 on the wire)
+if not stream.reconnect():
+    raise RuntimeError(stream.last_error)
 stream.start()
 ```
 

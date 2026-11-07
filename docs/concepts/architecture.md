@@ -1,49 +1,40 @@
-# Architecture
-
-MyoGestic is built around three orthogonal concerns: **acquisition** (sources feeding ring buffers), **decision** (the predict thread), and **rendering** (the main thread drawing widgets). **Actuation** is a fourth: a `Target` driving a device from a sanitised control frame. Outputs are the paced sender a target writes through, and are owned by user code.
+---
+title: "Architecture"
+---
+MyoGestic is built around three orthogonal concerns: **acquisition** (sources feeding ring buffers), **decision** (the predict thread), and **rendering** (the main thread drawing widgets). **Actuation** is a fourth: a `Target` driving a device from a sanitised control frame. Outputs are paced senders that a target may write through, or that user code owns directly.
 
 ```mermaid
 flowchart TB
-    subgraph SRC["Sources - one daemon acquisition thread each"]
-        direction LR
-        S1[LSLSource]
-        S2[ReplaySource]
-        S3[SerialSource]
-        S5[user Source]
-    end
+    SRC["Sources: LSLSource · ReplaySource · SerialSource · your Source<br/>one acquisition thread per Stream"]
 
-    SRC -->|sample-major chunks<br/>+ LSL clock timestamps| CTX
+    SRC -->|sample-major chunks<br/>+ LSL clock timestamps| BUF["Stream ring buffer<br/>(dvg-ringbuffer + Lock)"]
+    BUF -->|while a take is open| ZARR["Session → Zarr"]
+    BUF -->|get_window<br/>channels-first| PT
+    BUF -->|get_raw_snapshot_stable<br/>bounded tail| RT
 
-    subgraph CTX["Context (shared state)"]
-        direction TB
-        CS["streams: dict[str, Stream]<br/>(dvg-ringbuffer + Lock)"]
-        ST["state: 'idle' | 'recording'<br/>'training' | 'predicting'"]
-        SE["session: Session | None"]
-    end
-
-    CTX -->|get_window<br/>channels-first| PT
-    CTX -->|get_display<br/>min/max envelope| RT
-
-    subgraph THREADS["Threads consuming the buffer"]
+    subgraph THREADS["Consumers"]
         direction LR
         PT["Predict thread @ predict_hz<br/>extract → predict<br/>writes pipeline.predictions"]
         RT["Render thread (main)<br/>Dear ImGui + ImPlot<br/>draws widgets"]
-        OUT["Output threads<br/>one LSLOutlet per driven control<br/>each @ its own hz"]
+        OUT["Output threads<br/>latest value @ each outlet's hz"]
     end
 
-    PT -.->|push| OUT
+    PT -->|pipeline.predictions| RT
+    PT -.->|outlet.push| OUT
 ```
+
+
 
 ## Data flow
 
 A typical tick of the system:
 
-1. **Acquisition thread** for stream `"emg"` reads a chunk from `LSLSource`, appends to the ring buffer, and (if `ctx.session` is non-`None`) appends to the active Zarr array. It never copies the growing history.
+1. **Acquisition thread** for stream `"emg"` reads a chunk from `LSLSource`, appends to the ring buffer, and (while a session is attached to that stream) appends to its Zarr array. `ctx.session` also holds the most recent stopped take, so it is not the recording flag. It never copies the growing history.
 2. **Predict thread**, once per `1/predict_hz`, pulls a window via `Stream.get_window()` (channels-first), forwards it to `@pipeline.extract`, then to `@pipeline.predict(model, features)`. The returned `dict[str, Any]` is stored in `pipeline.predictions`.
 3. **Render thread** (main) draws widgets from `ctx`. `SignalViewer` asks for only its visible tail and builds a plot-width-sized min/max envelope. The pose-output filter (`PostProcessor`) renders its panel.
 4. **Output thread** for `LSLOutlet` reads its atomic latest-value slot every `1/hz` and sends it — every tick, changed or not. Latest-wins, never queued.
 
-Every box runs on its own daemon thread. The shared `Context` is the only synchronisation surface.
+On desktop, acquisition, prediction and output loops use daemon threads; rendering stays on the main thread. `Context`, `Pipeline` and the stream buffers hold shared state, with locks around buffer and session access. In the browser playground, acquisition and prediction run as scheduled steps on the GUI frame loop.
 
 ## Module map
 
@@ -57,7 +48,7 @@ Every box runs on its own daemon thread. The shared `Context` is the only synchr
 | [`myogestic.session`](../api/session.md) | Recording, label tracks, `.mg.zip`, window iterators |
 | [`myogestic.ml`](../api/ml.md) | `Pipeline`, train/predict lifecycle, ML widgets |
 | [`myogestic.recipes`](../api/models.md) | CatBoost / scikit-learn constructor recipes |
-| [`myogestic.widgets`](../api/widgets.md) | Stateless ImGui function widgets |
+| [`myogestic.widgets`](../api/widgets.md) | Construct-once ImGui widget classes and rendering helpers |
 | [`myogestic.outputs.filters`](../api/filters.md) | OneEuro / Gaussian / Identity output smoothers |
 | `myogestic.bridges` | Subprocess pattern for heavy-data sources (webcam, ultrasound) |
 
@@ -71,7 +62,7 @@ from myogestic.sources import LSLSource, ReplaySource
 from myogestic.outputs import LSLOutlet
 from myogestic.ml import Pipeline
 from myogestic.session import open_session_store, iter_labeled_windows
-from myogestic.widgets import signal_viewer, recording_controls, session_manager
+from myogestic.widgets import SignalViewer, RecordingControls, SessionManager
 ```
 
 See [Public API cheatsheet](../reference/api-cheatsheet.md) for the full surface.

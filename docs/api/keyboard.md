@@ -1,5 +1,6 @@
-# Keyboard
-
+---
+title: "Keyboard"
+---
 Press keys when a control is active. The second target this library ships, and the proof
 that the [control standard](controls.md) reaches past a hand.
 
