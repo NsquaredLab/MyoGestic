@@ -284,6 +284,19 @@ test('install and BibTeX buttons copy their exact content and announce success',
     await expect(page.locator('[data-cite-status]')).toHaveText('Copied');
 });
 
+test('protocol cards copy their exact run command and link to real guides', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto(home);
+    const button = page.getByRole('button', { name: 'Copy the myocontrol.py command' });
+    await button.click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+        .toBe('uv run --extra examples --extra grpc python examples/start_here/myocontrol.py');
+    await expect(button).toHaveText('Copied');
+    await expect(page.getByRole('link', { name: 'Read the guide →' })).toHaveCount(3);
+    await expect(page.getByRole('link', { name: 'Quattrocento', exact: true }))
+        .toHaveAttribute('href', '/MyoGestic/how-to/connect-otb-devices/#quattrocento-ethernet');
+});
+
 test('search shortcut follows the documented docs fallback', async ({ page }) => {
     await page.route('https://context7.com/widget.js', route => route.abort());
     await page.goto(home);
