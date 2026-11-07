@@ -15,9 +15,10 @@ myogestic-install-vhi
 ```
 
 That pulls the latest release for your OS/arch, checks the download against
-GitHub's per-asset SHA-256 when available, unpacks it atomically into the
-location `virtual_hand()` searches, and prints a success summary. If the
-digest is unavailable, it warns and continues without an integrity check.
+GitHub's per-asset SHA-256 when available, prepares it beside the location
+`virtual_hand()` searches, then puts it in place with directory renames and
+prints a success summary. If the digest is unavailable, it warns and continues
+without an integrity check.
 
 !!! warning "MyoGestic 2.x needs VHI 2.0 or newer"
     MyoGestic drives VHI over the v2 control contract: it asks VHI which
@@ -88,8 +89,9 @@ The installer requests the SHA-256 digest from the GitHub release API
 *before* downloading. A missing digest or failed API request does not stop
 the download; a digest mismatch refuses the install before unpacking.
 
-`--no-verify` is available but the warning is loud on purpose - use it
-only for ad-hoc local builds where no digest exists.
+`--no-verify` skips both the digest lookup and the SHA-256 check. It prints
+a loud warning to stderr before downloading: the archive will not be
+integrity-checked. Use it only for ad-hoc local builds where no digest exists.
 
 ## macOS Gatekeeper
 
@@ -143,6 +145,19 @@ uv run python -m myogestic.tools.install_vhi --tag v2.1.0 --force
 
 `--force` is required when the destination is non-empty. Without it,
 the installer refuses rather than clobbering an unrelated directory.
+
+The installer downloads and prepares the replacement in a temporary directory
+beside the destination, on the same filesystem. Unpacking, validation, executable
+permissions, the version marker and macOS quarantine removal all finish before
+the current install is touched. It then renames the current install aside and
+renames the prepared directory into place; there is a brief gap between those
+two renames, so close VHI before upgrading.
+
+If the replacement rename fails, the installer renames the previous install
+back. If that restoration also fails, it keeps the previous install in its
+backup directory and prints the path to stderr. It never copies a partially
+prepared replacement into the destination. After a successful swap, failure to
+remove the temporary directory prints a warning and leaves the new install usable.
 
 ## Uninstall
 
