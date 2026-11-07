@@ -45,7 +45,7 @@ data/
 └── P-001/
     ├── recordings/   P-001_20261106-1412_R+F.mg.zip
     ├── predictions/  P-001_20261106-1430_guided.mg.zip
-    └── models/       P-001_20261106-1425_tuple.joblib
+    └── models/       P-001_20261106-1425_catboost.joblib
 ```
 
 ## Write your own
