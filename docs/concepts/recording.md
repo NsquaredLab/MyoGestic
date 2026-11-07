@@ -1,7 +1,8 @@
 ---
 title: "Recording"
 ---
-Streams always flow. **Recording is just "start appending to Zarr."** Labels are a separate timestamped event track, not interleaved with the signal - that keeps the signal arrays cheap to slice and the labels cheap to scan.
+Streams flow continuously. Recording appends samples to Zarr. Labels form a separate timestamped event track. They are never interleaved with signal
+samples, so signals and labels can be read independently. This keeps signal arrays cheap to slice and labels cheap to scan.
 
 ## Mental model
 
@@ -27,7 +28,7 @@ stateDiagram-v2
 
 Acquisition threads append each chunk while their stream has an attached session. Stop detaches the streams, freezes event buffers, then finalizes metadata and the archive on a daemon thread.
 
-`ctx.recording` is the truth of "a take is open". It is independent of `ctx.state`: from `idle`, Record moves the state to `recording`; while a `Pipeline` is `predicting`, Record leaves the state alone and sets the flag. `RECORDABLE_STATES` in `myogestic.core` lists the states a take may start from — core registers `idle`, `myogestic.ml` registers `predicting`. `ctx.session` stays set after a stop so the signal viewer can keep drawing the last take's label markers; do not use it as the flag.
+`ctx.recording` indicates whether a take is open, independently of `ctx.state`. From `idle`, Record moves the state to `recording`; while a `Pipeline` is `predicting`, Record leaves the state alone and sets the flag. `RECORDABLE_STATES` in `myogestic.core` lists the states a take may start from. Core registers `idle`, `myogestic.ml` registers `predicting`. `ctx.session` stays set after a stop so the signal viewer can keep drawing the last take's label markers; do not use it as the flag.
 
 ## On-disk layout
 
@@ -72,7 +73,7 @@ data/P-014/recordings/
 └── P-014_20260506-1846_R.mg.zip  # archive - contains the same internal layout
 ```
 
-The source folder is removed after a successful pack; if packing fails, it is kept. Saved folders and archives are both loadable via [`open_session_store(path)`][myogestic.session.open_session_store] - readers don't need to know which they got.
+The source folder is removed after a successful pack; if packing fails, it is kept. Saved folders and archives are both loadable via [`open_session_store(path)`][myogestic.session.open_session_store]. Readers need no format-specific branch.
 
 ## Notifications
 
@@ -91,16 +92,16 @@ assert ctx.logs[-1].endswith("Recording saved — a.mg.zip")
 
 `success` and `info` last 6 seconds, `warning` lasts 10 seconds, and `danger` stays until
 dismissed. Hovering the overlay pauses expiry. At most the newest three toasts appear;
-older events remain in the log. Click a toast's **×** to dismiss it. An unknown `kind`
+older events remain in the log. Click a toast's × to dismiss it. An unknown `kind`
 raises `ValueError`.
 
-Stopping a recording reports **Recording saved** with the archive's filename after packing
-succeeds. If packing fails, **Recording not packed** shows the error and confirms that
+Stopping a recording reports Recording saved with the archive's filename after packing
+succeeds. If packing fails, Recording not packed shows the error and confirms that
 the session folder was kept.
 
 ## Labels
 
-`LabelEvent` is a tiny dataclass:
+`LabelEvent` stores a timestamp and class index.
 
 ```python
 @dataclass
@@ -109,7 +110,7 @@ class LabelEvent:
     class_index: int  # -1 = unlabeled (terminator)
 ```
 
-The label track is a list of these events, persisted to `labels.json` on stop. Each consecutive pair `(events[i], events[i+1])` defines one **trial** - every sample in between is labelled `class_index`. An optional `-1` event marks an unlabeled boundary. Without a closing event, the last trial extends to the end of the recorded samples.
+The label track is a list of these events, persisted to `labels.json` on stop. Each consecutive pair `(events[i], events[i+1])` defines one trial. Every sample in between is labelled `class_index`. An optional `-1` event marks an unlabeled boundary. Without a closing event, the last trial extends to the end of the recorded samples.
 
 [`RecordingControls`][myogestic.widgets.RecordingControls] writes labels when the user clicks a button:
 
@@ -123,15 +124,15 @@ rec_controls = RecordingControls(
 rec_controls.ui(ctx)
 ```
 
-`on_gesture` is yours - typically you forward to a control LSL stream (so a synthetic generator can change pattern), or a robot, or just log it. The label itself is added by `RecordingControls` itself before calling your callback.
+Use `on_gesture` to change a synthetic generator's pattern through a control LSL stream, command a robot or log the gesture. `RecordingControls` adds the label before calling your callback.
 
 ## Event streams
 
-A sampled stream has a clock; an event stream has one row per *thing that happened*. `Session.append_event(name, values, timestamp, channel_names=..., fs=...)` declares such a stream on first use and appends one float32 row to it. On disk it is the same `<name>.zarr` / `<name>_timestamps.zarr` pair as any stream, so every reader — `open_session_store`, `ReplaySource`, the window iterators — sees it unchanged. `meta.json` lists these names under `event_streams`, and their `fs` is *nominal* (the producer's tick rate) so `ReplaySource` can pace them; the timestamps are the truth.
+A sampled stream has a clock; an event stream has one row per *thing that happened*. `Session.append_event(name, values, timestamp, channel_names=..., fs=...)` declares such a stream on first use and appends one float32 row to it. On disk it is the same `<name>.zarr` / `<name>_timestamps.zarr` pair as any stream, so `open_session_store`, `ReplaySource` and the window iterators can read it. `meta.json` lists these names under `event_streams`, and their nominal `fs` is the producer's tick rate, used by `ReplaySource` for pacing. Timestamps are authoritative for event times; nominal `fs` is only for replay pacing.
 
-Rows are buffered in memory and written 1024 at a time or once a second, whichever comes first, because a single-row zarr append rewrites the partial chunk (about 1.5 ms each on zarr 3.2). `Session.freeze()` flushes every buffer and closes the session to new rows and new streams; `App.stop_recording` calls it before finalization metadata and the archive are written.
+Rows are buffered in memory and written 1024 at a time or once a second, whichever comes first, because a single-row zarr append rewrites the partial chunk, taking about 1.5 ms each on zarr 3.2. `Session.freeze()` flushes every buffer and closes the session to new rows and new streams; `App.stop_recording` calls it before finalization metadata and the archive are written.
 
-Rows are float32 by default; a value that is itself a clock — an LSL timestamp, `local_clock()` — loses milliseconds at float32 after a day of uptime, so pass `dtype=np.float64` for it (the pipeline does for `pipeline.tick`) or record an offset instead.
+Rows are float32 by default; clock values such as LSL timestamps from `local_clock()` lose milliseconds at float32 after a day of uptime. Pass `dtype=np.float64`, as the pipeline does for `pipeline.tick`, or record an offset.
 
 With a take open, two producers write event streams for you:
 
@@ -139,15 +140,15 @@ With a take open, two producers write event streams for you:
 |---|---|---|---|
 | `features` or `features.<key>` | `Pipeline`, what `@pipeline.extract` returned | predict tick | newest sample the tick consumed |
 | `prediction.<key>` | `Pipeline`, what `@pipeline.predict` returned | predict tick | same |
-| `pipeline.tick` | `Pipeline`, the LSL `local_clock()` at the decision | predict tick | same — so `tick − timestamp` is the latency |
+| `pipeline.tick` | `Pipeline`, the LSL `local_clock()` at the decision | predict tick | same; `tick − timestamp` is the latency |
 | `controls` | `ControlBus`, the continuous frame it delivered, DOF names as channels | `push` | delivery clock |
 | `controls.<name>` | A second bus with `record_as="controls.<name>"`; its map is saved in `meta.control_spaces` | `push` | delivery clock |
 
-A dict becomes one stream per key. A value is recorded when it is a bool, a number, or a 1-D array; text, `None`, nested dicts and anything 2-D or wider are skipped — once, with a log line, and listed under `extras.pipeline.skipped` in `meta.json`. A raw window returned by `extract` is the recorded stream already; a CNN history is rebuilt from consecutive frames.
+A dict becomes one stream per key. A value is recorded when it is a bool, a number, or a 1-D array; text, `None`, nested dicts and anything 2-D or wider are skipped, logged once, and listed under `extras.pipeline.skipped` in `meta.json`. A raw window returned by `extract` is the recorded stream already; a CNN history is rebuilt from consecutive frames.
 
 For a take that recorded pipeline ticks, `extras.pipeline` identifies it as a Drive run. Takes shows a Drive tag and leaves it unticked for training; the operator can still tick it. Continue → Train selects ordinary takes and skips Drive runs.
 
-On stop, `App.finalize_hooks` run on the finalize thread before `meta.json` is updated with `finished: true`. The pipeline's hook saves the running model as `model.joblib` beside the arrays (when `pipeline.save_model` is set) and writes `extras.pipeline` with the model type, its `report` if it has one, the event streams, and the skip list.
+On stop, `App.finalize_hooks` run on the finalize thread before `meta.json` is updated with `finished: true`. The pipeline's hook saves the running model as `model.joblib` beside the arrays when `pipeline.save_model` is set. It writes `extras.pipeline` with the model type, its `report` if it has one, the event streams, and the skip list.
 
 ## Reading recordings
 
@@ -188,7 +189,7 @@ for window, ts, class_idx in iter_labeled_windows(
     y.append(class_idx)
 ```
 
-Yields one window per `hop_ms` step, dropping windows that straddle a label boundary so each window has exactly one class. The three-tuple is `(window, ts, class_index)` - `ts` is the matching 1-D timestamp array, in case you need per-sample times for downstream alignment.
+Yields one window per `hop_ms` step, dropping windows that straddle a label boundary so each window has exactly one class. The three-tuple is `(window, ts, class_index)`. `ts` is the matching 1-D timestamp array for per-sample alignment.
 
 ### Regression - [`iter_aligned_windows`][myogestic.session.iter_aligned_windows]
 
@@ -207,21 +208,21 @@ for window, aligned, ts in iter_aligned_windows(
     target_pose = aligned["vhi_control"]  # shape (n_channels,)
 ```
 
-Yields the primary window plus a target snapshot nearest its midpoint, averaging `n_alignment_samples` around that target index, per `aligned_stream_names` entry - handy when the ground truth is a continuous signal (kinematics, torque, joint angles).
+Yields the primary window plus a target snapshot nearest its midpoint, averaging `n_alignment_samples` around that target index, per `aligned_stream_names` entry. Use this for continuous targets such as kinematics, torque or joint angles.
 
 ## Backends
 
-Zarr is the storage layer. Two compression backends are supported transparently:
+Zarr is the storage layer. Two compression backends are supported.
 
-- **Pure-Python `zarr`** (default) - works everywhere.
-- **`zarrs`** (Rust codec via PyO3, optional via `uv sync --extra zarrs`) - drop-in faster compression for big sessions.
+- Pure-Python `zarr` is the default and works everywhere.
+- `zarrs` provides faster Rust compression through PyO3. Install it with `uv sync --extra zarrs`.
 
 On desktop Zarr 3, if `zarrs` is installed, its codec pipeline is selected on import; if not, recording falls back to plain `zarr` with no code change.
 
 ## Common mistakes
 
-See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
+See [Troubleshooting](../troubleshooting.md) for symptoms and fixes.
 
-- **`sess.class_names = [...]` after `save_meta`.** The class names persist only when passed as a kwarg to `save_meta(name, class_names=...)`, not when set as an attribute after the fact. (`RecordingControls` handles this for you when it calls `app.start_recording`.)
-- **Treating the label track as a stream.** It isn't - it's events. To iterate "rest periods" by time, slice with the labels and the timestamp arrays manually, or use `iter_labeled_windows`.
-- **Too little data.** `iter_labeled_windows` uses every nonnegative labeled segment long enough for a window; it does not skip the first trial. Record several sustained trials per class rather than relying on one short segment.
+- `sess.class_names = [...]` after `save_meta`. Pass class names to `save_meta(name, class_names=...)` to persist them. Setting the attribute after saving does not persist them. `RecordingControls` handles this through `app.start_recording`.
+- Treating the label track as a stream. Labels are events. To iterate "rest periods" by time, slice with the labels and the timestamp arrays manually, or use `iter_labeled_windows`.
+- Too little data. `iter_labeled_windows` uses every nonnegative labeled segment long enough for a window; it does not skip the first trial. Record several sustained trials per class. Do not rely on one short segment.

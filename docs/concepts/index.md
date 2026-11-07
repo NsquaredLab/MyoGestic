@@ -1,11 +1,8 @@
 ---
 title: "Concepts"
 ---
-Explanation of how MyoGestic fits together. Read these once to understand the runtime model; the [guides](../how-to/index.md) and [API reference](../api/index.md) become much easier afterwards.
-
-If you haven't yet, read **[Anatomy of an app](../anatomy.md)** first - it walks through one complete tiny app in the order you write it and builds the mental model these deep-dive pages assume.
-
-Drill in:
+Read [Anatomy of an app](../anatomy.md) first. It walks through a complete app in the order
+you write it and introduces the runtime model these pages assume. These pages explain its components. Use the [guides](../how-to/index.md) for tasks and the [API reference](../api/index.md) for symbols.
 
 - [Architecture](architecture.md) - the runtime: sources → streams → context → render / predict / output threads.
 - [Streams](streams.md) - the ring buffer, `get_window` vs `get_display`, channels-first convention.

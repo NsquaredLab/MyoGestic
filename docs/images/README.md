@@ -2,19 +2,15 @@
 title: "Docs screenshots"
 slug: images
 ---
-The docs site references PNGs from this folder. There are two capture
-flows: **widgets** (automated, one script) and **examples** (manual, full
-window).
+The docs site uses PNGs from this folder. Capture widgets automatically
+with one script and examples manually as full windows.
 
 ## Widgets - automated via `tools/widget_screenshot.py`
 
-For every entry in the script's registry, a minimal `App` is built with
-the widget (or Hello EMG pair), the window settles for about 3 s
-(7 s for the signal viewers), and the script
-self-captures via Quartz + `screencapture`, saves the PNG, and exits
-cleanly. This capture script requires macOS, screen-capture permission and
-the `dev` extra for Quartz. Re-run any time the widget look changes (theme, fonts, ImGui
-upgrade, new helper widget added).
+For each registry entry, the script builds a minimal `App` with the widget
+or Hello EMG pair. It waits about 3 s, or 7 s for signal viewers, then captures
+the window via Quartz + `screencapture`, saves the PNG and exits. This capture script requires macOS, screen-capture permission and
+the `dev` extra for Quartz. Re-run after changes to widget styling, themes, fonts or ImGui, and when adding widgets.
 
 ```bash
 uv run --extra dev python tools/widget_screenshot.py --all
@@ -23,7 +19,7 @@ uv run --extra dev python tools/widget_screenshot.py signal_viewer
 uv run --extra dev python tools/widget_screenshot.py hello_emg --out docs/images/hello-emg.png
 ```
 
-The current registry covers:
+The registry covers
 
 | File                                       | Shows                               |
 |--------------------------------------------|-------------------------------------|
@@ -46,22 +42,22 @@ The current registry covers:
 
 The session fixture creates three takes in `P-014/recordings/`, calls
 `SessionManager.select_all("P-014")`, then renders that participant. No Rescan click is
-needed, and the newest day opens with all three takes visible.
+needed. The newest day opens with all three takes visible.
 
 ## Examples - fullscreen, manual
 
 For the classification tutorial screenshot (`gui-overview.png`) and any
-future per-example shots, run the example **fullscreen** and capture the whole
-window. `App.run(fullscreen=True)` opens the window maximised to the
-monitor work area (keeps the menu bar / dock visible, fills the rest):
+future per-example shots, run the example fullscreen and capture the whole
+window. `App.run(fullscreen=True)` maximizes to the monitor work area,
+keeping the menu bar / dock visible.
 
 ```python
 # Add temporarily to the example's main() or pass through __main__:
 app.run(fullscreen=True)
 ```
 
-Then start the example, launch EMG Generator in **Connect**, connect
-**TestEMG1**, and optionally connect the Virtual Hand. Run a
+Then start the example, launch EMG Generator in Connect, connect
+TestEMG1, and optionally connect the Virtual Hand. Run a
 Record → Train → Predict cycle so the signal viewer and prediction card
 show non-empty state, and capture:
 
@@ -74,17 +70,18 @@ For scripted macOS capture, obtain the Quartz window ID as
 `_self_capture_after` does in `tools/widget_screenshot.py`; a process ID
 is not a window ID.
 
-Linux: `gnome-screenshot -w` (per-window) or `import` (ImageMagick).
+On Linux, capture one window with `gnome-screenshot -w` or use ImageMagick
+`import`.
 
 ## Style notes
 
-- Crop tightly - the site renders images full-width on phones; whitespace is wasted.
-- PNG, < 1 MB each. Use `pngquant` if needed: `pngquant --quality=70-90 *.png`.
+- Crop tightly for full-width display on phones.
+- PNG, < 1 MB each. Compress with `pngquant --quality=70-90 *.png`.
 - 16:10 is the safest aspect; the demo looks good at 1280×800. Fullscreen
-  captures land at native monitor resolution - downsize before commit if
-  you're on Retina (`sips -Z 1920 *.png`).
-- Light or dark theme is fine - the docs support both. Pick whichever
-  looks cleaner per screenshot; mixing is fine.
+  captures use native monitor resolution. Downsize Retina captures with
+  `sips -Z 1920 *.png` before committing.
+- Use light or dark themes, whichever looks clearer in each screenshot.
+  The docs support both. Mixing themes across screenshots is fine.
 
 ## Once captured
 

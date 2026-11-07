@@ -31,10 +31,10 @@ uv sync --extra examples --extra grpc
 uv run --extra examples --extra grpc python examples/start_here/myocontrol.py
 ```
 
-!!! info "No amplifier?"
-    In the **Connect** step, use the device picker to choose **Synthetic (no hardware)**, then press **Connect**. Set a participant ID before recording. The synthetic source uses sine waves by default; stochastic EMG is opt-in with `SyntheticSource(waveform="emg")`.
+!!! info "Synthetic amplifier"
+    In the Connect step, use the device picker to choose Synthetic (no hardware), then press Connect. Set a participant ID before recording. The synthetic source uses sine waves by default; stochastic EMG is opt-in with `SyntheticSource(waveform="emg")`.
 
-The [browser playground](playground/) follows **Connect → Record → Train → Predict** with a synthetic EMG source and an LDA classifier. Takes stay in the tab's temporary filesystem; reloading clears them.
+The [browser playground](playground/) follows Connect → Record → Train → Predict with a synthetic EMG source and an LDA classifier. Takes stay in the tab's temporary filesystem; reloading clears them.
 
 ## Where your takes go
 
@@ -50,7 +50,7 @@ data/
 
 ## Write your own
 
-This is the whole loop: a stream, a signal viewer and recording controls. Start an LSL outlet named `EMG`, then press **Connect** in the viewer to attach it.
+Create a stream with a signal viewer and recording controls. Start an LSL outlet named `EMG`, then press Connect in the viewer to attach it.
 
 <!--docs:skip-->
 ```python
@@ -80,14 +80,14 @@ app.run()
 
 - Next
 
-    [**Anatomy of an app**](anatomy.md)
+    [Anatomy of an app](anatomy.md)
 
 - Browse
 
-    [**Widget gallery**](widget-gallery.md)
+    [Widget gallery](widget-gallery.md)
 
 - Try
 
-    [**Playground**](playground/)
+    [Playground](playground/)
 
 </div>
