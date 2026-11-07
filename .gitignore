@@ -59,3 +59,6 @@ docs/playground/wheels/manifest.json
 
 # Agent plans and design specs: kept locally, never committed or published.
 docs/superpowers/
+
+# Agent scratch (screenshots, reports)
+.superpowers/
