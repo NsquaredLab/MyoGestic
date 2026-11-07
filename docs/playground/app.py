@@ -56,7 +56,8 @@ GESTURES = [(0.0, 0.0), (0.8, 0.0), (0.8, -1.0)]
 synthetic = DeviceSpec(
     "Synthetic amplifier",
     partial(
-        SyntheticSource, n_channels=8, fs=1024.0, noise=0.05, hum=0.0, activation=0.0
+        SyntheticSource, n_channels=8, fs=1024.0, noise=0.05, hum=0.0, activation=0.0,
+        waveform="emg",
     ),
     hint="An in-process test signal. No amplifier is needed.",
 )
