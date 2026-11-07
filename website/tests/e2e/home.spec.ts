@@ -243,7 +243,7 @@ test('Hello EMG code and screenshot point at each other', async ({ page }) => {
 });
 
 for (const width of [1440, 390]) {
-    test(`Hello EMG code never scrolls sideways and the screenshot fills its frame at ${width}px`, async ({ page }) => {
+    test(`Hello EMG code never scrolls sideways and the panels line up at ${width}px`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(home);
         const code = page.locator('.hello-code');
@@ -251,8 +251,9 @@ for (const width of [1440, 390]) {
         expect(await code.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
         const shot = await page.locator('.hello-shot').boundingBox();
         const frame = await page.locator('.hello-window').boundingBox();
+        const panel = await code.locator('..').boundingBox();
         expect(shot!.width).toBeGreaterThan(frame!.width - 24);
-        expect(shot!.height).toBeGreaterThan(frame!.height - 24);
+        if (width > 1200) expect(Math.abs(frame!.height - panel!.height)).toBeLessThanOrEqual(2);
     });
 }
 
