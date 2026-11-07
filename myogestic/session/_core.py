@@ -38,10 +38,11 @@ log = logging.getLogger(__name__)
 if _ZARR_V3 and find_spec("zarrs") is not None:
     zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 
-#: ``meta.json`` schema version. Bump whenever the on-disk shape of a per-stream
-#: entry changes. Readers must stay tolerant of older, unversioned meta.json files
+#: ``meta.json`` schema version. Bump whenever its on-disk shape changes.
+#: Version 4 adds the optional ``finished`` flag; older files remain readable.
+#: Readers must stay tolerant of older, unversioned meta.json files
 #: (see `open_session_store`), so this is informational rather than enforced.
-_META_SCHEMA_VERSION = 3
+_META_SCHEMA_VERSION = 4
 
 #: Value of ``meta.json``'s ``pose_convention``, stamped on every session this build
 #: writes. Signed and normalised, ``+1`` in the direction the control's address names —
@@ -584,8 +585,9 @@ class Session:
     Created when the user clicks **Record**, finalised when they click **Stop**.
     While active, every acquisition thread with a registered stream appends to the
     session's Zarr stores; UI label clicks emit [`LabelEvent`][] entries onto the
-    label track. Closing writes ``meta.json`` and ``labels.json`` alongside the
-    Zarr folders, and optionally packs the tree into a portable ``.mg.zip``.
+    label track. Metadata is checkpointed at creation and stream declaration with
+    ``finished=False``. `save_meta` updates it at stop, and `pack_to_zip` packs the
+    tree into a portable ``.mg.zip``.
 
     Layout on disk (one folder per recording, named with the start minute,
     packed on stop to ``<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip``, see
@@ -672,11 +674,17 @@ class Session:
         # use and buffered (see EVENT_CHUNK_ROWS). One lock covers declaration, buffering,
         # flush and freeze, because the predict thread, the UI thread and the finalise
         # thread all reach these.
-        self._event_lock = threading.Lock()
+        self._event_lock = threading.RLock()
         self._event_buffers: dict[str, _EventBuffer] = {}
         self._event_streams: list[str] = []
         #: Set by freeze(): no row is accepted and no stream declared after it.
         self._finalising = False
+        self.save_meta("", finished=False)
+
+    def _checkpoint_meta(self) -> None:
+        """Persist a declaration, never an acquisition chunk or event-buffer flush."""
+        with self._event_lock:
+            self.save_meta(**self._meta_options, finished=False)
 
     def init_stream(
         self, stream_name: str, info: StreamInfo, *, chunk_rows: int | None = None
@@ -686,6 +694,13 @@ class Session:
         ``chunk_rows`` sizes the zarr chunk; the default is one second of samples. Event
         streams pass `EVENT_CHUNK_ROWS` because their rate is nominal.
         """
+        with self._event_lock:
+            self._init_stream(stream_name, info, chunk_rows=chunk_rows)
+
+    def _init_stream(
+        self, stream_name: str, info: StreamInfo, *, chunk_rows: int | None = None
+    ) -> None:
+        """Declare arrays and checkpoint together under the event/metadata lock."""
         rows = max(1, int(info.fs) if chunk_rows is None else int(chunk_rows))
         codecs = _SIGNAL_CODECS if chunk_rows is None else _EVENT_CODECS
         self._streams_info[stream_name] = info
@@ -705,6 +720,7 @@ class Session:
             dtype=np.float64,
             **codecs,
         )
+        self._checkpoint_meta()
 
     def append(self, stream_name: str, data: np.ndarray, timestamps: np.ndarray) -> None:
         """Called from acquire loop when recording. data: (n_samples, n_channels)."""
@@ -785,6 +801,7 @@ class Session:
                     chunk_rows=EVENT_CHUNK_ROWS,
                 )
                 self._event_streams.append(name)
+                self._checkpoint_meta()
                 buf = self._event_buffers[name] = _EventBuffer()
             else:
                 # Already declared: the stream's dtype won, not this call's — coerce
@@ -867,6 +884,8 @@ class Session:
         control_space: Mapping[str, object] | None = None,
         control_spaces: Mapping[str, Mapping[str, object]] | None = None,
         class_codes: Mapping[str, str] | None = None,
+        *,
+        finished: bool = True,
     ) -> None:
         """Write meta.json + labels.json to the session folder.
 
@@ -892,10 +911,44 @@ class Session:
             Codes the app pins for some classes, usually ``ctx.class_codes``. The
             rest are worked out by `class_codes`; the whole map is saved as
             ``meta.json``'s ``class_codes`` and names the archive.
+        finished
+            Whether the take stopped normally. Start and declaration checkpoints
+            pass ``False``; finalisation uses the default ``True``. Recovery keeps
+            an unfinished take marked ``False`` even after it is packed.
         """
+        with self._event_lock:
+            self._save_meta(
+                app_name, class_names, control_space, control_spaces, class_codes, finished=finished
+            )
+
+    def _save_meta(
+        self,
+        app_name: str,
+        class_names: list[str] | None,
+        control_space: Mapping[str, object] | None,
+        control_spaces: Mapping[str, Mapping[str, object]] | None,
+        class_codes: Mapping[str, str] | None,
+        *,
+        finished: bool,
+    ) -> None:
+        """Write one atomic metadata checkpoint with declarations held stable."""
+        # Reused only when another stream is declared, so appends keep their original
+        # cost and a later event stream does not erase the app's interpretation keys.
+        self._meta_options = {
+            "app_name": app_name,
+            "class_names": class_names,
+            "control_space": control_space,
+            "control_spaces": control_spaces,
+            "class_codes": class_codes,
+        }
+        self.class_names = list(class_names or [])
+        # Packing a previously saved folder must not relabel legacy pose values
+        # as today's convention. A fresh take always carries the current tag.
+        convention = getattr(self, "_pose_convention", POSE_CONVENTION)
         meta: dict[str, object] = {
             "schema_version": _META_SCHEMA_VERSION,
-            "pose_convention": POSE_CONVENTION,
+            "finished": finished,
+            "pose_convention": convention,
             "app_name": app_name,
             "created": time.strftime("%Y-%m-%dT%H:%M:%S", self._started),  # when it started
             "streams": {
@@ -914,6 +967,8 @@ class Session:
             },
             "event_streams": list(self._event_streams),
         }
+        if convention is None:
+            meta.pop("pose_convention")
         # Use the same clock as add_label, and only the first nonempty stream:
         # multiple streams describe the same take, not extra recorded time.
         first, last = 0.0, 0.0
@@ -955,11 +1010,16 @@ class Session:
             meta["control_space"] = dict(control_space)
         if control_spaces:
             meta["control_spaces"] = {name: dict(space) for name, space in control_spaces.items()}
-        (self.path / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         labels = [
             {"timestamp": e.timestamp, "class_index": e.class_index} for e in self.label_track
         ]
-        (self.path / "labels.json").write_text(json.dumps(labels, indent=2), encoding="utf-8")
+        # A kill during a checkpoint must leave the previous JSON readable, rather
+        # than truncating the only metadata from which recovery can open the arrays.
+        for filename, value in (("labels.json", labels), ("meta.json", meta)):
+            target = self.path / filename
+            temporary = self.path / (filename + ".tmp")
+            temporary.write_text(json.dumps(value, indent=2), encoding="utf-8")
+            os.replace(temporary, target)
 
     def pack_to_zip(self) -> Path:
         """Pack the session folder into one ``<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip``.

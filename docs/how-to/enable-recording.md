@@ -279,7 +279,15 @@ window's midpoint. Both handle the window/hop math. See [Record and replay](reco
 
 - **Calling `start_recording` before streams connect.** A `Stream` whose `info is None` is skipped (no Zarr schema yet). Call `stream.reconnect()` and check its result first. `App.run()` starts acquisition threads but does not connect their sources.
 - **Recording with the synthetic generator paused.** The generator only produces data while it's running. Click Launch in the `ProcessLauncher` panel before Record, or in headless flow start the generator subprocess before `app.run()`.
-- **Killing the process mid-recording.** The `.mg.zip` is packed only at `stop_recording()`. Crashes leave the raw `data/<ID>/recordings/<ID>_<timestamp>/` folder; you can pack it later with `Session(base_path=...).pack_to_zip()` after re-attaching to it, or just load the folder directly with `open_session_store("data/<ID>/recordings/<ID>_<timestamp>/")` - both work.
+- **Killing the process mid-recording.** The `.mg.zip` is packed only at `stop_recording()`. Starting a take writes `meta.json` with `finished: false`; each stream declaration checkpoints its schema, and a normal stop updates the metadata with `finished: true`. A crash leaves the raw `data/<ID>/recordings/<ID>_<timestamp>/` folder (or `predictions/` for a prediction take), readable with `open_session_store(...)` and listed by `SessionManager`. With the recording process stopped, pack that folder through the normal verified pack path:
+
+  ```python
+  from myogestic.session import recover_session
+
+  archive = recover_session("data/P-001/recordings/P-001_20261107-0930")
+  ```
+
+  Recovery removes the folder after packing succeeds and keeps `finished: false` in the archive. It recovers samples and event batches already written to disk; buffered event rows, labels and extras changed since the last checkpoint, and outputs from finalize hooks may be missing. It does not resume recording or run those hooks. Metadata is written at start, stream declaration and stop, with no extra writes per acquisition chunk or event-buffer flush. Older crashed folders without `meta.json` cannot be recovered this way.
 - **Forgetting class names.** `RecordingControls` sets them automatically. For custom labels, set `app.ctx.class_names = ["Rest", "Fist"]` before stopping; `stop_recording` passes that list to `save_meta`.
 
 ## See also

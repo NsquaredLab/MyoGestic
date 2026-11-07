@@ -297,13 +297,13 @@ def test_train_follows_a_pack_that_finishes_after_this_frames_selection(
     assert pipeline.model is not None
 
 
-def test_stop_then_train_before_metadata_is_written(
+def test_stop_then_train_before_metadata_is_finalized(
     tmp_path,
     monkeypatch,
     imgui_frame,
     deferred_pack,
 ):
-    """A zarr-only pending take stays hidden until it is registered once, ticked."""
+    """An unfinished pending take stays hidden until it is registered once, ticked."""
     from myogestic.ml import widgets
     from myogestic.stream import StreamInfo
 
@@ -320,7 +320,7 @@ def test_stop_then_train_before_metadata_is_written(
     finish = deferred_pack.pop()
     folder = session.path
     assert (folder / "emg.zarr").exists()
-    assert not (folder / "meta.json").exists()
+    assert json.loads((folder / "meta.json").read_text())["finished"] is False
     assert not list(folder.parent.glob("*.session.zip"))
     assert scan_sessions(str(folder.parent)) == []
     assert manager.selection().n_total == 0

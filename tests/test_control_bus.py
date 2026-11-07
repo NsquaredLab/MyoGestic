@@ -855,17 +855,19 @@ def _save_control_take(tmp_path, monkeypatch, *, operator=False):
     return app, metadata
 
 
-def test_single_link_meta_matches_pre_change_bytes(tmp_path, monkeypatch):
-    import os
+def test_single_link_meta_preserves_pre_change_fields(tmp_path, monkeypatch):
+    import json
     from pathlib import Path
 
     _, metadata = _save_control_take(tmp_path, monkeypatch)
     # Generated with the identical take helper against PR #25's 8afc8a1; the
     # class_codes block came later, with the file-name standard.
     expected = Path(__file__).parent / "fixtures" / "control_meta_8afc8a1.json"
-    # save_meta has always used native text-file newlines, including CRLF on Windows.
-    baseline = expected.read_text(encoding="utf-8").replace("\n", os.linesep).encode("utf-8")
-    assert metadata == baseline
+    # Crash recovery adds only the finished flag and its schema-version bump;
+    # the single-link stream and control-space shape still matches this fixture.
+    baseline = json.loads(expected.read_text(encoding="utf-8"))
+    baseline.update(schema_version=4, finished=True)
+    assert json.loads(metadata) == baseline
 
 
 def test_two_links_record_separate_streams_and_maps(tmp_path, monkeypatch):
@@ -876,7 +878,7 @@ def test_two_links_record_separate_streams_and_maps(tmp_path, monkeypatch):
 
     app, raw = _save_control_take(tmp_path, monkeypatch, operator=True)
     meta = json.loads(raw)
-    assert meta["schema_version"] == 3
+    assert meta["schema_version"] == 4
     assert meta["control_space"] == app.ctx.control_space.as_control_space()
     assert meta["control_spaces"] == {
         "controls.operator": app.ctx.control_spaces["controls.operator"].as_control_space()

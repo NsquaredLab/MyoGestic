@@ -57,8 +57,8 @@ During recording, one folder per take:
 ```text
 data/P-014/recordings/
 └── P-014_20260506-1846/
-    ├── meta.json                   # class_names, created, streams, extras (written on stop)
-    ├── labels.json                 # timestamps + class indices (written on stop)
+    ├── meta.json                   # class_names, created, streams, extras (checkpointed; finalised on stop)
+    ├── labels.json                 # timestamps + class indices (checkpointed with metadata)
     ├── emg.zarr/                   # (n_samples, n_channels) sample-major
     ├── emg_timestamps.zarr/        # (n_samples,) float64 LSL clock
     ├── imu.zarr/                   # if a second stream was recorded
@@ -147,7 +147,7 @@ A dict becomes one stream per key. A value is recorded when it is a bool, a numb
 
 For a take that recorded pipeline ticks, `extras.pipeline` identifies it as a Drive run. Takes shows a Drive tag and leaves it unticked for training; the operator can still tick it. Continue → Train selects ordinary takes and skips Drive runs.
 
-On stop, `App.finalize_hooks` run on the finalize thread before `meta.json` is written. The pipeline's hook saves the running model as `model.joblib` beside the arrays (when `pipeline.save_model` is set) and writes `extras.pipeline` with the model type, its `report` if it has one, the event streams, and the skip list.
+On stop, `App.finalize_hooks` run on the finalize thread before `meta.json` is updated with `finished: true`. The pipeline's hook saves the running model as `model.joblib` beside the arrays (when `pipeline.save_model` is set) and writes `extras.pipeline` with the model type, its `report` if it has one, the event streams, and the skip list.
 
 ## Reading recordings
 
