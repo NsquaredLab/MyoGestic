@@ -1,14 +1,14 @@
 # Signal-field EMG validation
 
-The fit uses **8-channel forearm bracelet recordings** sampled at 1000 Hz. The previous fit is superseded: its narrowband common-mode signal was simulated and did not establish a muscle-activity reference. Only rounded RMS maps and scalar aggregates are committed. Recording arrays remain private; the optional comparison bridge holds excerpts in memory on loopback and is never used by the deployed website.
+The fit uses 8-channel forearm bracelet recordings sampled at 1000 Hz. The muscle-activity reference requires recordings; simulated narrowband common-mode signals cannot establish it. Only rounded RMS maps and scalar aggregates are committed. Recording arrays remain private; the optional comparison bridge holds excerpts in memory on loopback and is never used by the deployed website.
 
 ## Selection and filtering
 
-Six complete recording sets were compared, with each set normalized by its own maximum Fist-channel RMS. One set was selected because it maximized the minimum pairwise RMS difference between the four normalized eight-electrode maps. Keeping a single electrode placement preserves spatial selectivity that pooling differently oriented bracelets would blur. The six minimum distances were 0.0973, 0.0640, 0.0343, 0.2076, 0.1307, 0.0786. The selected distance is 0.2076. This is a visual reference selection, not a population estimate or classifier validation.
+Six complete recording sets were compared, with each set normalized by its own maximum Fist-channel RMS. One set was selected because it maximized the minimum pairwise RMS difference between the four normalized eight-electrode maps. Keeping a single electrode placement preserves spatial selectivity that pooling differently oriented bracelets would blur. The six minimum distances were 0.0973, 0.0640, 0.0343, 0.2076, 0.1307, 0.0786. The selected distance is 0.2076. The selection provides a visual reference. Population estimates and classifier validation require separate analyses.
 
-Each take has a single gesture label near its start. Index means index flexion. A fourth-order Butterworth 20–450 Hz band-pass is applied forward and backward, followed by forward/backward Q=30 notches at 50, 100, …, 450 Hz. The first 650 ms after the later of the label and first sample, and the final 100 ms, are excluded. There is one selected take per gesture, with 9.19–9.26 stationary seconds each. There is no rest-to-contraction cue or offset segment in these takes; onset and offset are not estimable. Both generator envelope constants remain **18 ms**.
+Each take has a single gesture label near its start. Index means index flexion. A fourth-order Butterworth 20–450 Hz band-pass is applied forward and backward, followed by forward/backward Q=30 notches at 50, 100, …, 450 Hz. The first 650 ms after the later of the label and first sample, and the final 100 ms, are excluded. There is one selected take per gesture, with 9.19–9.26 stationary seconds each. There is no rest-to-contraction cue or offset segment in these takes; onset and offset are not estimable. Both generator envelope constants remain 18 ms.
 
-Per-channel RMS is measured at 1000 Hz after filtering. These eight-number maps, normalized to maximum Fist RMS, are interpolated around a closed bracelet. Lane c uses position 8c/N and wraps electrode 7 back to electrode 0; 64 lanes are display interpolation, not 64 independent electrodes.
+Per-channel RMS is measured at 1000 Hz after filtering. These eight-number maps, normalized to maximum Fist RMS, are interpolated around a closed bracelet. Lane c uses position 8c/N and wraps electrode 7 back to electrode 0; 64 interpolated lanes are not 64 independent electrodes.
 
 | Gesture | Eight-electrode RMS map |
 | --- | --- |
@@ -17,11 +17,11 @@ Per-channel RMS is measured at 1000 Hz after filtering. These eight-number maps,
 | Pinch | 0.0851, 0.1671, 0.7326, 0.4169, 0.5279, 0.4671, 0.1561, 0.0877 |
 | Index | 0.2221, 0.1321, 0.4732, 0.3591, 0.1783, 0.1133, 0.0770, 0.0653 |
 
-All six pairwise map distances remain at least **0.18** after spreading to 64 lanes; the seeded test enforces this margin. Rest is low-amplitude texture, Fist has broad recruitment, Pinch emphasizes the middle bracelet sector, and Index has a narrower flexion profile. The four measured maps are used directly.
+All six pairwise map distances remain at least 0.18 after spreading to 64 lanes; the seeded test enforces this margin. Rest is low-amplitude texture, Fist has broad recruitment, Pinch emphasizes the middle bracelet sector, and Index has a narrower flexion profile. The four measured maps are used directly.
 
 ## Real versus synthetic at the displayed rate
 
-Point sampling uses floor(j × 1000/120), with the clock reset for each take. No additional anti-alias filter is applied during point sampling: 480 columns represent four seconds at the existing full-tier cadence. Both real and synthetic signed signals are circularly interpolated from eight carriers. The synthetic interpolation normalizes variance so each lane follows its interpolated RMS map. This explains its slightly higher absolute RMS and adjacent-lane correlation.
+Point sampling uses floor(j × 1000/120), with the clock reset for each take. Point sampling uses no additional anti-alias filter. At full-tier cadence, 480 columns represent four seconds. Both real and synthetic signed signals are circularly interpolated from eight carriers. The synthetic interpolation normalizes variance so each lane follows its interpolated RMS map. This explains its slightly higher absolute RMS and adjacent-lane correlation.
 
 The table reports the selected recordings and generator seed 314159 after 2400 settling columns and 24000 stationary columns per gesture. Tails are pooled absolute amplitudes divided by each channel's own RMS. Electrode neighbours include 7→0; lane neighbours include 63→0. Negative displayed lag-1 is a point-sampling effect; native recorded lag-1 is positive (0.59–0.77).
 
@@ -64,9 +64,9 @@ The table reports the selected recordings and generator seed 314159 after 2400 s
 | Index | Lane p99.9 / RMS | 4.5391 | 4.8906 |
 | Index | Lane kurtosis | 5.0658 | 5.0313 |
 
-The generator uses eight correlated carriers with a common component fitted to circular electrode correlation, a per-gesture negative AR(1) term at the displayed rate, and occasional broad innovations for the measured tails. Six summed uniforms approximate Gaussian innovations without frame-path allocations. It is an aggregate visual fit, not a reconstruction of motor-unit physiology or native-frequency spectra. Tests require active/rest RMS ratios within ±20%, both neighbour correlations within ±0.1, lag-1 within ±0.1, p99 within ±10%, p99.9 within ±15%, and kurtosis within ±25%.
+The generator uses eight correlated carriers with a common component fitted to circular electrode correlation, a per-gesture negative AR(1) term at the displayed rate, and occasional broad innovations for the measured tails. Six summed uniforms approximate Gaussian innovations without frame-path allocations. Use this aggregate visual fit for display; it does not reconstruct motor-unit physiology or native-frequency spectra. Tests require active/rest RMS ratios within ±20%, both neighbour correlations within ±0.1, lag-1 within ±0.1, p99 within ±10%, p99.9 within ±15%, and kurtosis within ±25%.
 
-The real raw stationary spectra are broad; the line notches intentionally reduce spectral flatness, so raw and filtered flatness must not be conflated:
+Raw stationary spectra are broad. Line notches reduce spectral flatness; compare raw and filtered values separately.
 
 | Gesture | Raw peak (Hz) | Raw flatness, 20–450 Hz | Filtered peak (Hz) | Filtered flatness, 20–450 Hz |
 | --- | ---: | ---: | ---: | ---: |
@@ -77,7 +77,7 @@ The real raw stationary spectra are broad; the line notches intentionally reduce
 
 ## Rendering and reproduction
 
-The two-device-pixel quads, Canvas 2D software-renderer fallback, renderer tiers, sample cadence, gain, reduced-motion handling and offscreen scheduling are unchanged. All per-frame storage is preallocated. The 64-lane texture budget remains 123136 bytes.
+Rendering uses two-device-pixel quads, a Canvas 2D software-renderer fallback and renderer tiers, with sample cadence, gain, reduced-motion handling and offscreen scheduling. All per-frame storage is preallocated. The 64-lane texture budget remains 123136 bytes.
 
 Define local take-path arrays, then run the reference script with repeated `--group` arguments, one group of local take arguments per recording set. It automatically selects the complete group with the largest minimum map distance. Standard output contains only aggregates; no path, identity or recording excerpt is printed. Add `--serve 4381` only for local comparison capture, then stop the bridge. From the website directory, with a built-site preview running:
 
@@ -88,11 +88,11 @@ node tests/field-visual-check.mjs "$BRIDGE_URL" "$SCREENSHOT_DIRECTORY" "$SITE_U
 npm run ci
 ```
 
-The comparison is 1440×900: one second each of Rest → Fist → Pinch → Index, at the same 120 Hz point-sampling scale on both sides. Each real segment comes from the selected take after settling; each side uses the same circular signal interpolation. Four hero screenshots show each held gesture. Images contain private visual excerpts and remain local, uncommitted evidence.
+The 1440×900 comparison shows one second each of Rest → Fist → Pinch → Index at the same 120 Hz point-sampling scale on both sides. Each real segment comes from the selected take after settling; each side uses the same circular signal interpolation. Four hero screenshots show each held gesture. Images contain private visual excerpts and remain local, uncommitted evidence.
 
 ## Final verification
 
-The foreground `npm run ci` passed under Node 22.23.4 on 2026-11-07: 19 unit-test files / 80 tests passed; 41 browser tests passed and three skipped. Two playground browser tests skip because this website-only build omits the optional wheel; the context-loss browser test skips when software rendering chooses Canvas 2D. Controller unit tests exercise context loss and replacement, while screenshot and performance checks use hardware WebGL. The new gesture, distribution and map tests were first run against the old generator and failed before implementation. Final focused field tests (37) and the reference script's Ruff check also pass.
+The foreground `npm run ci` passed under Node 22.23.4 on 2026-11-07. All 19 unit-test files / 80 tests passed; 41 browser tests passed and three skipped. Two playground browser tests skip because this website-only build omits the optional wheel; the context-loss browser test skips when software rendering chooses Canvas 2D. Controller unit tests exercise context loss and replacement, while screenshot and performance checks use hardware WebGL. The gesture, distribution and map tests detect deviations from the measured reference. Final focused field tests (37) and the reference script's Ruff check also pass.
 
 CI tail:
 
@@ -108,7 +108,7 @@ Running 44 tests using 2 workers
   41 passed (14.3s)
 ```
 
-The complete field island is **5323 bytes gzipped** (12269 minified bytes), below the 10240-byte limit. Textures remain **123136 bytes**. The supplied measurement script ran with one minute of clean-page heap sampling on Apple M5 Pro / ANGLE Metal at 1440×900. Across 600 timed callbacks, mean main-thread cost was **0.036 ms**, p95 **0.100 ms**, maximum **0.200 ms**. Offscreen callbacks and script/task CPU were zero. Forced-GC heap at 0/30/60 s was **0.850, 0.864, 0.863 MiB**; no sustained growth was observed.
+The complete field island is 5323 bytes gzipped (12269 minified bytes), below the 10240-byte limit. Textures remain 123136 bytes. The measurement script ran with one minute of clean-page heap sampling on Apple M5 Pro / ANGLE Metal at 1440×900. Across 600 timed callbacks, mean main-thread cost was 0.036 ms, p95 0.100 ms, maximum 0.200 ms. Offscreen callbacks and script/task CPU were zero. Forced-GC heap at 0/30/60 s was 0.850, 0.864, 0.863 MiB; no sustained growth was observed.
 
 Lighthouse 12 mobile, with a fresh headless browser for each page:
 

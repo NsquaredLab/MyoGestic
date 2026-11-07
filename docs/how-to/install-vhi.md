@@ -1,10 +1,8 @@
 ---
 title: "Install the Virtual Hand Interface"
 ---
-The Virtual Hand Interface (VHI) is a separate Godot 4.5 application. It
-isn't bundled in the MyoGestic wheel - you download the platform-specific
-release binary once and the framework's `virtual_hand()` registry picks
-it up automatically.
+The Virtual Hand Interface (VHI) is a separate Godot 4.5 application.
+Download its platform-specific release binary for `virtual_hand()` to find it.
 
 ## TL;DR
 
@@ -21,10 +19,8 @@ prints a success summary. If the digest is unavailable, it warns and continues
 without an integrity check.
 
 !!! warning "MyoGestic 2.x needs VHI 2.0 or newer"
-    MyoGestic drives VHI over the v2 control contract: it asks VHI which
-    controls it exports and refuses to guess. A pre-2.0 build has no manifest to
-    answer with, and the v1 bridge that used to cover for that was removed — so an
-    older release is not limited, it does not work.
+    MyoGestic queries VHI's manifest through the v2 control contract.
+    Pre-2.0 builds lack this manifest and cannot work with MyoGestic 2.x.
 
     Both the installer and the launcher check. `install_vhi` checks the requested
     tag and resolves `latest` before downloading when the API is reachable. It refuses
@@ -40,7 +36,7 @@ without an integrity check.
     export GODOT_BIN=/path/to/godot          # Godot 4.x with .NET support
     ```
 
-## What gets installed where
+## Install locations
 
 The default install root mirrors what `virtual_hand()` looks at:
 
@@ -71,15 +67,13 @@ The release matrix:
 | Linux    | x86_64 | `VHI-linux-x64.tar.gz`      | No aarch64 build.                            |
 | Windows  | x64    | `VHI-windows-x64.zip`       |                                              |
 
-**Intel Macs are not supported by the binary.** Rosetta translates
-x86_64 → arm64, not the reverse, so the released arm64 build cannot run
-on Intel. Either use a different machine, or run from the Godot source
-project (see "Source-mode" below).
+On Intel Macs, run the Godot source project under "Source-mode" below.
+The released binary requires arm64; Rosetta translates x86_64 → arm64
+and cannot run it on Intel.
 
 ## Pin a version for reproducibility
 
-`latest` is convenient for a fresh checkout. In production - anything
-that needs to behave the same months from now - pin the tag:
+Pin the tag for reproducible installs:
 
 ```bash
 uv run python -m myogestic.tools.install_vhi --tag v2.1.0
@@ -90,36 +84,33 @@ The installer requests the SHA-256 digest from the GitHub release API
 the download; a digest mismatch refuses the install before unpacking.
 
 `--no-verify` skips both the digest lookup and the SHA-256 check. It prints
-a loud warning to stderr before downloading: the archive will not be
+a warning to stderr before downloading that the archive will not be
 integrity-checked. Use it only for ad-hoc local builds where no digest exists.
 
 ## macOS Gatekeeper
 
-VHI is ad-hoc signed (no Apple Developer ID, no notarisation). Two
-launch paths, two different stories:
+VHI is ad-hoc signed without Apple Developer ID or notarization.
+Launch method determines Gatekeeper behaviour:
 
-* **Via MyoGestic's `ProcessLauncher`** - works directly. The launcher
+* Via MyoGestic's `ProcessLauncher` - works directly. The launcher
   calls `subprocess.Popen`, which bypasses Gatekeeper / LaunchServices
-  entirely. This is the integrated workflow and the one you usually
-  want.
-* **Via Finder / `open` / double-click** - Gatekeeper blocks the first
+  entirely.
+* Via Finder / `open` / double-click - Gatekeeper blocks the first
   launch. The installer strips the `com.apple.quarantine` xattr after
   unpack, but Finder's first-launch check is separate. Once:
 
     1. Double-click `VHI.app` - macOS refuses to open it.
-    2. **System Settings → Privacy & Security**, scroll to the blocked-app
-       notice, click **Open Anyway**.
+    2. System Settings → Privacy & Security, scroll to the blocked-app
+       notice, click Open Anyway.
     3. Subsequent Finder launches succeed.
 
-  (On macOS 14 and earlier, right-click → Open also works.)
+  On macOS 14 and earlier, right-click → Open also works.
 
-The installer prints this same note at the end of every macOS install,
-so you don't have to remember it.
+The installer prints these instructions after each macOS install.
 
 ## Source-mode (developing VHI itself)
 
-For VHI development - editing the Godot project, not just consuming the
-binary - point `$VHI_PATH` at a checkout of the Godot project and set
+To edit VHI, point `$VHI_PATH` at a Godot project checkout and set
 `$GODOT_BIN`:
 
 ```bash
@@ -131,8 +122,8 @@ export GODOT_BIN=/usr/bin/godot4                                 # Linux
 uv run python examples/synthetic/emg_classification.py
 ```
 
-`virtual_hand()` auto-detects: if `$GODOT_BIN` is set (or `godot_bin=...`
-is passed), it launches `godot --path $VHI_PATH` instead of the packaged
+With `$GODOT_BIN` set or `godot_bin=...` passed,
+`virtual_hand()` launches `godot --path $VHI_PATH` instead of the packaged
 binary. Force one or the other with `$VHI_LAUNCH_MODE=binary` or
 `=godot`.
 
@@ -144,7 +135,7 @@ uv run python -m myogestic.tools.install_vhi --tag v2.1.0 --force
 ```
 
 `--force` is required when the destination is non-empty. Without it,
-the installer refuses rather than clobbering an unrelated directory.
+the installer leaves the destination untouched.
 
 The installer downloads and prepares the replacement in a temporary directory
 beside the destination, on the same filesystem. Unpacking, validation, executable

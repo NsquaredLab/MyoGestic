@@ -266,7 +266,7 @@ test('links and package version match the integrated site', async ({ page }) => 
     await expect(page.getByRole('link', { name: 'Search ⌘K in the docs' })).toHaveAttribute('href', '/MyoGestic/getting-started/');
     const version = readFileSync('../pyproject.toml', 'utf8').match(/^version\s*=\s*"([^"]+)"/m)![1];
     await expect(nav.getByRole('link', { name: /GitHub/ })).toHaveText(`GitHub · ${version}`);
-    await expect(page.getByText('Behind this page: 64 channels of synthetic EMG, drawn live')).toBeVisible();
+    await expect(page.getByText('64 channels of synthetic EMG drawn live behind this page')).toBeVisible();
 });
 
 test('install and BibTeX buttons copy their exact content and announce success', async ({ page, context }) => {

@@ -1,13 +1,11 @@
-"""Device selection panel — choose a device, configure it, connect.
+"""Device selection and connection in the running app.
 
-Every acquisition example hardcodes its source at import time, so moving from a
-Muovi to a Quattrocento, or from 2000 Hz to 500 Hz, means editing Python.
-[`DevicePicker`][] moves that choice into the running UI: pick a device from a
-dropdown, set the handful of knobs that device actually has, press Connect.
+[`DevicePicker`][] lets operators switch between devices such as Muovi and
+Quattrocento or rates such as 2000 Hz and 500 Hz. Configure the device, then
+press Connect.
 
-The device list is data — a sequence of [`DeviceSpec`][] entries passed in code — so
-an app offers exactly the hardware it supports. [`DEFAULT_DEVICES`][] covers the
-OTB family plus any LSL outlet on the network.
+Pass [`DeviceSpec`][] entries to choose the offered hardware.
+[`DEFAULT_DEVICES`][] covers the OTB family and network LSL outlets.
 """
 
 from __future__ import annotations
@@ -62,13 +60,12 @@ class DeviceOption:
     kwarg
         Constructor keyword the chosen value is passed as.
     label
-        Row label, spelled out in the unit the operator thinks in —
-        ``"Channels"``, ``"Sample rate"``, not ``"nch_mode"``. Only the device
-        entry knows what its own constructor keywords mean.
+        Row label with the operator's unit, such as ``"Channels"`` or
+        ``"Sample rate"`` for ``"nch_mode"``.
     choices
         ``{shown: value}``, in the order they should appear. Shown text is
         drawn as a segmented control when the row is wide enough for every
-        option at once, so keep it short — the ``label`` carries the unit.
+        option at once. Keep it short; ``label`` carries the unit.
     """
 
     kwarg: str
@@ -78,12 +75,11 @@ class DeviceOption:
 
 @dataclass(frozen=True)
 class DeviceParam:
-    """One slider that tunes a **connected** source while it streams.
+    """One slider that tunes a connected source while it streams.
 
-    Where an [`DeviceOption`][] is a constructor argument — fixed when Connect builds
-    the source — a `DeviceParam` writes straight to an attribute of the source
-    that is already running. The next chunk follows; nothing reconnects, the
-    plot does not reset, and a recording in progress keeps its geometry.
+    A [`DeviceOption`][] sets a constructor argument on Connect.
+    A `DeviceParam` writes a live source attribute for the next chunk,
+    preserving the connection, plot history and recording geometry.
 
     The source must therefore expose that attribute publicly and read it fresh
     each chunk. Assigning a float is atomic under the GIL, so no lock is needed
@@ -122,35 +118,28 @@ class DeviceSpec:
     label
         Shown in the dropdown, e.g. ``"Quattrocento"``.
     factory
-        Builds the source when Connect is pressed — a source class, or a
-        ``functools.partial`` of one. Called with the chosen options as keyword
-        arguments, and *only* on Connect: selecting a device costs nothing.
+        Source class or ``functools.partial``, called on Connect with the
+        selected options as keyword arguments. Selecting a device leaves the
+        running source unchanged.
     options
         The [`DeviceOption`][] rows to draw, in order. Their chosen values are passed
         to ``factory`` as keyword arguments. Each row starts on whichever choice
         matches the factory's *own* default, so leaving them all alone
         reproduces ``factory()`` exactly.
     scan
-        ``True`` for a source whose target is discovered at runtime rather than
-        configured — LSL, serial. Draws a target list fed by ``discover()``
-        instead of the option rows, and hands the choice to
-        `Stream.reconnect`. This is *declared*, not detected: a source can
-        implement ``discover()`` and still be configured statically, and some
-        do.
+        ``True`` to discover LSL or serial targets at runtime. Draws a list
+        from ``discover()`` and passes the choice to `Stream.reconnect`. Set
+        this explicitly; sources with discovery can also use static options.
     live
         [`DeviceParam`][] sliders, shown only once this device is the connected
-        one. They tune the running source in place — use them for anything worth
-        changing without dropping the stream.
+        one. Use them to tune the running source without disconnecting.
     hint
         One line on what this device *is*, or how it connects. Shown behind an
-        **ⓘ** button beside the dropdown rather than on the panel: it is read
-        once, when the hardware is first wired up. No hint and no steps, no
-        button.
+        ⓘ button beside the dropdown. The button is hidden if both hint
+        and steps are empty.
     steps
         The setup procedure, one instruction per entry, rendered as a numbered
-        list under the hint. Setup is a sequence of physical acts — hold this,
-        join that, then press Connect — and a paragraph makes the reader
-        re-derive the order every time they come back to it.
+        list under the hint.
 
     Examples
     --------
@@ -349,9 +338,9 @@ def _row_labels(dev: DeviceSpec) -> tuple[str, ...]:
 def _fits_segmented(labels: Sequence[str], avail: float) -> bool:
     """Whether every choice can be shown at once in ``avail`` pixels.
 
-    A segmented control beats a dropdown when it fits — one click instead of
-    two, and the alternatives stay visible — but it cannot wrap or truncate, so
-    a narrow panel or a device with wordy choices falls back to a combo.
+    A segmented control keeps alternatives visible and takes one click.
+    A narrow panel or long choices use a two-click combo because segments
+    cannot wrap or truncate.
     """
     style = imgui.get_style()
     per = style.frame_padding.x * 2.0 + 2.0  # `segmented` overrides item spacing to 2 px
@@ -362,9 +351,9 @@ def _swap_source(stream: Stream, source: Source, target: str | None = None) -> b
     """Attach ``source`` to ``stream``, closing whatever was attached before.
 
     `Stream.reconnect` only ever (re)connects ``stream._source``, which by the
-    time it runs is already the *new* object — so a picker that assigns the
-    attribute and stops there never disconnects the source it replaced. For
-    Muovi and Sessantaquattro that leaks the **listening** server socket, which
+    time it runs is the replacement object. Disconnect the previous source
+    before assigning the replacement. Skipping this for Muovi and
+    Sessantaquattro leaks the listening server socket, which
     only their ``disconnect()`` override closes, and the next Connect to the
     same device then fails to bind its fixed port. ``SO_REUSEADDR`` is set on
     both but does not permit binding over a live listener.
@@ -373,8 +362,8 @@ def _swap_source(stream: Stream, source: Source, target: str | None = None) -> b
     running acquire thread: a freshly constructed source holds no socket and its
     ``read()`` returns ``(None, None)``, and `Stream.reconnect` clears
     ``_connected`` under the stream lock immediately afterwards. Stopping and
-    restarting the stream would be worse — `App.run` owns that thread, and
-    calling ``start()`` again would spawn a second one.
+    restarting the stream would spawn a second thread; `App.run` owns
+    the acquisition thread.
 
     Returns
     -------
@@ -396,9 +385,7 @@ def _swap_source(stream: Stream, source: Source, target: str | None = None) -> b
 class _StreamState:
     """One stream's worth of a `DevicePicker`'s state.
 
-    Split out because a ``selectable`` picker drives several streams and none of
-    this describes the panel — it describes whichever stream the panel is
-    currently showing.
+    A ``selectable`` picker stores this state separately for each stream.
     """
 
     #: Index into the picker's device list.
@@ -425,11 +412,9 @@ class _StreamState:
 class DevicePicker:
     """Pick a device, configure it, and connect the stream to it.
 
-    Replaces `StreamPanel` for the one stream it names: the panel header's dot
-    carries the connection state, and the Connect button is what binds the
-    stream to hardware. Nothing connects on its own, and changing the controls
-    does nothing until Connect is pressed — so the plot never swaps out from
-    under a recording.
+    Use for a named stream in place of `StreamPanel`. The header dot shows
+    connection state. Connect applies device settings and attaches hardware;
+    changes stay pending until it is pressed.
 
     Parameters
     ----------
@@ -441,10 +426,9 @@ class DevicePicker:
         amplifier, or add your own [`DeviceSpec`][] entries.
     widget_id
         ImGui id scope and state key. Defaults to the stream name. Give each
-        instance its own when an app renders more than one: ImGui derives a
-        control's identity from its label plus the enclosing scope, and a
-        `Grid` cell is a single child window — so two of these in one cell
-        share every slider, popup and plot until they are told apart.
+        instance its own value. ImGui combines labels with the enclosing scope
+        for control identity. Distinct values keep panels in one `Grid` cell
+        from sharing controls.
     selectable
         Show sorted stream chips from ``ctx.streams``, each with a status dot.
         Clicking a chip changes only which stream this panel configures.
@@ -457,12 +441,10 @@ class DevicePicker:
         `App.remove_stream`. The last offered stream cannot be removed.
         Adding and removing are disabled during a recording.
     exclude
-        Stream names this panel must not offer. For a stream whose source
-        belongs to another widget — a `TrackingTask`'s target, a replay — where
-        a Connect would replace that source and leave its owner writing to
-        nothing, with the recording holding a device's data under the wrong
-        name. A frozen set, so streams added at runtime are offered unless they
-        are named here.
+        Stream names to exclude. Use for sources owned by another widget, such
+        as a `TrackingTask` target or replay. Connecting another source would
+        detach its owner and record data under the wrong stream name. This
+        frozen set allows streams added at runtime unless named here.
     show_header
         Render the standard ``panel_header``. Turn it off when the surrounding
         layout already names the card; chips and the action area still carry
@@ -498,12 +480,7 @@ class DevicePicker:
         self._typed = ""
         self._excluded = frozenset(exclude)
         self._scanning = False
-        # One entry per stream this panel has been pointed at. Every field on
-        # `_StreamState` is a fact about a *stream* — which device it is set to,
-        # which attempt is in flight, what a scan found — so with `selectable`
-        # holding them once for the widget made switching streams show the
-        # previous one's configuration: a device dropdown naming something the
-        # new stream was never attached to, beside a green dot belonging to it.
+        # Keep device selection, connection attempts and scan results per stream.
         self._per_stream: dict[str, _StreamState] = {}
 
     # --- per-stream state ----------------------------------------------------
@@ -590,12 +567,8 @@ class DevicePicker:
     def ui(self, ctx: Context) -> None:
         """Render the picker. Call once per frame.
 
-        Everything below is drawn inside an ImGui id scope named by
-        ``widget_id``. ImGui derives a control's identity from its label plus the
-        enclosing scope, and a `Grid` cell is one child window — so without this,
-        two of these panels in a single cell would share every control. Pushed
-        around the whole body rather than prefixed onto each label, because a
-        prefix has to be remembered at every site and this cannot be forgotten.
+        Wraps all controls in the ``widget_id`` ImGui scope. Distinct scopes
+        keep panels in one `Grid` cell from sharing control identity.
         """
         imgui.push_id(self._widget_id)
         try:
@@ -771,26 +744,16 @@ class DevicePicker:
     def _select_stream(self, name: str) -> None:
         """Point the panel at another stream. Changes nothing but which one is shown.
 
-        Every field the panel reads lives in that stream's own `_StreamState`, so the
-        incoming stream's device, scan results and attachment mark are already its own
-        and were right when it was last shown. There is nothing to clear.
-
-        This used to clear ``_connected_from``, ``_targets`` and ``_scanned_for``, from
-        when they were held once for the whole widget. Past the per-stream split those
-        clears did not merely become unnecessary — the assignment below rebinds which
-        state the properties address, so every one of them landed on the **incoming**
-        stream. Switching away and back therefore wiped the stream you returned to: its
-        live sliders vanished until it was connected again, and a scan it had already
-        run was thrown away.
+        Each stream's `_StreamState` retains its selected device, connection
+        and scan results when switching away and back.
         """
         self._stream_name = name
 
     def _hint_popup(self, dev: DeviceSpec, anchor: imgui.ImVec2 | None) -> None:
         """The device's setup instructions, on demand.
 
-        A dismissable popup rather than a tooltip: the OTB hints are two or three
-        sentences describing a physical procedure, and a tooltip vanishes the
-        moment you move the pointer towards the thing it told you to do.
+        A dismissable popup keeps the OTB procedure's two or three sentences
+        visible while the operator follows them.
 
         Positioned under its own button, hanging left (pivot on the right edge)
         so it opens over the panel instead of off the side of the window.
@@ -901,9 +864,9 @@ class DevicePicker:
     def _start_scan(self, dev: DeviceSpec) -> None:
         """Run ``discover()`` off-thread on a throwaway source.
 
-        The probe is never connected — ``discover()`` on both shipped
-        scan-capable sources is a network query, not a session — so it needs no
-        teardown and cannot disturb the stream's current source.
+        Both shipped scan-capable sources use a network query for ``discover()``.
+        The probe stays disconnected and needs no teardown, leaving the stream's
+        source undisturbed.
         """
         if self._scanning:
             return
@@ -943,11 +906,9 @@ class DevicePicker:
         straight to ``stream._source``, so showing them for a device the user has
         merely selected would silently retune a different device.
 
-        Attachment is read off the stream rather than trusted to ``_connected_from``.
-        That mark is this panel's record of its own last connect, and anything else
-        that detaches the stream — a `StreamManager` removing it, an acquire loop that
-        gave up — leaves it standing, which would leave sliders on screen retuning a
-        source that is no longer running.
+        Check attachment on the stream. ``_connected_from`` records this panel's
+        last connection and can remain set when a `StreamManager` or acquisition
+        loop detaches the source.
         """
         if not dev.live or self._selected != self._connected_from or stream.info is None:
             return
@@ -1068,7 +1029,7 @@ class DevicePicker:
         parked in a blocking ``accept()`` (or ``connect()``), and closing the
         descriptor from here makes that call raise at once instead of running
         out its timeout. Bumping the generation first means the worker treats
-        the resulting error as the abort it is rather than reporting a failure.
+        the resulting error as an abort without reporting a failure.
         """
         self._connect_gen += 1
         self._connecting = False
@@ -1152,9 +1113,8 @@ class DevicePicker:
     def _state(self, stream: Stream | None) -> tuple[imgui.ImVec4, str]:
         """State tone and its one-line detail.
 
-        A stream nobody has connected yet is `IDLE`, not `DANGER`: never having
-        been asked to attach is not a failure, and a panel that opens red reads
-        as a broken app.
+        Streams awaiting their first connection use `IDLE`. Failed connection
+        attempts use `DANGER`.
         """
         if stream is None:
             return IDLE, "no such stream"

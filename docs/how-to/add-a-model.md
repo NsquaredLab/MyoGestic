@@ -1,7 +1,7 @@
 ---
 title: "Add a custom model"
 ---
-[`Pipeline`][myogestic.ml.Pipeline] doesn't care what your model is. Sklearn, CatBoost, PyTorch, a state machine, a lookup table - anything pickleable works, and even unpickleable models work if you provide your own `save_model` / `load_model`.
+[`Pipeline`][myogestic.ml.Pipeline] accepts any pickleable model, including Sklearn, CatBoost, PyTorch, state machines and lookup tables. For unpickleable models, provide `save_model` / `load_model`.
 
 The protocol is three decorators on plain functions:
 
@@ -35,11 +35,9 @@ def predict(model, features):
     return {"class": int(pred)}
 ```
 
-That's the entire surface. Three decorators, no inheritance.
-
 ## Case 1: scikit-learn / CatBoost / XGBoost
 
-The straightforward case. Train returns a fitted estimator, predict calls it. See [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py) for the reference pattern. Key beats:
+Train returns a fitted estimator; predict calls it. See [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py) for the reference pattern.
 
 ```python
 @pipeline.train
@@ -58,11 +56,11 @@ def predict(model, features):
     return {"class": cls, "name": CLASSES[cls]}
 ```
 
-`save_pickle` round-trips CatBoost / sklearn / XGBoost models without surprises.
+`save_pickle` saves and loads CatBoost / sklearn / XGBoost models.
 
 ## Case 2: PyTorch model
 
-PyTorch models pickle fine for the weights, but you need to handle CUDA-vs-CPU on load:
+PyTorch models can pickle their weights. Handle CUDA-vs-CPU device selection on load:
 
 ```python
 import torch
@@ -117,7 +115,7 @@ pipeline.load_model = load_torch
 
 ## Case 3: regression (continuous targets)
 
-Use [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] instead of [`iter_labeled_windows`][myogestic.session.iter_labeled_windows] - it pairs each EMG window with a synchronised target vector:
+Use [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] to pair each EMG window with a synchronized target vector. [`iter_labeled_windows`][myogestic.session.iter_labeled_windows] supplies class labels.
 
 <!--docs:run-->
 ```python
@@ -139,7 +137,7 @@ def train(data):
     return MultiOutputRegressor().fit(np.array(X), np.array(Y))
 ```
 
-See [`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression.py) for the full thing - it includes a fallback to `iter_labeled_windows` when no aligned target stream was recorded.
+See [`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression.py) for a fallback to `iter_labeled_windows` when no aligned target stream was recorded.
 
 ## Pushing predictions to outputs
 
@@ -156,7 +154,7 @@ def predict(model, features):
     return {"pose": pose_smooth}  # to widgets / pipeline.predictions
 ```
 
-Both happen on the same predict thread; no synchronisation needed.
+Both run on the predict thread; no synchronization is needed.
 
 ## Stale-tick guard
 
@@ -180,11 +178,11 @@ The model's `step` should return the previous state if `last_ts <= self._last_ts
 
 ## Common mistakes
 
-See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
+See [Troubleshooting](../troubleshooting.md) for errors by symptom.
 
-- **Returning a non-dict from `predict()`.** Silently dropped. Always `return {...}`.
-- **Forgetting to set `pipeline.save_model`.** The Save button stays disabled until a model and save callback are available.
-- **Putting feature extraction in `train()`.** Then `predict()` re-runs different code on the same window shape. Keep one `extract()` for both, or factor a shared `featurize(window) -> features` helper.
-- **Heavy training in the predict thread.** Don't call `model.fit()` from `predict()` - training has its own thread and its own state. The framework already separates them.
-- **Fitting one regressor on raw features for a two-directional DOF.** Amplitude says how *much*, not which *way*, so the fit latches onto whichever cue happened to be louder in your trials - and the symptom is that contracting harder moves the output the wrong way. Use [`directional_decoder`][myogestic.recipes.estimators.directional_decoder], which estimates effort and direction apart and multiplies them.
-- **Assuming the predict thread is paced.** It is, but `predict_hz` is a *target*, not a guarantee. If the model takes 100 ms but `predict_hz=50` (20 ms target), you fall behind. Profile your `predict()` and either lower `predict_hz` or speed up the model.
+- Returning a non-dict from `predict()`. Silently dropped. Always `return {...}`.
+- Forgetting to set `pipeline.save_model`. The Save button stays disabled until a model and save callback are available.
+- Share feature extraction. Use one `extract()` for training and prediction, or a shared `featurize(window) -> features` helper.
+- Train on the training thread. Call `model.fit()` from `train()`. Calling it from `predict()` blocks prediction.
+- Separate effort and direction for a two-directional DOF. A regressor on raw features can learn the louder cue and move the output the wrong way as contraction increases. Use [`directional_decoder`][myogestic.recipes.estimators.directional_decoder] to estimate effort and direction separately and multiply them.
+- Profile `predict()`. `predict_hz` sets a target rate. A model that takes 100 ms cannot keep up with `predict_hz=50`, a 20 ms interval. Lower `predict_hz` or speed up the model.

@@ -1,9 +1,9 @@
 ---
 title: "Keep state between pipeline stages"
 ---
-`@pipeline.extract` and `@pipeline.predict` are plain functions called on predict ticks with available input. The target interval is `1 / predict_hz` seconds. They get no implicit context object - if you need data to *survive* between ticks, you store it yourself. This page covers the four patterns that come up.
+`@pipeline.extract` and `@pipeline.predict` are plain functions called on predict ticks with available input. The target interval is `1 / predict_hz` seconds. Store persistent state explicitly using one of the four patterns below.
 
-## The base case: stateless tick
+## Stateless ticks
 
 ```python
 @pipeline.extract
@@ -20,7 +20,7 @@ No state to keep. The pipeline calls `extract` then `predict`, the dict goes int
 
 ## Pattern 1: module-level mutable state
 
-For anything that needs to persist across ticks, put it at module scope and mutate from inside the callback. Both threads (predict + render) see the same object, and CPython's GIL guarantees scalar / reference assignment is atomic - no lock needed for simple cases.
+For anything that needs to persist across ticks, put it at module scope and mutate from inside the callback. The predict and render threads share the object. CPython's GIL makes scalar and reference assignment atomic.
 
 ```python
 import numpy as np
@@ -39,11 +39,11 @@ def predict(model, features):
     return {"class": pred, "tick": prediction_count}
 ```
 
-The render thread can read `prediction_count` directly to display "1234 predictions made" - no synchronization needed for an int.
+The render thread can read `prediction_count` directly to display "1234 predictions made" without synchronization.
 
 ## Pattern 2: rolling-window deque for feature smoothing
 
-When a single window isn't enough context - e.g. you want the RMS averaged over the last 5 ticks - keep a `deque` at module scope and append per tick:
+To average RMS over the last 5 ticks, keep a `deque` at module scope and append each tick:
 
 ```python
 from collections import deque
@@ -81,11 +81,11 @@ def predict(model, features):
     return {"class": pred, "raw_rms": features["raw"]}
 ```
 
-`features` can be any shape - tuple, dict, dataclass, whatever pickleable-or-not thing your model wants. The framework just passes it through.
+`features` can be any object your model accepts, including a tuple, dict or dataclass. The framework passes it through.
 
 ## Pattern 3: stateful model objects
 
-The `model` argument to `@pipeline.predict` is whatever object `@pipeline.train` returned. If that object has internal state - a Kalman filter, an HMM, a sequence model that wants its own RNN state - it persists across ticks because the same `model` reference is used every call.
+The `model` argument to `@pipeline.predict` is whatever object `@pipeline.train` returned. The same `model` reference is used on every call, preserving internal state for Kalman filters, HMMs and RNNs.
 
 ```python
 class StatefulClassifier:
@@ -115,7 +115,7 @@ A retrain replaces the model object (and its state). If you need state that *sur
 
 ## Pattern 4: gating side-effects on state changes
 
-You often want a side-effect (RPC, audio cue, serial write) to fire only when the prediction *changes*, not every tick. [`EdgeTrigger`](../concepts/edge-trigger.md) is the one-liner:
+Use [`EdgeTrigger`](../concepts/edge-trigger.md) to run an RPC, audio cue or serial write when the prediction changes:
 
 ```python
 from myogestic.outputs import EdgeTrigger
@@ -131,11 +131,11 @@ def predict(model, features):
     return {"class": class_idx}
 ```
 
-`fire_if_changed` returns `True` when the callback ran, `False` when suppressed - useful for paired effects (e.g. log only when the gesture actually changed).
+`fire_if_changed` returns `True` when the callback ran and `False` when suppressed. Use it to pair effects, such as logging a gesture change.
 
-See [Edge trigger](../concepts/edge-trigger.md) for `rebase()`, thread-safety, and the deeper "why".
+See [Edge trigger](../concepts/edge-trigger.md) for `rebase()` and thread safety.
 
-## Detecting stale ticks (predict thread faster than acquisition)
+## Detect stale ticks
 
 The predict thread wakes every `1/predict_hz`. The acquisition thread may not have new data on any given tick. Pass the latest timestamp through and let the model decide:
 

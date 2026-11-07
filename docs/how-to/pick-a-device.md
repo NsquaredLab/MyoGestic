@@ -3,11 +3,11 @@ title: "Pick a device from the UI"
 ---
 `DevicePicker` puts device choice in the running app instead of the source
 file. Pick hardware from a dropdown, set the few knobs it has, press
-**Connect**. Nothing attaches on its own, and nothing changes until you press
+Connect. Nothing attaches on its own, and nothing changes until you press
 that button.
 
-`examples/start_here/force_ramps.py` is the whole thing — a tabbed signal /
-force-tracking viewer, log, recording and sessions around one picker:
+`examples/start_here/force_ramps.py` combines a picker with a tabbed signal /
+force-tracking viewer, log, recording and sessions:
 
 ```python
 from myogestic import App, Stream
@@ -25,60 +25,51 @@ def ui(ctx):
     device.ui(ctx)
 ```
 
-`DEFAULT_DEVICES` covers the OT Bioelettronica family — Muovi, Muovi+,
-Sessantaquattro(+), Quattrocento — plus any LSL outlet on the network, plus a
-synthetic test signal for when you have no hardware to hand. Each amplifier
-still needs its physical setup first: the **ⓘ** button beside the dropdown opens
-the numbered procedure — which button to hold, which network to join — and
+`DEFAULT_DEVICES` covers Muovi, Muovi+, Sessantaquattro(+) and Quattrocento
+from OT Bioelettronica. It also offers network LSL outlets and a synthetic test signal. Each amplifier
+still needs its physical setup first: the ⓘ button beside the dropdown opens
+the numbered setup procedure, and
 [Connect OTB devices](connect-otb-devices.md) has the detail behind it.
 
-The dot in the panel header is the connection state — grey until you connect,
+The panel header dot shows connection state. It is grey until you connect,
 green once connected, red if the attempt failed. Hover it for the
 reason. The action area shows connection progress or live geometry; a failed
 attempt leaves its error below Connect.
 
-One thing the labels cannot tell you: on a Sessantaquattro, **`Bipolar` halves
-the channel count**, so picking `64` and `Bipolar` gives you 32. The status
+On a Sessantaquattro, `Bipolar` halves the channel count.
+Picking `64` and `Bipolar` gives you 32. The status
 line shows the real number once connected.
 
 ## Try it without hardware
 
-The last entry in the list, **Synthetic (no hardware)**, is a fake amplifier
+The last entry in the list, Synthetic (no hardware), is a fake amplifier
 that runs in-process: sine waves, a 50 Hz mains hum so the notch filter has
 something to remove, and paced to whatever rate you pick. Connect it and every
-panel behaves exactly as it would against a real device — plot, record, name,
-save.
+panel supports plotting and recording, including naming and saving takes.
 
-It is there so you can learn the app before the hardware arrives, and so a bug
-can be reproduced by someone who does not own the amplifier. It is *not* data:
-the label says so, and it is listed last so real hardware leads.
+Use it to learn the app or reproduce bugs without an amplifier. It is labelled
+as a test signal and listed last. Use real recordings for experimental data.
 
-Five of its knobs — **Activation**, **Direction**, **Noise**, **Hum** and
-**Hum (Hz)** — appear as sliders once it is connected, and they retune the
-running signal *live*: no reconnect, so the plot never resets and a recording in
-progress keeps its geometry.
+Five sliders appear once connected. Activation, Direction, Noise, Hum and
+Hum (Hz) retune the live signal without reconnecting. The plot keeps its history
+and a recording keeps its geometry.
 
-**Activation** is the one that makes it a subject rather than a signal
-generator. At `0` the channels are noise and mains hum; at `1` the muscle is
-working. Without it every gesture is the same waveform, so a model trained on
-synthetic EMG separates nothing — which makes a prediction demo meaningless.
+Activation scales the synthetic contraction. At `0` the channels contain noise
+and mains hum; at `1` the carrier has full amplitude. Vary it between gestures
+to produce distinct training signals.
 
-**Direction**, `-1` to `+1`, is the same idea for a *two-way* gesture. It splits
-Activation between the first half of the channels and the second, the way an
-agonist and its antagonist sit on opposite sides of a limb: at `-1` only the
-first half carries the signal, at `+1` only the second, at `0` — the default —
-both do and the source is exactly what it was before the knob existed. This is
-what lets you record "down" and "up" as measurably different takes and train a
-regressor on them with no hardware in the room. It only ever attenuates, so
-steering never makes a channel louder than Activation alone would.
+Direction ranges from `-1` to `+1` and splits Activation between the channel halves.
+At `-1` only the first half carries the signal; at `+1` only the second does.
+At the default `0`, both carry it. Record "down" and "up" as distinct takes
+to train a regressor without hardware. Direction only attenuates; neither half
+exceeds the amplitude set by Activation.
 
 Noise and hum deliberately do *not* scale with either: an electrode picks those
 up whether or not the muscle is contracting, and scaling them would hand a
 classifier a signal-to-noise cue that no real recording has.
 
-Two things worth trying with them. Drag **Hum** up and switch the viewer's Notch
-to 50 Hz to watch it disappear. Then drag **Hum (Hz)** off 50 while the notch
-stays there — the hum comes back, which is that filter's bandwidth made visible.
+Raise Hum and set the viewer's Notch to 50 Hz to remove it. Then move Hum (Hz)
+away from 50. The hum returns outside the notch's bandwidth.
 
 The source is public, so a script can use it directly with no picker involved:
 
@@ -96,9 +87,9 @@ entry uses the default sine carrier.
 
 ## Knobs you can turn while it streams
 
-An `DeviceOption` is a constructor argument: it is applied when Connect builds the
-source, so changing one means reconnecting. A `DeviceParam` is the other kind —
-a slider wired straight to an attribute of the source that is *already running*:
+A `DeviceOption` sets a constructor argument when Connect builds the source;
+changing it requires reconnecting. A `DeviceParam` slider writes an attribute
+of the running source:
 
 ```python
 from myogestic.widgets import DeviceSpec, DeviceParam
@@ -115,12 +106,11 @@ The next chunk picks the new value up. Nothing reconnects, the plot does not
 reset, and a recording in progress keeps its channel count and rate.
 
 For that to work the source must expose the attribute publicly and read it fresh
-each chunk — assigning a float is atomic under the GIL, so no lock is needed
+each chunk. Float assignment is atomic under the GIL, so no lock is needed
 between the UI thread and the acquire thread. The sliders are shown only while
-that device is the **connected** one: they write to the live source, so
+that device is the connected one: they write to the live source, so
 rendering them for a device you have merely selected would retune something
-else. Detaching the stream from anywhere — this panel's Disconnect, a
-`StreamManager` removing it — takes them away with it.
+else. Disconnecting or removing the stream hides the sliders.
 
 On a `selectable` picker they survive pointing the panel at another stream and
 back. Every field the panel shows is keyed by the stream it describes, so a
@@ -160,21 +150,19 @@ MUOVI_EEG = DeviceSpec(
 )
 ```
 
-Each `DeviceOption` binds a **constructor keyword** to a labelled row of choices, and
+Each `DeviceOption` binds a constructor keyword to a labelled row of choices, and
 the chosen values are passed to the factory as keyword arguments. Rows are
 drawn in the order you write them.
 
-`hint` and `steps` sit behind the **ⓘ** button next to the dropdown: one line on
-what the device is, then the setup procedure as a numbered list. Setup is a
-sequence of physical acts, so it is written as one — a paragraph makes the
-reader re-derive the order every time they come back to it. A device with
-neither gets no button.
+`hint` and `steps` appear behind the ⓘ button beside the dropdown.
+Use one hint line and a numbered setup procedure. The button is hidden
+when both are empty.
 
 Two things to get right:
 
-- **The row `label` carries the unit, spelled out** — `"Sample rate"`,
-  `"Channels"`, never `"fs_mode"`. Only your entry knows what the keyword means.
-- **Keep the choice text short** — `"2048"`, not `"2048 Hz"`. When every choice
+- Use a descriptive `label` with the unit. Use `"Sample rate"` or `"Channels"`
+  for `"fs_mode"`-style keywords.
+- Keep choices short. `"2048"` fits better than `"2048 Hz"`. When every choice
   fits on the row it is drawn as a segmented control, so all the alternatives
   stay visible and picking one is a single click. Wordy choices, or a narrow
   panel, fall back to a dropdown automatically.
@@ -185,7 +173,7 @@ and the source constructors stay the single source of truth.
 
 ## Devices that are discovered, not configured
 
-An LSL outlet has no settings to pick — you choose which one to subscribe to.
+Choose an LSL outlet by scanning available streams.
 Set `scan=True` and the picker draws a Scan button and a list of what
 `discover()` found, instead of option dropdowns, then hands the choice to
 `Stream.reconnect`:
@@ -202,8 +190,7 @@ LSL = DeviceSpec(
 )
 ```
 
-This is declared, not detected. A source can implement `discover()` and still
-be worth configuring statically, so the flag is yours to set.
+Set the flag explicitly; a source with `discover()` can also use static configuration.
 
 ## Watch the buffer at high channel counts
 
@@ -217,9 +204,9 @@ The default is 10 s. Raise `buffer_ms` for a specific recording, not by habit.
 
 ## One Connect per app
 
-`SignalViewer` offers its own Connect button while a stream is detached — for an
-app that is just `App` + `Stream` + a viewer, that is the only way to attach.
-Once you add a picker, **turn it off**:
+`SignalViewer` offers Connect while detached. Use it in an app with
+`App`, `Stream` and a viewer.
+Once you add a picker, turn it off:
 
 ```python
 viewer = SignalViewer("emg", show_connect=False)
@@ -232,8 +219,8 @@ silently connects a device nobody chose.
 
 ## Streams that come and go
 
-An app can declare its streams up front — `app.streams(Stream("emg", ...))` has
-always taken as many as you like — or let the operator add them while it runs:
+Declare streams with `app.streams(Stream("emg", ...))` or let the operator
+add them while the app runs:
 
 ```python
 from myogestic import Stream
@@ -246,23 +233,22 @@ streams = StreamManager(
 ```
 
 `StreamManager` shows sorted mono stream chips with status dots. Select a chip to
-reveal its **×** removal action; the last stream is kept. The trailing **+** opens
-an inline name field, **Add**, and **×** to cancel. During recording the chips are
+reveal its × removal action; the last stream is kept. The trailing + opens
+an inline name field, Add, and × to cancel. During recording the chips are
 dimmed and a caption says to stop recording before adding or removing streams.
 
-The manager only names the stream; the app builds it, because the geometry —
-window and buffer length — is the app's decision. Pair it with
+The manager names the stream; the app builds it with its window and buffer lengths. Pair it with
 `DevicePicker(selectable=True)` to choose each source. The picker has its own
 chip selection and keeps each stream's chosen device, options, and connection
 state intact when switching between them.
 
 For sources already configured in code, `StreamPanel` shows one compact row per
 stream: name, sample rate, channels, sample age, and a reconnect icon. Detached
-streams offer **Connect**, connection attempts show elapsed time with **Abort**,
-and failures show their error with **Retry**. With `selectable=True` (the default),
+streams offer Connect, connection attempts show elapsed time with Abort,
+and failures show their error with Retry. With `selectable=True` (the default),
 Connect opens a popover of discovered outlets when the source supports discovery;
 its rescan icon refreshes the choices. The Streams header also offers rescan and
-summarises connection state with a dot. Give panels distinct `widget_id` values
+summarizes connection state with a dot. Give panels distinct `widget_id` values
 when displaying more than one; connection attempts belong to each instance.
 
 For one compact card, put those callbacks directly on the picker instead of
@@ -281,34 +267,33 @@ picker = DevicePicker(
 )
 ```
 
-The trailing **+** chip opens a name field, **Add**, and **×** to cancel. Names use
+The trailing + chip opens a name field, Add, and × to cancel. Names use
 `StreamManager`'s rules: lowercase ASCII letters, digits, hyphens, and underscores,
 up to 32 characters. Empty names and duplicates cannot be added. Only the selected
-chip offers **×** removal; the last offered stream cannot be removed, and removing
+chip offers × removal; the last offered stream cannot be removed, and removing
 the selected stream points the picker at a remaining one. `exclude=("target",)`
 keeps widget-owned streams out of these chips.
 
 Options have captions above their controls in two columns, falling back to one
 column when the controls need more room. Each uses segments when all choices fit,
-or a dropdown otherwise. Scanned devices show an **Outlet** chooser and rescan
-button. **Connect** fills the action row while detached; during connection it
-becomes an elapsed-time readout with **Abort**. Once connected, sample rate,
+or a dropdown otherwise. Scanned devices show an Outlet chooser and rescan
+button. Connect fills the action row while detached; during connection it
+becomes an elapsed-time readout with Abort. Once connected, sample rate,
 channel count and sample age share a tinted row with Reconnect and Disconnect
 icons; attached-device live sliders stay below.
 
-**Both are refused while a recording is running.** A session sizes one Zarr array
+Both are refused while a recording is running. A session sizes one Zarr array
 per stream when recording starts, so a stream that appears afterwards has
 nowhere to write, and one that vanishes mid-take keeps the session attached and
-is never finalised. `App.add_stream` and `App.remove_stream` return `False` and
+is never finalized. `App.add_stream` and `App.remove_stream` return `False` and
 put the reason in `ctx.status_message`.
 
-One asymmetry worth knowing: `App.run` starts every registered stream once on
-the way in, so `add_stream` starts the stream itself *only* when the app is
-already running. Called during setup it behaves exactly like `app.streams(...)`.
+`App.run` starts each registered stream once. `add_stream` starts its stream
+only while the app is running; during setup it behaves like `app.streams(...)`.
 
 ## Recording
 
-**Connect**, **Reconnect**, and **Disconnect** are disabled while a recording is running,
+Connect, Reconnect, and Disconnect are disabled while a recording is running,
 with the reason in each action's tooltip. Reconnecting does not
 detach the session, so the acquire loop would keep appending to the same key at
 the new channel width and corrupt what you recorded. Stop, switch, start again.

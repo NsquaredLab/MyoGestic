@@ -181,13 +181,13 @@
     setStatus("Installing imgui-bundle (~5 MB)...");
     await micropip.install(IMGUI_BUNDLE_WHL);
 
-    setStatus("Installing pure-Python deps...");
+    setStatus("Installing pure-Python dependencies...");
     await micropip.install(PURE_PY_DEPS);
 
-    setStatus("Writing browser shims (mne_lsl, tsdownsample)...");
+    setStatus("Writing browser shims for mne_lsl and tsdownsample...");
     await installShims(pyodide);
 
-    setStatus("Installing MyoGestic (no deps)...");
+    setStatus("Installing MyoGestic without dependencies...");
     // Resolve the actual wheel filename from the CI-written manifest;
     // pyproject.toml's version drives the filename so we can't
     // hardcode it. Cache-bust the manifest fetch so version bumps

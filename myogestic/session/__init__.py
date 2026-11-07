@@ -1,7 +1,6 @@
 """Public session API.
 
-The implementation is split across small private modules so this file stays
-easy to scan while preserving the original import path.
+Private modules implement the session lifecycle and storage helpers.
 """
 
 from myogestic.session._core import (
