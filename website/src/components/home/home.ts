@@ -2,6 +2,20 @@ import { mountSignalField, CONFIDENCE, type Gesture } from '../signal-field/inde
 
 const hero = document.querySelector<HTMLElement>('.home-hero');
 if (hero) {
+    const copy = hero.querySelector<HTMLElement>('.hero-copy')!;
+    const panels = hero.querySelector<HTMLElement>('[data-panels]')!;
+    // Track layout changes (including font loading), outside the field's frame
+    // loop. These offsets also survive the controller replacing a lost canvas.
+    const alignField = () => {
+        const bounds = hero.getBoundingClientRect();
+        const headline = copy.getBoundingClientRect();
+        const instruments = panels.getBoundingClientRect();
+        hero.style.setProperty('--hero-field-top', `${instruments.top - bounds.top}px`);
+        hero.style.setProperty('--hero-probe-x', `${(headline.right + instruments.left) / 2 - bounds.left}px`);
+    };
+    alignField();
+    const layout = new ResizeObserver(alignField);
+    for (const element of [hero, copy, panels]) layout.observe(element);
     const prediction = hero.querySelector<HTMLElement>('[data-prediction]')!;
     const confidence = hero.querySelector<HTMLElement>('[data-confidence]')!;
     const confidenceBar = hero.querySelector<HTMLElement>('[data-confidence-bar]')!;
@@ -23,11 +37,15 @@ if (hero) {
     });
     for (const chip of chips) chip.addEventListener('click', () => controller.hold(chip.dataset.gesture as Gesture));
     auto.addEventListener('click', () => controller.auto());
+    const destroy = () => {
+        layout.disconnect();
+        controller.destroy();
+    };
     window.addEventListener('pagehide', event => {
         // A page in the back/forward cache resumes with its existing controller.
-        if (!event.persisted) controller.destroy();
+        if (!event.persisted) destroy();
     });
-    document.addEventListener('astro:before-swap', () => controller.destroy(), { once: true });
+    document.addEventListener('astro:before-swap', destroy, { once: true });
     document.addEventListener('keydown', event => {
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
             event.preventDefault();

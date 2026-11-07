@@ -92,6 +92,60 @@ test('phone width contains the page and puts the headline above the panels', asy
     expect(headline!.y + headline!.height).toBeLessThan(panels!.y);
 });
 
+for (const width of [390, 768, 1024, 1208]) {
+    test(`stacked hero hides the probe and guides at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 1000 });
+        await page.goto(home);
+        const copy = await page.locator('.hero-copy').boundingBox();
+        const panels = await page.locator('[data-panels]').boundingBox();
+        expect(panels!.y).toBeGreaterThanOrEqual(copy!.y + copy!.height);
+        const decorations = page.locator('.home-hero > .hide-sm');
+        await expect(decorations).toHaveCount(4); // Two guides, probe circle, CH 23.
+        for (const decoration of await decorations.all()) await expect(decoration).toBeHidden();
+    });
+}
+
+for (const width of [1209, 1280, 1440]) {
+    test(`side-by-side hero keeps the probe in the column gap at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 1000 });
+        await page.goto(home);
+        await page.evaluate(() => document.fonts.ready);
+        const decorations = page.locator('.home-hero > .hide-sm');
+        for (const decoration of await decorations.all()) await expect(decoration).toBeVisible();
+        const copy = await page.locator('.hero-copy').boundingBox();
+        const panels = await page.locator('[data-panels]').boundingBox();
+        const probe = await decorations.nth(2).boundingBox();
+        expect(panels!.y).toBeCloseTo(copy!.y, 0);
+        expect(probe!.x).toBeGreaterThanOrEqual(copy!.x + copy!.width);
+        expect(probe!.x + probe!.width).toBeLessThanOrEqual(panels!.x);
+    });
+}
+
+for (const width of [390, 768]) {
+    test(`stacked field fills an unattenuated band behind the panels at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 1000 });
+        await page.goto(home);
+        await page.evaluate(() => document.fonts.ready);
+        const canvas = page.locator('[data-signal-field]');
+        await expect(canvas).toHaveCount(1);
+        const field = await canvas.boundingBox();
+        const panels = await page.locator('[data-panels]').boundingBox();
+        const hero = await page.locator('.home-hero').boundingBox();
+        const scrim = await page.locator('.hero-scrim').boundingBox();
+        expect(field!.y).toBeCloseTo(panels!.y, 0);
+        expect(field!.y + field!.height).toBeGreaterThanOrEqual(hero!.y + hero!.height - 1);
+        expect(scrim!.y + scrim!.height).toBeLessThanOrEqual(panels!.y + 1);
+        const centre = { x: panels!.x + panels!.width / 2, y: panels!.y + panels!.height / 2 };
+        expect(centre.x).toBeGreaterThanOrEqual(field!.x);
+        expect(centre.x).toBeLessThanOrEqual(field!.x + field!.width);
+        // The mask is fully opaque after the first 48 px, including the centre.
+        await expect(canvas).toHaveCSS('mask-image', /^linear-gradient\(rgba\(0, 0, 0, 0\), rgb\(\d+, \d+, \d+\) 48px\)$/);
+        expect(centre.y).toBeGreaterThan(field!.y + 48);
+        expect(centre.y).toBeLessThan(field!.y + field!.height);
+        await expect(canvas).toHaveCSS('opacity', '1');
+    });
+}
+
 test('phone hero copy is covered by a uniform scrim with AA body contrast', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(home);
