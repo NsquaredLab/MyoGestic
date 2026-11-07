@@ -9,24 +9,24 @@ if (!version) throw new Error('Could not read the package version from pyproject
 
 <section id="top" class="home-hero" aria-label="Live EMG field" style="position: relative; overflow: hidden; background: var(--mg-field-bg); border-bottom: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent)">
   <canvas data-signal-field aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block"></canvas>
-  <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--mg-field-bg) 95%, transparent) 0%, color-mix(in srgb, var(--mg-field-bg) 82%, transparent) 36%, color-mix(in srgb, var(--mg-field-bg) 20%, transparent) 60%, color-mix(in srgb, var(--mg-field-bg) 5%, transparent) 100%)"></div>
+  <div aria-hidden="true" class="hero-scrim"></div>
   <div aria-hidden="true" class="hide-sm" style="position: absolute; top: 0; bottom: 0; left: 51.5%; border-left: 1px dashed color-mix(in srgb, var(--mg-home-ink) 18%, transparent)"></div>
   <div aria-hidden="true" class="hide-sm" style="position: absolute; left: 51.5%; right: 0; top: 640px; border-top: 1px dashed color-mix(in srgb, var(--mg-home-ink) 18%, transparent)"></div>
   <div aria-hidden="true" class="hide-sm" style="position: absolute; top: 631px; left: calc(51.5% - 9px); width: 18px; height: 18px; border: 1.5px solid var(--mg-text); border-radius: 50%"></div>
   <div aria-hidden="true" class="hide-sm" style="position: absolute; top: 652px; left: calc(51.5% + 12px); background: var(--mg-text); color: var(--mg-field-bg); font: 500 10px/1 var(--mg-font-mono); letter-spacing: 0.04em; padding: 4px 6px">CH 23</div>
 
   <div class="pad-x" style="position: relative; max-width: 1360px; margin: 0 auto; padding: 0 40px 28px">
-    <nav aria-label="Main" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 22px 0">
+    <nav aria-label="Main" class="home-nav" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 22px 0">
       <a href={base} aria-label="MyoGestic home" style="display: flex; align-items: center"><img src={logo.src} alt="MyoGestic" style="height: 30px; width: auto; display: block"></a>
-      <div style="display: flex; flex-wrap: wrap; gap: 4px 22px; font: 500 12px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase">
+      <div class="home-nav-links" style="display: flex; flex-wrap: wrap; gap: 4px 22px; font: 500 12px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase">
         <a href={`${base}getting-started/`} style="color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent); text-decoration: none; padding: 12px 0">Docs</a>
         <a href={`${base}widget-gallery/`} style="color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent); text-decoration: none; padding: 12px 0">Widgets</a>
         <a href={`${base}playground/`} style="color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent); text-decoration: none; padding: 12px 0">Playground</a>
         <a href={`${base}api/`} style="color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent); text-decoration: none; padding: 12px 0">API</a>
         <a href="https://github.com/NsquaredLab/MyoGestic/blob/main/CHANGELOG.md" style="color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent); text-decoration: none; padding: 12px 0">Changelog</a>
       </div>
-      <div style="flex: 1 1 0"></div>
-      <a href={`${base}getting-started/`} aria-label="Search ⌘K in the docs" style="text-decoration: none; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; background: color-mix(in srgb, var(--mg-home-control) 70%, transparent); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent); border-radius: 6px; color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent); font: 400 13px/1 var(--mg-font-body); cursor: pointer">
+      <div class="home-nav-spacer" style="flex: 1 1 0"></div>
+      <a href={`${base}getting-started/`} class="home-nav-search" aria-label="Search ⌘K in the docs" style="text-decoration: none; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; background: color-mix(in srgb, var(--mg-home-control) 70%, transparent); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent); border-radius: 6px; color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent); font: 400 13px/1 var(--mg-font-body); cursor: pointer">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
         Search
         <span aria-hidden="true" style="font: 500 11px/1 var(--mg-font-mono); padding: 3px 5px; border-radius: 4px; background: var(--mg-raised)">⌘K</span>
@@ -38,7 +38,7 @@ if (!version) throw new Error('Could not read the package version from pyproject
     </nav>
 
     <div class="hero-content" style="display: flex; flex-wrap: wrap; gap: 48px; align-items: flex-start; padding-top: 88px; min-height: 760px">
-      <div style="flex: 1 1 520px; min-width: 0; max-width: 640px">
+      <div class="hero-copy" style="flex: 1 1 520px; min-width: 0; max-width: 640px">
         <p style="margin: 0 0 22px; display: flex; align-items: center; gap: 10px; font: 500 12px/1 var(--mg-font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent)"><span style="width: 8px; height: 8px; border-radius: 50%; background: var(--mg-success)"></span>Real-time biosignal experiment GUI builder</p>
         <h1 class="hero-h1" style="margin: 0; font-family: var(--mg-font-display); font-weight: 400; font-size: 88px; line-height: 0.98; letter-spacing: -0.01em">A live experiment from a short Python script.</h1>
         <p style="margin: 28px 0 0; font-size: 19px; line-height: 1.55; color: color-mix(in srgb, var(--mg-home-ink) 80%, transparent); max-width: 540px">Signal viewers, recording, training and prediction in one window, built from a script without classes, registries or config files.</p>
@@ -68,3 +68,29 @@ if (!version) throw new Error('Could not read the package version from pyproject
     </div>
   </div>
 </section>
+
+<style>
+  .hero-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--mg-field-bg) 95%, transparent) 0%, color-mix(in srgb, var(--mg-field-bg) 82%, transparent) 36%, color-mix(in srgb, var(--mg-field-bg) 20%, transparent) 60%, color-mix(in srgb, var(--mg-field-bg) 5%, transparent) 100%);
+  }
+
+  /* The two flex columns stack below 520 + 560 + 48 + 80 px. Text then
+     spans the field's bright right side as well as its dark left side. */
+  @media (max-width: 1208px) {
+    .hero-scrim { background: color-mix(in srgb, var(--mg-field-bg) 96%, transparent); }
+  }
+
+  @media (max-width: 1100px) {
+    .home-nav { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; }
+    .home-nav > :first-child, .home-nav-links { grid-column: 1 / -1; }
+    .home-nav-links { min-width: 0; }
+    .home-nav-spacer { display: none; }
+    .home-nav > a { width: fit-content; max-width: 100%; }
+  }
+
+  @media (max-width: 380px) {
+    .home-nav-search > span { display: none; }
+  }
+</style>

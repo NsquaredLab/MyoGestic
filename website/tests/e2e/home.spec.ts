@@ -92,6 +92,81 @@ test('phone width contains the page and puts the headline above the panels', asy
     expect(headline!.y + headline!.height).toBeLessThan(panels!.y);
 });
 
+test('phone hero copy is covered by a uniform scrim with AA body contrast', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(home);
+    const scrim = page.locator('.hero-scrim');
+    const backdrop = await scrim.boundingBox();
+    // All of the copy, including the headline, install line and buttons, must
+    // remain inside the attenuated region, away from any full-strength field.
+    for (const selector of ['h1', '.hero-copy']) {
+        const copy = await page.locator(selector).boundingBox();
+        expect(copy!.x).toBeGreaterThanOrEqual(backdrop!.x);
+        expect(copy!.y).toBeGreaterThanOrEqual(backdrop!.y);
+        expect(copy!.x + copy!.width).toBeLessThanOrEqual(backdrop!.x + backdrop!.width);
+        expect(copy!.y + copy!.height).toBeLessThanOrEqual(backdrop!.y + backdrop!.height);
+    }
+    await expect(scrim).toHaveCSS('background-image', 'none');
+    const { opacity, contrast } = await scrim.evaluate(element => {
+        const ctx = document.createElement('canvas').getContext('2d')!;
+        function rgba(css: string) {
+            ctx.clearRect(0, 0, 1, 1);
+            ctx.fillStyle = css;
+            ctx.fillRect(0, 0, 1, 1);
+            return Array.from(ctx.getImageData(0, 0, 1, 1).data, value => value / 255);
+        }
+        const overlay = rgba(getComputedStyle(element).backgroundColor);
+        const ink = rgba(getComputedStyle(document.querySelector('.hero-copy > p:nth-of-type(2)')!).color);
+        // White is brighter than any trace, including additive intersections.
+        const background = overlay.slice(0, 3).map(channel => channel * overlay[3] + 1 - overlay[3]);
+        const foreground = background.map((channel, i) => ink[i] * ink[3] + channel * (1 - ink[3]));
+        const luminance = (rgb: number[]) => rgb.map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+            .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+        return { opacity: overlay[3], contrast: (luminance(foreground) + 0.05) / (luminance(background) + 0.05) };
+    });
+    expect(opacity).toBeGreaterThanOrEqual(0.95);
+    expect(contrast).toBeGreaterThanOrEqual(4.5);
+});
+
+for (const width of [320, 390, 768]) {
+    test(`header links do not overlap and remain keyboard reachable at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 844 });
+        await page.goto(home);
+        const links = page.getByRole('navigation', { name: 'Main', exact: true }).getByRole('link');
+        const boxes = await links.evaluateAll(elements => elements.map(element => {
+            const { x, y, width, height } = element.getBoundingClientRect();
+            return { x, y, width, height, name: element.getAttribute('aria-label') ?? element.textContent };
+        }));
+        for (const [i, box] of boxes.entries()) {
+            expect(box.x).toBeGreaterThanOrEqual(0);
+            expect(box.x + box.width).toBeLessThanOrEqual(width);
+            for (const other of boxes.slice(i + 1)) {
+                const overlaps = box.x < other.x + other.width && box.x + box.width > other.x
+                    && box.y < other.y + other.height && box.y + box.height > other.y;
+                expect(overlaps, `${box.name} overlaps ${other.name}`).toBe(false);
+            }
+        }
+        await page.keyboard.press('Tab'); // Skip to content.
+        for (const link of await links.all()) {
+            await page.keyboard.press('Tab');
+            await expect(link).toBeFocused();
+            await expect(link).toBeInViewport();
+        }
+    });
+}
+
+test('Hello EMG ships a sized WebP in tens of kilobytes', async ({ page }) => {
+    await page.goto(home);
+    const image = page.getByRole('img', { name: 'Hello EMG app with SignalViewer and RecordingControls in the dark theme' });
+    await image.scrollIntoViewIfNeeded();
+    await expect(image).toHaveAttribute('width', '720');
+    expect(Number(await image.getAttribute('height'))).toBeGreaterThan(0);
+    const response = await page.request.get(await image.getAttribute('src') ?? '');
+    expect(response.ok()).toBe(true);
+    expect(response.headers()['content-type']).toContain('image/webp');
+    expect((await response.body()).length).toBeLessThan(80_000);
+});
+
 for (const width of [1440, 390]) {
     test(`axe: no serious or critical violations at ${width}px`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 });
