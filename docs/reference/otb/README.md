@@ -42,4 +42,6 @@ Quattrocento facts:
 - Conversion: biosignal `5/2**16/150*1000` ≈ 5.086e-4 mV; AUX IN `5/2**16/0.5`
   ≈ 1.526e-4 V; last 8 accessory raw (counter @ `n-7`, trigger @ `n-6`,
   buffer @ `n-4`).
-- Stop: byte0 = `0x80` + recomputed CRC (always stop before reconnect).
+- The MATLAB example stops with byte0 = `0x80` + recomputed CRC. The Python
+  source clears `acq_on` while preserving the selected sample rate, channel
+  count and input settings, then recomputes the CRC (stop before reconnect).

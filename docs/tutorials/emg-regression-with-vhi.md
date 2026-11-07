@@ -12,8 +12,8 @@ Why regression and not classification? Two reasons it's the next thing
 to learn after `emg_classification.py`:
 
 * **The label loop is different.** Recording captures the VHI control
-  hand's *kinematic value at the end of each movement*, not a class
-  index. That changes both the recorder setup and the training-data
+  hand's *kinematics throughout the take*, rather than using a class
+  index as the training target. That changes both the recorder setup and the training-data
   iterator.
 * **The dual-plane idiom is unavoidable.** The example commands a
   *discrete DOF* over gRPC to drive the control hand to static
@@ -32,17 +32,19 @@ controls; this page walks the specific script.
 uv run --extra examples --extra grpc python examples/synthetic/emg_regression.py
 ```
 
-The `ProcessLauncher` panel inside the GUI spawns the EMG generator
-and the VHI binary. No env vars required if VHI was installed with
+The **Connect** step has launch controls for the EMG generator
+and the VHI binary, followed by their stream connections. No env vars required if VHI was installed with
 `python -m myogestic.tools.install_vhi`.
 
 ## The recording loop, narrated
 
 The thing that surprises first-time regression users:
-**recording captures the control hand's settled kinematics, not the
-button click.** The flow:
+**recording captures the control hand's kinematics throughout the take.**
+Select a pose and let it settle before recording if you want a static target. The flow:
 
-1. Click **Launch** on EMG Generator and VHI Hand.
+1. In **Connect**, launch EMG Generator and VHI Hand, then connect
+   **TestEMG1** and **VHI_Control**. Set a participant in the header and
+   open **Record**.
 2. Click a gesture button (Rest / Fist). Two things happen:
    * `bus.select("gesture", name)` - the gesture is a
      **discrete DOF**, a *held state*: the control hand snaps to that
@@ -52,15 +54,15 @@ button click.** The flow:
      regressor can map back from EMG amplitude. (If you *want* a swept
      trajectory instead, that is `recording_aid.start_trajectory(...)`, a
      recording aid rather than a control command.)
-   * `ctrl_outlet.push_sample([CTRL_VALUES[i]])` - the EMG generator
+   * `simulator.set(CTRL_VALUES[i])` - the EMG generator
      switches to the corresponding amplitude pattern.
-3. Click **Record**. `recording_aid.set_recording_session(True)` disables
+3. Click **Record Rest** or **Record Fist**. `recording_aid.set_recording_session(True)` disables
    VHI's local keyboard so the *only* movement source for this session
    is your gesture buttons. The session captures EMG samples
    *and* the `VHI_Control` 9-channel kinematics stream side by side.
    It returns `False` if this VHI has no recording aid, which the example
    surfaces — an ungated recording can pick up stray keyboard movements.
-4. Click **Stop Rec**. The session ends; `set_recording_session(False)`
+4. Click **Stop**. The session ends; `set_recording_session(False)`
    restores VHI's local control.
 
 That's the loop. Repeat for every gesture you want the model to
@@ -99,10 +101,10 @@ The bus owns the ordering that must not be re-derived per app:
 substitute rest → clip → smooth → **clip again** → deliver. Rest
 substitution comes first because `min(hi, max(lo, nan))` is `lo`, so a
 NaN prediction would otherwise arrive as a full-scale deflection; the
-second clip exists because a smoother undershoots on a falling edge.
+second clip keeps any smoother output inside the declared range.
 
-`RemoteTarget` refuses at construction what it cannot drive. Declare
-something this hand has no joint for and it raises, listing what it does
+`resolve()` and `RemoteTarget.bind()` refuse a map the target cannot drive. Declare
+something this hand has no joint for and resolution raises, listing what it does
 have — because a silently dropped joint looks exactly like a joint that
 is working and holding still.
 
@@ -155,31 +157,30 @@ by default), the encode to VHI's wire layout — belongs to the bus and
 its target.
 
 There is deliberately **no `np.clip` here**. Each DOF's declared range
-is the authority, and clipping *before* the smoother is a bug rather
-than a safeguard: the filter then overshoots straight back out of the
-range you just enforced. `bus.push` returns the frame it actually
+is the authority, and clipping *only before* the smoother cannot
+keep its output in range. The bus clips both before and after smoothing. `bus.push` returns the frame it actually
 delivered, which is what feeds `pipeline.predictions`.
 
-`bus.stop()` runs in the example's `finally`, and it does two things
+`link.stop()` runs in the example's `finally` and calls `bus.stop()`, and it does two things
 that matter on a real limb: it delivers the rest frame *before* tearing
 the targets down, and it **flushes** it. An outlet sends on a paced
 thread, so a pose pushed as the process exits would otherwise never
 leave — leaving the hand holding its last commanded position.
 
-## Layout - six rows, three columns
+## Layout - responsive steps
 
 ```python
 --8 < --"examples/synthetic/emg_regression.py:grid"
 ```
 
-A 6×3 grid: a fixed-height top row sized to the wordmark aspect, then
-five equal-share rows below. The left column is fixed at 300 px for the
-logo + control panels; columns 2 and 3 are `Fr(1)` and grow with the
-window. See [Grid layout](../concepts/grid-layout.md) for the
-`Px`/`Fr` rules.
+The wide layout has six rows and two columns: a growing signal column
+and a 400 px step-and-sessions column. The header and status span both.
+The simulator and activity log stay beside the sessions. Below 1100 px,
+the narrow layout stacks the same panels in one column.
 
-The signal viewer spans rows 0-3 across columns 1-2; stream and log
-panels share the bottom two rows.
+The header shows **Connect → Record → Train → Predict** and the
+participant. See [Grid layout](../concepts/grid-layout.md) for the
+`Px`/`Fr` rules.
 
 ## Where to go next
 

@@ -4,20 +4,20 @@ title: "Examples directory"
 Every runnable example under [`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic),
 what it teaches, and what's tweakable, plus the complete protocols in
 [`examples/start_here/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/start_here).
-All of them are hardware-free - the
-`ProcessLauncher` panel spawns `myogestic.tools.emg_generator` for you,
-so one terminal is enough.
+All can run without hardware. The EMG demos launch
+`myogestic.tools.emg_generator` from their connection controls; the array
+viewers and `start_here` protocols also offer in-process synthetic sources.
 
 For VHI integration, install once with `python -m myogestic.tools.install_vhi`
-(see [Install the Virtual Hand](../how-to/install-vhi.md)). Without it,
-the launcher button errors at click time and everything else still runs.
+(see [Install the Virtual Hand](../how-to/install-vhi.md)). The apps offer launch controls when a binary is available. Otherwise, run
+a compatible hand separately and bind to it, or use the app without it.
 
 ## Running
 
 ```bash
 uv sync --extra examples              # core demos
 uv sync --extra examples --extra grpc # adds the gRPC-control examples
-uv run python examples/synthetic/<name>.py
+uv run --extra examples --extra grpc python examples/synthetic/<name>.py
 ```
 
 ### From VS Code
@@ -50,7 +50,8 @@ A ready-to-copy declaration ships at
 — signed continuous DOFs, a discrete grasp state, a one-way range, and a `debounce_s`
 stability gate, with the mapping-first short forms alongside the explicit table form.
 [`examples/controls/myocontrol.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/myocontrol.toml)
-declares the narrower thing an app should: only the two aliases it actually pushes. A map
+declares the model's `prediction` alias. The separate `myocontrol_operator.toml` declares
+the operator's `control` alias. Each link binds only the hand it drives. A map
 listing a control the app never drives shows a row in its panel that never moves.
 
 To watch it load and drive a hand end to end:
@@ -135,6 +136,43 @@ time window, and `initial_channels` for each tile's opening selection. A unique
 Invert and the spatial selection grid inside that tile's array. Expand a tile's
 controls to edit channels, and keep the same manual range when comparing arrays.
 
+### `electrode_overview.py` - spatial RMS maps
+
+Five 64-channel arrays from one in-process 320-channel source, with a
+shared colour range and a signal viewer for detail. One contact on IN3 is
+silent so there is a visible fault to find.
+
+```bash
+uv run python examples/synthetic/electrode_overview.py
+```
+
+**What to tweak:** `RMS_MS` for integration time and `_scale` for the
+amplitude of each array or contact.
+
+### `high_channel_viewer.py` - a high-channel LSL viewer
+
+Launch a 256-channel generator, connect **TestEMG256**, and inspect the
+stream with `SignalViewer`. This app has no recording or model step.
+
+```bash
+uv run python examples/synthetic/high_channel_viewer.py
+```
+
+**What to tweak:** `N_CHANNELS`, `FS` and the stream buffer duration.
+
+### `reference_target.py` - a separate remote target
+
+A headless gRPC service with six continuous `vhi.prediction.*` addresses.
+It reads one LSL stream per address and holds the latest values. Drive it
+from a second process using a control map; it generates no EMG itself.
+
+```bash
+uv run --extra grpc python examples/synthetic/reference_target.py
+```
+
+**What to tweak:** `ADDRESSES` and the application of each received value.
+See [Your first remote target](your-first-remote-target.md).
+
 ### `my_device.py` - drive your own hardware
 
 A complete in-process target with three lines left for you: name your controls, drive your
@@ -189,10 +227,10 @@ smoothed pose to the predicted hand over LSL, while `gesture` sends each settled
 class change to the control hand over gRPC (`debounce_s = 0.1`). The compact
 Virtual Hand row in Connect opens the movement palette; Predict shows the last
 values under **Sent to the hand**. Connecting the hand needs the `grpc` extra:
-`uv run --extra grpc python examples/synthetic/emg_classification.py`.
+`uv run --extra examples --extra grpc python examples/synthetic/emg_classification.py`.
 
 ```bash
-uv run python examples/synthetic/emg_classification.py
+uv run --extra examples python examples/synthetic/emg_classification.py
 ```
 
 **What to tweak:** swap `rms`/`mav` from `myogestic.recipes.features`
@@ -207,7 +245,7 @@ end pose - regression needs the trainee to physically reach and hold the
 target, not sweep through a cycle. RMS + MAV + waveform length features.
 
 ```bash
-uv run python examples/synthetic/emg_regression.py
+uv run --extra examples --extra grpc python examples/synthetic/emg_regression.py
 ```
 
 **What to tweak:** add or remove DOFs in the kinematic target; swap
@@ -219,11 +257,11 @@ Same regression flow but with **RaulNetV17** - a PyTorch Lightning CNN
 that takes a sliding-RMS feature stack `(channels, time)` and predicts
 5-DOF kinematics. Trains with `Trainer(precision="32-true")`
 (TorchScript backward has hard-coded fp32 checks; mixed-precision
-fails), SWA, ModelCheckpoint, and per-epoch log lines streamed to the
+fails), ModelCheckpoint, and per-epoch log lines streamed to the
 pipeline panel's autoscroll-and-popout log box.
 
 ```bash
-uv run python examples/synthetic/emg_regression_raulnet.py
+uv run --extra examples --extra grpc python examples/synthetic/emg_regression_raulnet.py
 ```
 
 **What to tweak:** change `RaulNetV17` hyperparameters, increase the
@@ -239,7 +277,7 @@ the pose-lookup pattern for mapping multiple gestures to control poses.
 Every card can pop out into its own window; the training log can float independently.
 
 ```bash
-uv run python examples/synthetic/emg_32ch_multi_model.py
+uv run --extra examples --extra grpc python examples/synthetic/emg_32ch_multi_model.py
 ```
 
 **What to tweak:** plug another classifier into the model registry, add
@@ -248,12 +286,10 @@ generator scales to any `--channels`).
 
 ### `vhi_control_hand.py` - the operator's hand, not the model's
 
-The only example that drives `vhi.control.pose.*` instead of `vhi.prediction.*`: sliders
-pose the hand an operator sets up by hand, on its own stream. Both namespaces number
-channels from 0, so a control-pose address on the prediction stream would land on the
-other hand's channel — but nothing in the example says so. The target finds those
-addresses on the operator's stream in VHI's manifest and publishes there; VHI
-reads a pose instead of animating its own movements for as long as that stream is
+An example that drives `vhi.control.pose.*` instead of `vhi.prediction.*`: sliders
+pose the operator's hand. `RemoteTarget` publishes one one-channel LSL stream
+per address in the map, using the same transport as the prediction controls. VHI
+reads those values instead of animating its own movements while the streams are
 present. Point the same file at `vhi.prediction.*` and the example drives the other
 hand, unchanged.
 
@@ -268,8 +304,11 @@ uv run --extra grpc python examples/synthetic/vhi_control_hand.py
 ### `start_here/myocontrol.py` - the whole loop as a protocol
 
 What the demos above teach one at a time, assembled into an application you could take to a
-subject unmodified: a device dropdown instead of a named source, Rest/Fist trials shown
-on the control hand and recorded to a session folder, and a Train that builds either a classifier or a regressor.
+subject: a device dropdown instead of a named source, Rest/Fist trials shown
+on the control hand and saved as `.mg.zip` takes in `data/<ID>/recordings/`,
+and a Train step that builds either a classifier or a regressor. The header
+shows **Connect → Record → Train → Drive**; prediction takes and saved models
+go in `data/<ID>/predictions/` and `data/<ID>/models/`.
 The switch chooses what the *next* Train builds — the mode rides inside the model, so
 flipping it under a loaded model cannot run a class index down the regression branch. One
 control map serves both, because **classification is regression that emits a constant**:
@@ -277,9 +316,9 @@ a class names how closed the hand should be, `POSES` says what that constant is,
 goes out in the same units a regressor's own numbers do. Nothing downstream can tell the
 two apart.
 
-The map declares two aliases, named for the hands they drive, and both are commanded
-every frame — `prediction` on `vhi.prediction.*`, the model's output, and `control` on
-`vhi.control.pose.*`, the class the operator selected. Same kind of value, different
+Two maps declare aliases named for the hands they drive: `prediction` on
+`vhi.prediction.*`, pushed each prediction tick, and `control` on
+`vhi.control.pose.*`, driven by the gesture buttons or a Follow run. Same kind of value, different
 source. The two hands are allowed to disagree; that disagreement is what you are
 watching.
 
@@ -287,7 +326,7 @@ watching.
 uv run --extra examples --extra grpc python examples/start_here/myocontrol.py
 ```
 
-VHI is optional: nothing binds until you press **Connect** on the Hand tab, and until then
+VHI is optional: nothing binds until you press **Connect** on the Virtual Hand row in **Connect**, and until then
 `predict` pushes nothing and everything else runs.
 
 **What to tweak:** `CLASSES` and `POSES` together - a class is a name plus how closed the
@@ -297,8 +336,8 @@ nothing downstream matches them against VHI's vocabulary. Also the ticked featur
 
 ### `start_here/pong.py` - the first signed example
 
-Everything else that ships is one-way: `fist` runs 0..1, `%MVC` runs 0..1, and rest is
-simply the bottom of the range. Here the command is **signed**, in `[-1, +1]`, and Down is
+The myocontrol protocol uses `0..1` hand activation, with rest at the bottom
+of the range. Here the command is **signed**, in `[-1, +1]`, and Down is
 a real `-1` rather than the absence of Up — a wrist is the canonical bidirectional DOF, and
 the negative half is a direction a one-way fit never sees. One model emits one number; that
 number moves a [`PongTask`][myogestic.widgets.PongTask] paddle, `+1` at the top of the
@@ -310,7 +349,7 @@ classifier rewards nothing continuous at all.
 score and a signed command meter, or an effort meter during cursor tracking. The header
 shows the rally count and **Stop**; court dimensions follow the UI scale.
 
-Two ways to record the training set, and the Model tab starts either. **Follow the cursor**
+Two ways to record the training set, both on the **Record** step. **Follow the cursor**
 runs a [`Pursuit`][myogestic.tracking.Pursuit] block — a ghost paddle wanders the court, the
 subject chases it, and the cursor is recorded beside the EMG on the `target` stream. The
 Down / Rest / Up buttons cue the older three-class protocol. Prefer the cursor: three cued
@@ -326,7 +365,7 @@ feedback, so the intermediate levels are reachable at all.
 [Record for proportional control](../how-to/record-for-proportional-control.md) is the
 protocol on its own, with the numbers.
 
-The mode switch offers **Proportional**, Regression and Classification, and Proportional is
+The **Train** step offers **Proportional**, Regression and Classification, and Proportional is
 the default because the obvious baseline is wrong here in an instructive way. A regressor
 handed raw features learns whichever cue is louder in the training set, and loudness is not
 direction: the CatBoost fit this example shipped with learned "louder = Down", so
@@ -345,18 +384,17 @@ uv run --extra examples --extra grpc python examples/start_here/pong.py
 The Virtual Hand is a **mirror**, not a target: the paddle follows a plain float whether or
 not VHI ever answers, and the one alias in
 [`examples/controls/pong.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/pong.toml)
-carries the same float to the wrist once the Hand tab is bound. Its `weight = -1.0` is
+carries the same float to the wrist once the Virtual Hand is bound in **Connect**. Its `weight = -1.0` is
 anatomy rather than a correction — flexion is palm-ward, which on a pronated forearm is
-down. With no hardware at all, the synthetic amplifier's `direction` slider drives an
-agonist/antagonist pair, so Down and Up are separable signals and the whole loop demos on
-one machine.
+down. With no hardware at all, the **Synthetic wrist (dummy follows the cursor)** source drives an agonist/antagonist pair. It follows the
+cursor during a block; outside a block, arrow keys or the mouse set its drive.
 
 **What to tweak:** `CLASSES` and `POSES` together, as in `myocontrol.py` — but keep a
 negative entry, since a table that never goes below zero pins the paddle to the top half.
-Difficulty is **Easy / Fair / Hard** on the Model tab, which is `OPPONENTS` in the file (the
+Difficulty is **Easy / Fair / Hard** under **Opponent** on the **Play** step, which is `OPPONENTS` in the file (the
 opponent's top speed as a multiple of `ball_speed`); changing it clears the court, because a
 score won against a slower paddle should not carry over. `PongTask(paddle_size=...)` and
-`ball_speed` are the two knobs left in code.
+`ball_speed` can also be changed in code.
 
 ### `start_here/force_ramps.py` - a protocol with no model in it
 
@@ -401,7 +439,7 @@ actually on.
 * **A session to run, not a loop to build on** - `start_here/myocontrol.py`, which is the
   classification and regression flows in one application that names no hardware.
 * **A bidirectional DOF, or a task a subject will stay with** - `start_here/pong.py`, the
-  one signed example: Down is `-1`, and the rally is what trains graded control.
+  signed paddle example: Down is `-1`, and the rally is what trains graded control.
 * **Recording a protocol rather than training a model** - `start_here/force_ramps.py`,
   isometric trapezoids with the calibration that makes them readable later.
 * **Custom extension point** - skip the examples and read the
