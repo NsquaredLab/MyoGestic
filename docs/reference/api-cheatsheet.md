@@ -1,7 +1,7 @@
 ---
 title: "API cheatsheet"
 ---
-The most-used public symbols, signatures only — hand-maintained and not exhaustive. Each name links to its full entry (prose, Args/Returns, source) in the [API reference](../api/index.md).
+The most-used public symbols, signatures only — hand-maintained and not exhaustive. Each name links to its full entry (prose and parameter/return tables) in the [API reference](../api/index.md).
 
 ## Core
 
@@ -9,30 +9,30 @@ The most-used public symbols, signatures only — hand-maintained and not exhaus
 
 <!--docs:skip-->
 ```python
-App(name, theme=True, docking=False)
+App(name, theme=True, docking=False, ui_scale=None, require_participant=False)
   .streams(*streams)
   .ui(fn)                                          # decorator
   .popout(title, gui_fn)                           # App(docking=True)
   .start_recording(base_path="data")
-  .stop_recording()
-  .run(mode="gui" | "headless")
+  .stop_recording(*, wait=False)
+  .run(mode="gui", window_size=(1280, 800), fullscreen=False)  # or mode="headless"
   .ctx                                             # Context
 
-Stream(name, source, window_ms, buffer_ms=10000)
+Stream(name, source, window_ms, buffer_ms=10000, notch_hz=0)
   .start() / .stop() / .reconnect(target=None)
   .get_window() -> (data, ts)                      # data is channels-first
-  .get_display(n_pixels) -> (env_min, env_max)
-  .get_raw_snapshot() -> (ts, data)
+  .get_display(n_pixels=800) -> (ts, data) | None   # M4 display points; samples-first
+  .get_raw_snapshot() -> (ts, data) | None          # full buffer; samples-first
 
 Context                                            # flat dataclass
   .streams: dict[str, Stream]
   .state: str                                      # "idle" / "recording" / ...
-  .session: Session | None                         # active recording
+  .session: Session | None                         # current or most recent take
   .class_names: list[str]
   .status_message: str
 
 Grid(rows, cols)                                   # @app.ui layout helper
-Grid.areas(template, row_height=None, col_width=None)   # named cells; "a | b" = tabs
+Grid.areas(template, *, row_height=None, col_width=None, bare=())   # named cells; "a | b" = tabs
   .area(name)                                      # with grid.area("record"):
 Layout(wide=Grid, narrow=Grid, breakpoint=Px(1100))
   [name]                                           # with layout["record"]:
@@ -47,8 +47,11 @@ TrainingData(paths=[], class_names=[], classes=set())
 
 <!--docs:skip-->
 ```python
-LSLSource(stream_name)
+LSLSource(stream_name, dtype="float32")
 ReplaySource(session_path, stream_name, speed=1.0)  # accepts .mg.zip
+SyntheticSource(n_channels=8, fs=2048.0, *, noise=0.12, hum=0.35,
+                hum_hz=50.0, activation=1.0, direction=0.0,
+                waveform="sine", require_target=False)  # opt in to waveform="emg"
 SerialSource(
     port, baud, n_channels, fs
 )  # extras:[serial]; from myogestic.sources.serial_source import SerialSource
@@ -69,14 +72,16 @@ stop() -> None                          # idempotent
 claims: frozenset[str]                  # optional: which aliases you drive
 capabilities() -> Sequence[Capability]  # optional: what you export
 
-Capability(address, kind, lo=-1.0, hi=1.0, rest=0.0, states=(), rest_state="")
+Capability(address, kind, lo=-1.0, hi=1.0, rest=0.0, states=(),
+           rest_state="", activation_threshold=0.0, description="")
 
 load_control_map(mapping) -> ControlMap          # a Mapping, not a path
 resolve(control_map, capabilities) -> ControlSet # needs a live target's answer
-ControlBus(controls, targets=[...], smoothing=None, hz=50, on_warn=None)
+ControlBus(controls, *, targets=(), smoothing=None, hz=50.0,
+           dead_zone=None, hysteresis=None, on_warn=None, ctx=None, record_as="controls")
   .push(values) -> dict    .select(name, state) -> bool    .stop() -> None
 connect_controls(control_map, targets, ...) -> ControlBus | None  # None while unreachable
-ControlLinkConnector(link, retry_s=2.0).poll() -> bool  # non-blocking UI retry
+ControlLinkConnector(*links, retry_s=2.0).poll() -> bool  # non-blocking UI retry
 ```
 
 ## Outlets
@@ -96,7 +101,7 @@ LSLOutlet(name, n_channels, hz=50)
 
 <!--docs:skip-->
 ```python
-Pipeline(app, predict_hz=50)
+Pipeline(app, predict_hz=50, *, input_streams=None)
   @pipeline.extract(windows: dict[str, np.ndarray])  # channels-first
   @pipeline.train(data: TrainingData)
   @pipeline.predict(model, features) -> dict
@@ -119,7 +124,7 @@ iter_labeled_windows(paths, stream_name, window_ms, hop_ms,
                      classes=None)
   -> Iterator[(window, ts, class_index)]            # window: (n_ch, n_samp)
 iter_aligned_windows(paths, primary_stream_name, aligned_stream_names,
-                     window_ms, hop_ms, n_alignment_samples=1)
+                     window_ms, hop_ms, n_alignment_samples=1, *, with_names=False)
   -> Iterator[(primary_window, {name: vec}, ts)]
 ```
 
@@ -144,23 +149,24 @@ Construct once (setup scope), then call `.ui(...)` each frame in `@app.ui`. Full
 
 <!--docs:skip-->
 ```python
-SignalViewer(stream_name, selectable=False, scale_mode="auto",
+SignalViewer(stream_name, *, selectable=False, scale_mode="auto",
              y_range=(-1, 1), show_diagnostics=False, show_markers=False)
   .ui(ctx)
-RawSignalViewer(stream_name, widget_id=None, show_title=True)
+RawSignalViewer(stream_name, *, widget_id=None, show_title=True)
                                                    # Window selector; Channels chip popup
   .ui(ctx)
-RecordingControls(class_names, *, on_record, on_stop, on_gesture=None)
+RecordingControls(class_names=None, *, on_record, on_stop, on_gesture=None)
   .ui(ctx)
-SessionManager(base_path, title="Sessions", class_names=None)
-  .ui() -> TrainingData(paths, class_names, classes)
+SessionManager(base_path="data", *, title="Sessions", class_names=None)
+  .ui(participant=None) -> TrainingData(paths, class_names, classes)
 ProcessLauncher(processes)
   .ui()
-Scatter2D(label, show_title=True) / Scatter3D(label, show_title=True)
+Scatter2D(label, *, show_title=True) / Scatter3D(label, *, show_title=True)
   .ui(points, labels=None, class_names=None)
-Heatmap(label, label_fmt="%.1f", show_title=True)
-  .ui(data, vrange=None)                            # shared colour range; scale strip
-LinePlot(label, y_range=None, show_title=True)
+Heatmap(label, *, label_fmt="%.1f", show_title=True)
+  .ui(data, x_tick_labels=None, y_tick_labels=None, vrange=None)
+                                                   # shared colour range; scale strip
+LinePlot(label, *, y_range=None, show_title=True)
   .ui(data, channel_names=None)                     # Auto / Shared when y_range is given
 panel_header(title, icon=None)
 output_filter = PostProcessor(hz=50)
