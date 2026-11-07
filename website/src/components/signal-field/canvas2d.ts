@@ -1,4 +1,4 @@
-import { channelColor, type FieldState } from './field';
+import { channelColor, FIELD_GAIN, type FieldState } from './field';
 import { FIELD_BACKGROUND_FALLBACK, type Renderer } from './gl';
 
 export function createCanvas2DRenderer(
@@ -41,7 +41,7 @@ export function createCanvas2DRenderer(
     width = Math.round(w * 256);
     height = Math.round(h * 256);
     const row = height / channels;
-    amplitude = row * 2.4;
+    amplitude = row * FIELD_GAIN;
     for (let i = 0; i < samples; i++) xs[i] = Math.round(i / (samples - 1) * width);
     for (let c = 0; c < channels; c++) ys[c] = Math.round((c + 0.5) * row);
     dpr = Math.min(2, dpr);

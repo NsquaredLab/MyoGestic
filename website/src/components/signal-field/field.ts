@@ -75,6 +75,9 @@ export function setGesture(s: FieldState, gesture: Gesture): void {
   s.gesture = gesture;
 }
 
+/** Trace height in channel lanes per unit of signal: bulk activity stays inside its lane. */
+export const FIELD_GAIN = 0.4;
+
 // Hot path: mutate the existing row-major ring and activation arrays only.
 export function stepField(s: FieldState, k: number, rand: () => number): void {
   for (let i = 0; i < k; i++) {

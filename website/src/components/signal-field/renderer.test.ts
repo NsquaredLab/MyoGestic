@@ -148,7 +148,7 @@ describe('Canvas 2D fallback', () => {
     renderer.draw(s);
     renderer.draw(s);
     expect(ctx.moveTo.mock.calls[0][0]).toBe(0);
-    expect(ctx.moveTo.mock.calls[0][1] / 256).toBeCloseTo(211 - 422 * 2.4, 2);
+    expect(ctx.moveTo.mock.calls[0][1] / 256).toBeCloseTo(211 - 422 * field.FIELD_GAIN, 2);
     expect(ctx.lineTo).toHaveBeenCalledTimes(28);
     expect(ctx.stroke).toHaveBeenCalledTimes(4);
     expect(colors).toHaveBeenCalledTimes(2);
@@ -157,7 +157,7 @@ describe('Canvas 2D fallback', () => {
     expect(ctx.globalCompositeOperation).toBe('source-over');
     renderer.resize(390, 422, 4);
     renderer.draw(s);
-    expect(ctx.moveTo.mock.calls.at(-2)![1] / 256).toBeCloseTo(105.5 - 211 * 2.4, 2);
+    expect(ctx.moveTo.mock.calls.at(-2)![1] / 256).toBeCloseTo(105.5 - 211 * field.FIELD_GAIN, 2);
     expect(ctx.lineTo.mock.calls.every(([x, y]) => Number.isInteger(x) && Number.isInteger(y))).toBe(true);
     renderer.destroy();
   });

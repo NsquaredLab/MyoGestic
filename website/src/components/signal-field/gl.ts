@@ -1,4 +1,4 @@
-import { channelColor, type FieldState } from './field';
+import { channelColor, FIELD_GAIN, type FieldState } from './field';
 
 export const FIELD_BACKGROUND_FALLBACK = '#0F1012';
 
@@ -80,7 +80,7 @@ void main() {
   float v = texelFetch(uSignal, ivec2((uHead + i) % ${samples}, c), 0).r;
   float a = 0.22 + 0.6 * texelFetch(uActivation, ivec2(c, 0), 0).r;
   gl_Position = vec4(2.0 * float(i) / ${samples - 1}.0 - 1.0,
-    1.0 - 2.0 * (float(c) + 0.5 - v * 2.4) / ${channels}.0, 0.0, 1.0);
+    1.0 - 2.0 * (float(c) + 0.5 - v * ${FIELD_GAIN.toFixed(2)}) / ${channels}.0, 0.0, 1.0);
   color = vec4(uColors[c] * a, a);
 }`);
   gl.shaderSource(fragment, `#version 300 es
