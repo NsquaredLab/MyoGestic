@@ -1,43 +1,20 @@
 ---
-import '../styles/fonts.css';
-import '../styles/tokens.css';
-
-const base = import.meta.env.BASE_URL;
+import HomeLayout from '../components/home/HomeLayout.astro';
+import Hero from '../components/home/Hero.astro';
+import OneScript from '../components/home/OneScript.astro';
+import Playground from '../components/home/Playground.astro';
+import Protocols from '../components/home/Protocols.astro';
+import Cite from '../components/home/Cite.astro';
+import HomeFooter from '../components/home/HomeFooter.astro';
 ---
 
-<!doctype html>
-<html lang="en" data-theme="dark">
-    <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>MyoGestic</title>
-        <meta name="description" content="Real-time biosignal experiment GUI builder." />
-        <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
-        <link rel="icon" href={`${base}favicon.ico`} sizes="any" />
-        <link rel="apple-touch-icon" href={`${base}apple-touch-icon.png`} />
-    </head>
-    <body>
-        <main>
-            <h1>MyoGestic</h1>
-            <a href={`${base}getting-started/`}>Getting Started</a>
-        </main>
-    </body>
-</html>
-
-<style>
-    body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        background: var(--mg-canvas);
-        color: var(--mg-text);
-        font-family: var(--mg-font-body);
-    }
-    h1 {
-        font-family: var(--mg-font-display);
-        font-weight: 400;
-        font-size: 4rem;
-    }
-    a { color: var(--mg-link); }
-</style>
+<HomeLayout>
+    <main id="main">
+        <Hero />
+        <OneScript />
+        <Playground />
+        <Protocols />
+        <Cite />
+    </main>
+    <HomeFooter />
+</HomeLayout>
