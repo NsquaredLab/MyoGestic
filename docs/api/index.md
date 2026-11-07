@@ -1,5 +1,6 @@
-# API reference
-
+---
+title: "API reference"
+---
 Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io/). Pick the part of the library you're working with — or, for a signatures-only lookup, use the [API cheatsheet](../reference/api-cheatsheet.md).
 
 <div class="grid cards" markdown>

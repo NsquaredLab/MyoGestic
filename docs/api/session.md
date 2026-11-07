@@ -1,5 +1,6 @@
-# Session
-
+---
+title: "Session"
+---
 Read back an on-disk recording session: iterate labeled or aligned windows for training, or open the raw store. See [Record and replay](../how-to/record-and-replay.md).
 
 ## Reading sessions

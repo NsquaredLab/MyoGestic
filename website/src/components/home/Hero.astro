@@ -1,0 +1,111 @@
+---
+import { readFileSync } from 'node:fs';
+import logo from '../../assets/brand/myogestic-horizontal.svg';
+import Panels from './Panels.astro';
+const base = import.meta.env.BASE_URL;
+const version = readFileSync(new URL('../../../../pyproject.toml', import.meta.url), 'utf8').match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+if (!version) throw new Error('Could not read the package version from pyproject.toml');
+---
+
+<section id="top" class="home-hero" aria-label="Live EMG field" style="position: relative; overflow: hidden; background: var(--mg-field-bg); border-bottom: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent)">
+  <canvas data-signal-field aria-hidden="true" class="hero-field"></canvas>
+  <div aria-hidden="true" class="hero-scrim"></div>
+
+  <div class="pad-x" style="position: relative; max-width: 1360px; margin: 0 auto; padding: 0 40px 28px">
+    <nav aria-label="Main" class="home-nav" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 22px 0">
+      <a href={base} aria-label="MyoGestic home" style="display: flex; align-items: center"><img src={logo.src} alt="MyoGestic" style="height: 30px; width: auto; display: block"></a>
+      <div class="home-nav-links" style="display: flex; flex-wrap: wrap; gap: 4px 22px; font: 500 12px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase">
+        <a href={`${base}getting-started/`} style="color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent); text-decoration: none; padding: 12px 0">Docs</a>
+        <a href={`${base}widget-gallery/`} style="color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent); text-decoration: none; padding: 12px 0">Widgets</a>
+        <a href={`${base}playground/`} style="color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent); text-decoration: none; padding: 12px 0">Playground</a>
+        <a href={`${base}api/`} style="color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent); text-decoration: none; padding: 12px 0">API</a>
+        <a href="https://github.com/NsquaredLab/MyoGestic/blob/main/CHANGELOG.md" style="color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent); text-decoration: none; padding: 12px 0">Changelog</a>
+      </div>
+      <div class="home-nav-spacer" style="flex: 1 1 0"></div>
+      <a href={`${base}getting-started/`} class="home-nav-search" aria-label="Search ⌘K in the docs" style="text-decoration: none; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; background: color-mix(in srgb, var(--mg-home-control) 70%, transparent); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent); border-radius: 6px; color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent); font: 400 13px/1 var(--mg-font-body); cursor: pointer">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        Search
+        <span aria-hidden="true" style="font: 500 11px/1 var(--mg-font-mono); padding: 3px 5px; border-radius: 4px; background: var(--mg-raised)">⌘K</span>
+      </a>
+      <a href="https://github.com/NsquaredLab/MyoGestic" style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 6px; background: var(--mg-pill-bg); color: var(--mg-on-pill); text-decoration: none; font: 500 12px/1 var(--mg-font-mono)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z"></path></svg>
+        GitHub · {version}
+      </a>
+    </nav>
+
+    <div class="hero-content" style="display: flex; flex-wrap: wrap; gap: 48px; align-items: flex-start; padding-top: 88px; min-height: 760px">
+      <div class="hero-copy" style="flex: 1 1 520px; min-width: 0; max-width: 640px">
+        <p style="margin: 0 0 22px; display: flex; align-items: center; gap: 10px; font: 500 12px/1 var(--mg-font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent)"><span style="width: 8px; height: 8px; border-radius: 50%; background: var(--mg-success)"></span>Real-time biosignal experiment GUI builder</p>
+        <h1 class="hero-h1" style="margin: 0; font-family: var(--mg-font-display); font-weight: 400; font-size: 88px; line-height: 0.98; letter-spacing: -0.01em">A live experiment from a short Python script.</h1>
+        <p style="margin: 28px 0 0; font-size: 19px; line-height: 1.55; color: color-mix(in srgb, var(--mg-home-ink) 80%, transparent); max-width: 540px">Signal viewers, recording, training and prediction in one window, built from a script without classes, registries or config files.</p>
+        <div style="margin-top: 34px; display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 420px; height: 48px; padding: 0 6px 0 16px; background: var(--mg-console-bg); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 60%, transparent); border-radius: 8px; font: 400 15px/1 var(--mg-font-mono); color: var(--mg-console-text)">
+          <span><span style="color: color-mix(in srgb, var(--mg-home-ink) 50%, transparent)">$ </span>pip install myogestic</span>
+          <button type="button" data-copy-install aria-label="Copy install command" style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent); cursor: pointer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>
+          </button>
+        </div>
+        <span class="sr-only" role="status" data-install-status></span>
+        <div style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px">
+          <a href={`${base}playground/`} style="display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 22px; background: var(--mg-primary-fill); color: var(--mg-text); border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px">Open the Playground
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+          </a>
+          <a href={`${base}getting-started/`} style="display: inline-flex; align-items: center; height: 48px; padding: 0 20px; background: var(--mg-home-control); color: var(--mg-text); border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 15px">Get started</a>
+        </div>
+        <p style="margin: 18px 0 0; font: 400 11.5px/1.6 var(--mg-font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 55%, transparent)">The Playground runs in your browser · Pyodide · about 30 s on first load</p>
+      </div>
+
+      <Panels />
+
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding-top: 18px; border-top: 1px solid color-mix(in srgb, var(--mg-home-hairline) 45%, transparent); font: 400 11px/1.5 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 55%, transparent)">
+      <span>Behind this page: 64 channels of synthetic EMG, drawn live</span>
+      <span>Pick a gesture and the field follows it</span>
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero-field {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .hero-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--mg-field-bg) 95%, transparent) 0%, color-mix(in srgb, var(--mg-field-bg) 82%, transparent) 36%, color-mix(in srgb, var(--mg-field-bg) 20%, transparent) 60%, color-mix(in srgb, var(--mg-field-bg) 5%, transparent) 100%);
+  }
+
+  /* Keep the layout and field band on the same breakpoint:
+     520 + 560 px columns, 48 px gap and 80 px page padding. */
+  @media (max-width: 1208px) {
+    .hero-content { flex-direction: column; }
+    .hero-copy, .hero-content :global([data-panels]) { flex: none !important; width: 100%; }
+    .hero-scrim {
+      height: var(--hero-field-top, 100%);
+      bottom: auto;
+      background: color-mix(in srgb, var(--mg-field-bg) 96%, transparent);
+    }
+    .hero-field {
+      top: var(--hero-field-top, 100%);
+      height: calc(100% - var(--hero-field-top, 100%));
+      mask-image: linear-gradient(transparent, var(--mg-text) 48px);
+    }
+  }
+
+  @media (max-width: 1100px) {
+    .home-nav { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; }
+    .home-nav > :first-child, .home-nav-links { grid-column: 1 / -1; }
+    .home-nav-links { min-width: 0; }
+    .home-nav-spacer { display: none; }
+    .home-nav > a { width: fit-content; max-width: 100%; }
+  }
+
+  @media (max-width: 380px) {
+    .home-nav-search > span { display: none; }
+  }
+</style>

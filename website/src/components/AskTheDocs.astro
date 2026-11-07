@@ -1,0 +1,108 @@
+---
+const icon = `${import.meta.env.BASE_URL}favicon.svg`;
+---
+
+<!-- Context7 has no public open API. Restyle its own launcher instead. -->
+<template id="mg-chat-styles" data-icon={icon}>
+    <style>
+        :host { font-family: var(--mg-font-body); color-scheme: inherit; }
+        .c7-bubble {
+            width: auto; height: 44px; gap: 8px; padding: 0 14px 0 8px;
+            border: 1px solid var(--mg-border); border-radius: 999px;
+            background: var(--mg-pill-bg); color: var(--mg-on-pill);
+            font: 500 13px/1 var(--mg-font-body); box-shadow: none;
+            z-index: 30;
+        }
+        .c7-bubble:hover { transform: none; box-shadow: none; background: var(--mg-control-hi); }
+        .c7-bubble img { width: 28px; height: 28px; }
+        .c7-bubble:focus-visible, button:focus-visible, input:focus-visible, a:focus-visible {
+            outline: 2px solid var(--mg-selected-line); outline-offset: 3px;
+        }
+        .c7-panel {
+            background: var(--mg-card); color: var(--mg-text); border: 1px solid var(--mg-border);
+            border-radius: 8px; z-index: 30; max-width: calc(100vw - 40px);
+            max-height: calc(100dvh - 110px); box-shadow: none;
+        }
+        .c7-header, .c7-input-area, .c7-footer {
+            background: var(--mg-raised); border-color: var(--mg-border);
+        }
+        .c7-header-title, .c7-close, .c7-close:hover, .c7-powered, .c7-tool-header { color: var(--mg-text); }
+        .c7-header-title { font: 500 12px/1.5 var(--mg-font-mono); }
+        .c7-msg.assistant, .c7-tool-call, .c7-typing { background: var(--mg-control); color: var(--mg-text); }
+        .c7-msg.user, .c7-send { background: var(--mg-primary-fill); color: var(--mg-on-primary); }
+        .c7-msg.error { background: color-mix(in srgb, var(--mg-danger) 14%, var(--mg-card)); color: var(--mg-text); }
+        .c7-input { min-width: 0; background: var(--mg-canvas); color: var(--mg-text); border-color: var(--mg-border); }
+        .c7-input::placeholder { color: var(--mg-text-dim); }
+        .c7-input:focus { border-color: var(--mg-accent); box-shadow: none; }
+        .c7-tool-result, .c7-footer { border-color: var(--mg-border); }
+        .c7-msg.assistant a, .c7-tool-toggle, .c7-powered:hover { color: var(--mg-link); }
+        .c7-msg.assistant code { background: var(--mg-control-hi); font-family: var(--mg-font-mono); }
+        .c7-msg.assistant pre, .c7-tool-content pre { background: var(--mg-console-bg); color: var(--mg-console-text); }
+        .c7-typing span { background: var(--mg-text-dim); }
+        @media (max-width: 640px) {
+            .c7-panel { max-width: 100vw; max-height: 85dvh; border-radius: 8px 8px 0 0; }
+        }
+        @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+    </style>
+</template>
+
+<script>
+    const template = document.querySelector<HTMLTemplateElement>('#mg-chat-styles');
+    if (template && !document.getElementById('context7-widget')) {
+        // The upstream launcher is inside a CLOSED root and has no public open or
+        // styling API. Capture only this root during creation; retain closed mode
+        // and restore the native method immediately (also on load/error).
+        const attach = Element.prototype.attachShadow;
+        const restore = () => {
+            if (Element.prototype.attachShadow === capture) Element.prototype.attachShadow = attach;
+        };
+        function capture(this: Element, options: ShadowRootInit) {
+            const root = attach.call(this, options);
+            if (this.id !== 'context7-widget') return root;
+            restore();
+            const host = this;
+            for (const type of ['keydown', 'keyup', 'keypress']) {
+                host.addEventListener(type, event => event.stopPropagation());
+            }
+            queueMicrotask(() => {
+                const bubble = root.querySelector<HTMLButtonElement>('.c7-bubble');
+                const panel = root.querySelector<HTMLElement>('.c7-panel');
+                const close = root.querySelector<HTMLButtonElement>('.c7-close');
+                if (!bubble || !panel || !close) return;
+                root.appendChild(template!.content.cloneNode(true));
+                const image = document.createElement('img');
+                image.src = template!.dataset.icon!;
+                image.alt = '';
+                bubble.replaceChildren(image, document.createTextNode('Ask the docs'));
+                bubble.setAttribute('aria-label', 'Ask the docs');
+                bubble.setAttribute('aria-expanded', 'false');
+                bubble.setAttribute('aria-controls', 'mg-docs-chat');
+                panel.id = 'mg-docs-chat';
+                panel.setAttribute('role', 'region');
+                panel.setAttribute('aria-label', 'Documentation chat');
+                root.querySelector('.c7-input')?.setAttribute('aria-label', 'Message the documentation chat');
+                new MutationObserver(() => {
+                    const open = panel.classList.contains('open');
+                    bubble.setAttribute('aria-expanded', String(open));
+                    if (!open) bubble.focus();
+                }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+                root.addEventListener('keydown', event => {
+                    if (event instanceof KeyboardEvent && event.key === 'Escape' && panel.classList.contains('open')) {
+                        event.preventDefault();
+                        close.click();
+                    }
+                });
+                host.setAttribute('data-mg-ready', '');
+            });
+            return root;
+        }
+        Element.prototype.attachShadow = capture;
+        const script = document.createElement('script');
+        script.src = 'https://context7.com/widget.js';
+        script.dataset.library = '/nsquaredlab/myogestic';
+        script.defer = true;
+        script.addEventListener('load', restore, { once: true });
+        script.addEventListener('error', restore, { once: true });
+        document.body.appendChild(script);
+    }
+</script>

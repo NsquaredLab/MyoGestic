@@ -4,8 +4,8 @@
 
   Ships as static content inside the docs site: the deployed URL is
   https://<docs-host>/playground/. Locally, run the docs dev server
-  (`uv run --extra docs --extra grpc --extra serial properdocs serve`)
-  and open http://127.0.0.1:8000/MyoGestic/playground/.
+  (`cd website && npm run dev`)
+  and open http://localhost:4321/MyoGestic/playground/.
 
   What this loads (in order):
     1. Pyodide 0.29.4                        (Python compiled to WebAssembly)
@@ -24,7 +24,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>MyoGestic playground</title>
-  <link rel="icon" type="image/png" href="../images/myogestic_logo.png" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
   <script src="https://cdn.jsdelivr.net/pyodide/v0.29.4/full/pyodide.js"></script>
 </head>
 <body>
@@ -59,11 +59,9 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* "Back to docs" pill - small, top-left, above the canvas. ImGui
-     still gets pointer events for everything else; this just carves
-     out a ~140x32 px region for navigation. */
+  /* app.py reserves the last 80 px of the bare header row for this link. */
   #back-to-docs {
-    position: fixed; top: 12px; left: 12px;
+    position: fixed; top: 24px; right: 20px;
     padding: 6px 12px;
     background: rgba(13, 17, 23, 0.85);
     color: #c9d1d9;
@@ -121,7 +119,11 @@
   const PURE_PY_DEPS = [
     "dvg-ringbuffer",
     "platformdirs",
-    "zarr",
+    // Zarr 3's sync API starts an IO thread, forbidden by Pyodide. Zarr 2
+    // writes the same portable directory/zip takes synchronously. Its codec
+    // dependency matches Pyodide's bundled numcodecs 0.15.1; MyoGestic uses
+    // one Blosc thread here (see session/_core.py).
+    "zarr==2.18.7",
     "joblib",
     "numpy",          // already bundled in Pyodide but ensures resolution
     "scikit-learn",   // for the playground app's LDA classifier

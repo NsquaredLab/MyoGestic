@@ -44,7 +44,7 @@
   <rect class="node" x="30" y="135" width="180" height="40" rx="8"/>
   <text class="text-strong" x="120" y="160" font-size="14" text-anchor="middle">Serial</text>
   <rect class="node" x="30" y="190" width="180" height="40" rx="8"/>
-  <text class="text-strong" x="120" y="215" font-size="14" text-anchor="middle">Replay (.npz)</text>
+  <text class="text-strong" x="120" y="215" font-size="14" text-anchor="middle">Replay (take)</text>
 
   <!-- Pipeline lane (center, prominent) -->
   <rect class="lane" x="320" y="30" width="320" height="300" rx="12"/>

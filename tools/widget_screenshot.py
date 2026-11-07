@@ -39,7 +39,9 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 # ─────────────────────────────────────────────────────────────────────
 
 
-def _self_capture_after(seconds: float, output_path: Path) -> None:
+def _self_capture_after(
+    seconds: float, output_path: Path, *, window_only: bool = False
+) -> None:
     """In a background thread, wait ``seconds``, find this process's
     main GUI window via Quartz, screencapture it, then SIGINT main to
     exit cleanly.
@@ -68,7 +70,10 @@ def _self_capture_after(seconds: float, output_path: Path) -> None:
             return
         output_path.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
-            ["screencapture", "-l", str(wid), "-t", "png", "-x", str(output_path)],
+            [
+                "screencapture", *(["-o"] if window_only else []), "-l", str(wid),
+                "-t", "png", "-x", str(output_path),
+            ],
             capture_output=True,
             text=True,
         )
@@ -90,6 +95,7 @@ def _self_capture_after(seconds: float, output_path: Path) -> None:
 # Per-widget window sizes (logical pixels). Tuned so each widget fills
 # the window at its natural rendered height with no empty padding.
 SIZES: dict[str, tuple[int, int]] = {
+    "hello_emg": (1000, 600),
     "signal_viewer": (700, 380),
     "recording_controls": (440, 200),
     "session_manager": (440, 240),
@@ -107,14 +113,15 @@ SIZES: dict[str, tuple[int, int]] = {
 }
 
 
-def render_signal_viewer(out: Path) -> None:
+def render_signal_viewer(out: Path, *, hello_emg: bool = False) -> None:
     import time
     import numpy as np
-    from myogestic import App, Stream, StreamInfo
-    from myogestic.widgets import SignalViewer
+    from myogestic import App, Fr, Grid, Px, Stream, StreamInfo
+    from myogestic.widgets import RecordingControls, SignalViewer
 
-    FS = 256.0
-    N = 32  # samples per read - 32 / 256 = 125 ms per chunk
+    FS = 2048.0 if hello_emg else 256.0
+    N = 64 if hello_emg else 32
+    channels = 8 if hello_emg else 4
 
     class FakeSource:
         """Paced synthetic 4-channel signal.
@@ -132,12 +139,18 @@ def render_signal_viewer(out: Path) -> None:
         def __init__(self):
             self._t = 0  # sample counter for waveform phase
             self._next_tick = None  # wall-clock target for next read
+            if hello_emg:
+                from scipy.signal import butter
+
+                self._rng = np.random.default_rng(7)
+                self._sos = butter(4, [20, 450], btype="bandpass", fs=FS, output="sos")
+                self._zi = np.zeros((len(self._sos), 2, channels))
 
         def connect(self):
             from mne_lsl.lsl import local_clock
 
             self._next_tick = local_clock()
-            return StreamInfo(n_channels=4, fs=FS, dtype=np.dtype("float32"))
+            return StreamInfo(n_channels=channels, fs=FS, dtype=np.dtype("float32"))
 
         def read(self):
             from mne_lsl.lsl import local_clock
@@ -153,14 +166,29 @@ def render_signal_viewer(out: Path) -> None:
 
             t = (self._t + np.arange(N)) / FS
             self._t += N
-            data = np.column_stack(
-                [
-                    1.2 * np.sin(2 * np.pi * 5 * t) + 0.15 * np.random.randn(N),
-                    1.0 * np.cos(2 * np.pi * 7 * t) + 0.15 * np.random.randn(N),
-                    0.8 * np.sin(2 * np.pi * 3 * t) + 0.10 * np.random.randn(N),
-                    0.6 * np.cos(2 * np.pi * 11 * t) + 0.10 * np.random.randn(N),
-                ]
-            ).astype(np.float32)
+            if hello_emg:
+                from scipy.signal import sosfilt
+
+                noise, self._zi = sosfilt(
+                    self._sos, self._rng.standard_normal((N, channels)),
+                    axis=0, zi=self._zi,
+                )
+                # The captured five-second window contains Rest → Fist → Rest.
+                # Smooth ramps avoid abrupt edges; filtering state spans chunks.
+                ramp_up = 0.5 - 0.5 * np.cos(np.pi * np.clip((t - 3.0) / 0.4, 0, 1))
+                ramp_down = 0.5 - 0.5 * np.cos(np.pi * np.clip((5.6 - t) / 0.4, 0, 1))
+                envelope = 0.035 + 0.9 * ramp_up * ramp_down
+                gain = np.array([1.0, 0.75, 0.55, 0.9, 0.65, 1.1, 0.8, 0.6])
+                data = (noise * envelope[:, None] * gain).astype(np.float32)
+            else:
+                data = np.column_stack(
+                    [
+                        1.2 * np.sin(2 * np.pi * 5 * t) + 0.15 * np.random.randn(N),
+                        1.0 * np.cos(2 * np.pi * 7 * t) + 0.15 * np.random.randn(N),
+                        0.8 * np.sin(2 * np.pi * 3 * t) + 0.10 * np.random.randn(N),
+                        0.6 * np.cos(2 * np.pi * 11 * t) + 0.10 * np.random.randn(N),
+                    ]
+                ).astype(np.float32)
             # Timestamps end at the wall clock we just paced to, one chunk
             # spanning N samples ending at `target`.
             ts = (target + (np.arange(N) - (N - 1)) / FS).astype(np.float64)
@@ -169,7 +197,7 @@ def render_signal_viewer(out: Path) -> None:
         def disconnect(self):
             pass
 
-    app = App("signal_viewer")
+    app = App("Hello EMG" if hello_emg else "signal_viewer")
     # Attached here, not by the acquire loop: a screenshot of a disconnected stream is
     # a screenshot of an empty plot.
     stream = Stream("emg", source=FakeSource(), window_ms=2000, buffer_ms=10000)
@@ -177,15 +205,36 @@ def render_signal_viewer(out: Path) -> None:
     app.streams(stream)
 
     viewer = SignalViewer("emg")
+    recording = (
+        RecordingControls(
+            ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
+        )
+        if hello_emg
+        else None
+    )
+    # Give both captured widgets a cell: an unconstrained viewer consumes the
+    # full window height and would leave the recording controls below the fold.
+    grid = Grid(1, 2, col_width=[Px(260), Fr(1)]) if hello_emg else None
 
     @app.ui
     def ui(ctx):
-        viewer.ui(ctx)
+        if grid is None:
+            viewer.ui(ctx)
+        else:
+            with grid[0, 1]:
+                viewer.ui(ctx)
+            with grid[0, 0]:
+                recording.ui(ctx)
 
     # 7 s delay gives the paced source enough samples to fill the viewer's
     # persisted 5 s resolution window edge-to-edge before capture.
-    _self_capture_after(7.0, out)
-    app.run(window_size=SIZES["signal_viewer"])
+    _self_capture_after(7.0, out, window_only=hello_emg)
+    app.run(window_size=SIZES["hello_emg" if hello_emg else "signal_viewer"])
+
+
+def render_hello_emg(out: Path) -> None:
+    """Capture the Hello EMG widgets with a paced fake stream."""
+    render_signal_viewer(out, hello_emg=True)
 
 
 def render_recording_controls(out: Path) -> None:
@@ -534,6 +583,7 @@ def render_follow_run(out: Path) -> None:
 # ─────────────────────────────────────────────────────────────────────
 
 WIDGETS: dict[str, callable] = {
+    "hello_emg": render_hello_emg,
     "FollowRun": render_follow_run,
     "signal_viewer": render_signal_viewer,
     "recording_controls": render_recording_controls,

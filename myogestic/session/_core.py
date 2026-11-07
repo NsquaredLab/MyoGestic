@@ -22,14 +22,20 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import zarr
 import zarr.storage
-from zarr.codecs import BloscCodec, BytesCodec, ZstdCodec
+
+# Zarr 3's synchronous API starts an IO thread even for a local store. Pyodide
+# uses Zarr 2's synchronous directory/zip stores instead; both write ordinary
+# Zarr arrays that open_session_store can read on desktop as well.
+_ZARR_V3 = int(zarr.__version__.split(".")[0]) >= 3
+if _ZARR_V3:
+    from zarr.codecs import BloscCodec, BytesCodec, ZstdCodec
 
 if TYPE_CHECKING:
     from myogestic.stream import StreamInfo
 
 log = logging.getLogger(__name__)
 
-if find_spec("zarrs") is not None:
+if _ZARR_V3 and find_spec("zarrs") is not None:
     zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 
 #: ``meta.json`` schema version. Bump whenever the on-disk shape of a per-stream
@@ -59,8 +65,17 @@ EVENT_CHUNK_ROWS = 1024
 #: 7% smaller than zarr's default zstd and 14% less append time, timestamps 2-4x smaller;
 #: Blosc zstd 5 was 12% smaller but tripled the append time. Event streams (predictions,
 #: controls) are low-entropy and compress best with plain zstd, zarr's default.
-_SIGNAL_CODECS = (BytesCodec(), BloscCodec(cname="lz4", clevel=5, shuffle="shuffle"))
-_EVENT_CODECS = (BytesCodec(), ZstdCodec(level=0))
+if _ZARR_V3:
+    _SIGNAL_CODECS = {"codecs": (BytesCodec(), BloscCodec(cname="lz4", clevel=5, shuffle="shuffle"))}
+    _EVENT_CODECS = {"codecs": (BytesCodec(), ZstdCodec(level=0))}
+else:
+    from numcodecs import Blosc, Zstd, blosc
+
+    # Blosc otherwise creates native codec threads, independently of Python's
+    # Thread API. One thread also keeps the browser's codec work on this frame.
+    blosc.set_nthreads(1)
+    _SIGNAL_CODECS = {"compressor": Blosc(cname="lz4", clevel=5, shuffle=Blosc.SHUFFLE)}
+    _EVENT_CODECS = {"compressor": Zstd(level=0)}
 #: A buffer older than this is flushed on the next append, whatever its size, so a quiet
 #: stream still reaches disk within a second.
 EVENT_FLUSH_SECONDS = 1.0
@@ -680,7 +695,7 @@ class Session:
             shape=(0, info.n_channels),
             chunks=(rows, info.n_channels),
             dtype=info.dtype,
-            codecs=codecs,
+            **codecs,
         )
         self.ts_stores[stream_name] = zarr.open_array(
             str(self.path / f"{stream_name}_timestamps.zarr"),
@@ -688,7 +703,7 @@ class Session:
             shape=(0,),
             chunks=(rows,),
             dtype=np.float64,
-            codecs=codecs,
+            **codecs,
         )
 
     def append(self, stream_name: str, data: np.ndarray, timestamps: np.ndarray) -> None:

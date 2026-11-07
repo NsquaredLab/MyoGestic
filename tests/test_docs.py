@@ -231,7 +231,7 @@ def test_doc_toml_blocks_parse_and_load(path):
 
 # --- Layer 4: snippet includes must sit inside a fence ------------------------
 #
-# `--8<--` outside a code fence is *valid markdown*, so `properdocs build` succeeds and the
+# `--8<--` outside a code fence is *valid markdown*, so the site build succeeds and the
 # page renders the included Python as prose — `#:` comments become headings. That shipped
 # once. The block scanner above cannot catch it either: an unfenced include is not a code
 # block, so nothing in layers 1-3 ever looks at the line.

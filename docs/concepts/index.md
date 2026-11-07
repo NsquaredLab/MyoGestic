@@ -1,5 +1,6 @@
-# Concepts
-
+---
+title: "Concepts"
+---
 Explanation of how MyoGestic fits together. Read these once to understand the runtime model; the [guides](../how-to/index.md) and [API reference](../api/index.md) become much easier afterwards.
 
 If you haven't yet, read **[Anatomy of an app](../anatomy.md)** first - it walks through one complete tiny app in the order you write it and builds the mental model these deep-dive pages assume.
@@ -12,7 +13,7 @@ Drill in:
 - [Controls](controls.md) - the control map, the `[-1, 1]` standard, in-process vs. remote targets, deferred binding.
 - [Recording](recording.md) - sessions, label tracks, the `.mg.zip` archive layout.
 - [File names](file-names.md) - `<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip`, gesture codes, model names.
-- [Widgets](widgets.md) - the stateless-function contract, ImGui immediate mode, `Grid` layout.
+- [Widgets](widgets.md) - the construct-once `.ui()` contract, ImGui immediate mode, `Grid` layout.
 - [Threading](threading.md) - daemon threads, GIL release, the GPU contention rule.
 - [Design principles](design-principles.md) - the eight rules the codebase keeps to.
 - [Visual language](visual-language.md) - the type, colour, panel and state-cue tokens every widget uses.

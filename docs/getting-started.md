@@ -1,83 +1,93 @@
-# Getting started
+---
+title: "Getting started"
+---
+
+Install the package, run a complete protocol against the synthetic amplifier, then write your own app.
 
 ## Install
 
-MyoGestic uses [uv](https://docs.astral.sh/uv/) for environment management. From a fresh clone:
+```bash
+pip install myogestic
+```
+
+Extras add optional parts. Install one with `pip install "myogestic[grpc]"`.
+
+| Extra | What it adds |
+| --- | --- |
+| `examples` | CatBoost, MyoVerse, PyTorch and scikit-learn for the demos |
+| `grpc` | the Virtual Hand control plane |
+| `brainflow` | BrainFlow devices |
+| `serial` | serial sources and outputs |
+| `zarrs` | the Rust-accelerated Zarr codec pipeline |
+
+## Run a protocol
+
+The examples live in the repository. Clone it, sync it with uv and start Myocontrol:
 
 ```bash
 git clone https://github.com/NsquaredLab/MyoGestic.git
 cd MyoGestic
-uv sync
+uv sync --extra examples --extra grpc
+uv run --extra examples --extra grpc python examples/start_here/myocontrol.py
 ```
 
-The base install gives you the framework - sources, widgets, the ML pipeline, the recording layer, and the synthetic EMG generator - without forcing scientific Python heavyweights on you.
+!!! info "No amplifier?"
+    In the **Connect** step, use the device picker to choose **Synthetic (no hardware)**, then press **Connect**. Set a participant ID before recording. The synthetic source uses sine waves by default; stochastic EMG is opt-in with `SyntheticSource(waveform="emg")`.
 
-Optional extras (pick what you need):
+The [browser playground](playground/) follows **Connect → Record → Train → Predict** with a synthetic EMG source and an LDA classifier. Takes stay in the tab's temporary filesystem; reloading clears them.
 
-| Extra | What it adds |
-|-------|--------------|
-| `examples` | `catboost`, `myoverse`, `torch`, `scikit-learn` (so the demos run) |
-| `dev` | the above plus `pytest` and `ruff` |
-| `serial` | `pyserial` (serial sources/outputs) |
-| `grpc` | `grpcio` (gRPC control plane to the Virtual Hand Interface) |
-| `bdi` | OT Bioelettronica devices |
-| `brainflow` | BrainFlow device support |
-| `zarrs` | Rust-accelerated Zarr codec |
-| `docs` | `properdocs` + `mkdocs-material` + `mkdocstrings` (this site) |
+## Where your takes go
 
-```bash
-uv sync --extra examples   # to run the EMG demos
+Each saved take is one `.mg.zip`, named by participant, start time and the gestures recorded or the run name. Takes started while a model predicts go to `predictions/`.
+
+```text
+data/
+└── P-001/
+    ├── recordings/   P-001_20261106-1412_R+F.mg.zip
+    ├── predictions/  P-001_20261106-1430_guided.mg.zip
+    └── models/       P-001_20261106-1425_catboost.joblib
 ```
 
-## Run the synthetic-EMG demo
+## Write your own
 
-The repository ships a synthetic LSL stream so the demos run without any hardware. **One terminal, then click two buttons in the GUI** - the demo's `ProcessLauncher` panel spawns the generator (and the Virtual Hand) for you.
+This is the whole loop: a stream, a signal viewer and recording controls. Start an LSL outlet named `EMG`, then press **Connect** in the viewer to attach it.
 
-```bash
-uv run python examples/synthetic/emg_classification.py
+<!--docs:skip-->
+```python
+from myogestic import App, Stream
+from myogestic.sources import LSLSource
+from myogestic.widgets import RecordingControls, SignalViewer
+
+app = App("Hello EMG")
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
+
+viewer = SignalViewer("emg")
+recording = RecordingControls(
+    ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
+)
+
+
+@app.ui
+def ui(ctx):
+    viewer.ui(ctx)
+    recording.ui(ctx)
+
+
+app.run()
 ```
 
-![EMG classification demo running](images/gui-overview.png){ loading=lazy }
+<div class="grid cards" markdown>
 
-In the window:
+- Next
 
-1. Click **Launch** on **EMG Generator** (top-left) - the synthetic 8-channel signal appears in the viewer on the right.
-2. *(Optional)* Click **Launch** on **VHI Hand** if `VHI_PATH` and `GODOT_BIN` are set; otherwise the button shows a click-time error and you can ignore it.
+    [**Anatomy of an app**](anatomy.md)
 
-The rest of the layout:
+- Browse
 
-- An 8-channel signal viewer filling the right two columns.
-- A `Rest`/`Fist` button strip on the left.
-- Recording controls, the pipeline panel, the output filter panel, and the session manager - top to bottom on the left.
+    [**Widget gallery**](widget-gallery.md)
 
-!!! tip "Running the generator standalone"
-    If you'd rather drive the generator from a separate terminal (handy when you want to share one generator across multiple demos), the in-GUI launcher just runs:
+- Try
 
-    ```bash
-    uv run python -m myogestic.tools.emg_generator \
-        --name TestEMG1 --channels 8 --fs 256 --classes 2 --control EMG_Control
-    ```
-    The demo's signal viewer will pick up whichever stream is publishing on the matching name.
+    [**Playground**](playground/)
 
-## What you just ran
-
-Each thing visible in the window maps directly to one MyoGestic primitive. Once you can map the GUI to the framework, the rest of the docs make a lot more sense.
-
-- **Signal viewer** (right two columns) - a [`SignalViewer`](api/widgets.md) widget reading from a `Stream`. The stream owns the ring buffer; the widget just renders a decimated min/max envelope.
-- **Process launchers** (top-left) - the [`ProcessLauncher`](api/widgets.md) widget. Each entry is a subprocess command - here, the synthetic EMG generator and the Virtual Hand.
-- **Recording controls** with `Rest` / `Fist` buttons and a Record button - the [`RecordingControls`](api/widgets.md) widget. Clicking a button writes a label event; clicking Record toggles `app.start_recording()` / `app.stop_recording()`.
-- **Train / Predict / Save / Load** buttons - [`PipelinePanel`](api/ml.md) plus `SaveModelButton` / `LoadModelButton`. They drive the `Pipeline` state machine.
-- **Post-processing filter panel** - a [`PostProcessor`](api/widgets.md) widget. The script also calls it from inside `predict()` to smooth the output vector before pushing.
-- **Sessions** - the [`SessionManager`](api/widgets.md) widget. It returns a `TrainingData` object the script assigns to `pipeline.training_data`, which is what `@pipeline.train` receives when you click Train.
-
-Want the code-side view of the same thing? Read **[Anatomy of a MyoGestic app](anatomy.md)** - it walks through a complete 35-line script in the order you write it.
-
-## A first experiment
-
-The minimum closed-loop experiment is ~40 lines. Open `examples/synthetic/emg_classification.py` for a walkthrough - see the [EMG classification tutorial](tutorials/emg-classification.md) for a line-by-line read.
-
-## Next steps
-
-- Browse the [guides](how-to/index.md) - end-to-end walkthroughs first, then task recipes by job.
-- Read [Concepts](concepts/index.md) to understand streams, the pipeline, and the threading model.
-- Skim the [API cheatsheet](reference/api-cheatsheet.md) when you need a quick lookup.
+</div>

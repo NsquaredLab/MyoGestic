@@ -66,18 +66,21 @@ uv sync --extra examples --extra grpc
 ```python
 from myogestic import App, Stream
 from myogestic.sources import LSLSource
-from myogestic.widgets import recording_controls, signal_viewer
+from myogestic.widgets import RecordingControls, SignalViewer
 
 app = App("Hello EMG")
 app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
 
+viewer = SignalViewer("emg")
+recording = RecordingControls(
+    ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
+)
+
 
 @app.ui
 def ui(ctx):
-    signal_viewer(ctx, "emg")
-    recording_controls(
-        ctx, ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
-    )
+    viewer.ui(ctx)
+    recording.ui(ctx)
 
 
 app.run()
@@ -166,7 +169,7 @@ holds runnable demos and templates to copy.
 
 | Page | Covers |
 | --- | --- |
-| [Getting started](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/getting-started.md) | Install and run the synthetic-EMG demo. |
+| [Getting started](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/getting-started.md) | Install, run a protocol and write your own app. |
 | [Tutorials](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/tutorials) | EMG classification, and EMG regression with the Virtual Hand. |
 | [How-to guides](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/how-to) | A custom source, widget or model, the Virtual Hand, and the recipe feature set. |
 | [Concepts](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/concepts) | Architecture, streams, pipeline, threading, recording, the `Px`/`Fr` grid and the `EdgeTrigger` pattern. |
@@ -185,11 +188,15 @@ Some integration tests need a live LSL outlet. To build and serve the docs
 locally:
 
 ```bash
-uv sync --extra docs --extra grpc --extra serial
-uv run properdocs serve
+uv sync --extra docs
+cd website
+npm ci
+npm run dev
 ```
 
-Then open `http://127.0.0.1:8000/MyoGestic/`.
+Use Node.js 22 (see `website/.nvmrc`), then open
+`http://localhost:4321/MyoGestic/`. Run `npm run build` from `website/`
+to build the site.
 
 ## How to cite
 

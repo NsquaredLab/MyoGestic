@@ -1,5 +1,6 @@
-# EMG classification (CatBoost)
-
+---
+title: "EMG classification (CatBoost)"
+---
 End-to-end walkthrough of [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py): synthetic 8-channel EMG → RMS+MAV features (from [`myogestic.recipes.features`][myogestic.recipes.features]) → CatBoost binary classifier, with optional LSL pose and gRPC movement outputs to VHI.
 
 !!! note "Code below is included from the example"
@@ -12,14 +13,16 @@ End to end, zero classes besides the framework's `App` and `Pipeline`.
 One terminal, then launch **EMG Generator** and connect its stream in the **Connect** step.
 
 ```bash
-uv run python examples/synthetic/emg_classification.py
+uv run --extra examples python examples/synthetic/emg_classification.py
 ```
 
-VHI is optional: recording, training and prediction all work without it or the `grpc` extra. The Virtual Hand row shows **Not running** until you connect it. To drive the 3D hand, [install the Virtual Hand](../how-to/install-vhi.md), run with `uv run --extra grpc python examples/synthetic/emg_classification.py`, and click **Connect** on its row. The app first checks for an existing service and launches the hand only if none answers.
+VHI is optional: recording, training and prediction all work without it or the `grpc` extra. The Virtual Hand row shows **Not running** until you connect it. To drive the 3D hand, [install the Virtual Hand](../how-to/install-vhi.md), run with `uv run --extra examples --extra grpc python examples/synthetic/emg_classification.py`, and click **Connect** on its row. The app first checks for an existing service and launches the hand only if none answers.
 
 ## What you should see
 
-![EMG classification demo running](../images/gui-overview.png){ loading=lazy }
+![Earlier EMG classification layout](../images/gui-overview.png){ loading=lazy }
+
+This screenshot shows the earlier layout. The current app uses the steps described below.
 
 The header carries **Connect → Record → Train → Predict**, the participant and session state. The signal and **Simulated EMG** controls stay visible beside the active step, with participant sessions and an activity log below. At narrow widths the same cards stack vertically.
 
@@ -55,7 +58,7 @@ See [Post-process predictions](../how-to/post-process-output.md) for tuning.
 --8 < --"examples/synthetic/emg_classification.py:features"
 ```
 
-[`FeatureSelector`][myogestic.widgets.FeatureSelector] holds a menu of named feature functions - the reference `rms`/`mav`/`wl`/`var`/`zc` from [`myogestic.recipes.features`][myogestic.recipes.features], plus any of your own callables - and renders a panel to toggle them live. Calling it, `features(window)`, runs every active feature over the channels-first window and stacks the results into one flat vector. `default=["RMS", "MAV"]` ticks two on at startup.
+[`FeatureSelector`][myogestic.widgets.FeatureSelector] holds a menu of named feature functions - the reference `rms`/`mav`/`wl`/`var`/`zc` from [`myogestic.recipes.features`][myogestic.recipes.features], plus any of your own callables - and renders a panel to toggle them live. Calling it, `features(window)`, runs every active feature over the channels-first window and concatenates the results along axis 0. These scalar-per-channel features produce one flat vector. `default=["RMS", "MAV"]` ticks two on at startup.
 
 ### 4. App, stream, pipeline
 
@@ -71,7 +74,7 @@ The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s o
 --8 < --"examples/synthetic/emg_classification.py:extract"
 ```
 
-`features(windows["emg"])` runs every active feature over the window (channels-first `(n_channels, n_samples)`) and returns one flat vector. The same function is invoked from inside `train()` (over recorded windows) and on the predict thread (over live windows), so training and inference always see identical features.
+`features(windows["emg"])` runs every active feature over the window (channels-first `(n_channels, n_samples)`) and returns one flat vector for this feature set. The same function is invoked from inside `train()` (over recorded windows) and on the predict thread (over live windows), so both paths use the same feature functions. Keep the selection fixed after training, or retrain after changing it.
 
 ### 6. `train` - slice sessions, featurize, fit
 
@@ -109,7 +112,7 @@ In the GUI:
 2. Optionally connect **Virtual Hand**; **Hand movements…** opens its palette.
 3. Set a participant in the header and open **Record**.
 4. Select **Rest**, record a take for about 3 s, then stop. Repeat with **Fist** and collect a few takes of each. A connected hand's recording gate disables its local keyboard during each take.
-5. Select the participant's takes in **Sessions**, open **Train**, choose features and train.
+5. Select the participant's takes in the **Takes** panel, open **Train**, choose features and train.
 6. Open **Predict** and start predicting. Use **Simulated EMG** to switch between Rest and Fist; the predicted class updates with or without the optional hand.
 7. With a hand connected, inspect the smoothed `fist` and debounced `gesture` values under **Sent to the hand**.
 

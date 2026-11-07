@@ -1,5 +1,6 @@
-# Outlets
-
+---
+title: "Outlets"
+---
 An `Outlet` owns a `.push(data)` method plus a daemon thread that sends the latest pushed
 value to its destination at a steady rate. See [Publish a data stream](../how-to/add-an-output.md).
 

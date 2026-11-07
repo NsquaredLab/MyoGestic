@@ -1,5 +1,6 @@
-# Add a custom source
-
+---
+title: "Add a custom source"
+---
 A `Source` is a [Protocol](https://docs.python.org/3/library/typing.html#typing.Protocol) - three methods, no inheritance. Implement them, hand the instance to `Stream(...)`, and the framework handles threading, buffering, and recording for you.
 
 ## The protocol
@@ -23,7 +24,7 @@ That's the whole interface.
 
 Open the device / file / socket. Return a [`StreamInfo`][myogestic.StreamInfo] describing the data: `n_channels`, `fs`, optional `dtype` (defaults to `np.float32`), optional `channel_names`. Auto-discovery is the goal - the user shouldn't have to pass these manually unless the source genuinely can't self-describe.
 
-If the source can't connect, raise - the framework surfaces the error in the GUI status bar.
+If the source can't connect, raise. `Stream.reconnect()` returns `False` and stores the error in `stream.last_error`; the connection widgets show it.
 
 ### `read() -> (data, ts) | (None, None)`
 
@@ -59,9 +60,7 @@ class CSVSource:
         self._t0 = 0.0
 
     def connect(self) -> StreamInfo:
-        arr = np.loadtxt(self.path, delimiter=",", dtype=np.float32)
-        if arr.ndim == 1:
-            arr = arr[:, None]
+        arr = np.loadtxt(self.path, delimiter=",", dtype=np.float32, ndmin=2)
         self._data = arr
         self._idx = 0
         self._t0 = local_clock()
@@ -96,7 +95,10 @@ Use it:
 from myogestic import App, Stream
 
 app = App("CSV replay")
-app.streams(Stream("emg", source=CSVSource("recording.csv", fs=2000.0), window_ms=1000))
+stream = Stream("emg", source=CSVSource("recording.csv", fs=2000.0), window_ms=1000)
+app.streams(stream)
+if not stream.reconnect():
+    raise RuntimeError(stream.last_error)
 app.run()
 ```
 
@@ -149,7 +151,7 @@ The vendor's callback runs on its own thread; the queue decouples it from the ac
 |--------|-------|---------|
 | [`LSLSource`](../api/sources.md#myogestic.sources.LSLSource) | `myogestic/sources/lsl.py` | LSL inlet polling with `pull_chunk(timeout=0.0)` |
 | [`ReplaySource`](../api/sources.md#myogestic.sources.ReplaySource) | `myogestic/sources/replay.py` | Reads from a `.mg.zip`, paces with real-time clock |
-| `SerialSource` | `myogestic/sources/serial_source.py` | pyserial loop with line-based parsing |
+| `SerialSource` | `myogestic/sources/serial_source.py` | pyserial reads of fixed-width little-endian float32 frames |
 
 Mirror whichever is closest to your transport.
 

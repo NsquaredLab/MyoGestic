@@ -1,8 +1,9 @@
-# Anatomy of a MyoGestic app
-
+---
+title: "Anatomy of a MyoGestic app"
+---
 Read this first. The deep-dive concept pages (Streams, Pipeline, Recording, Widgets) explain *each part* of the framework in detail; this page explains *how the parts fit together* in the order you write them.
 
-By the end, the 35-line script below will read like prose. Open it in your editor and read alongside.
+By the end, the script below will read like prose. Open it in your editor and read alongside.
 
 ```python
 from myogestic import App, Stream, TrainingData
@@ -101,7 +102,7 @@ Three layers, from framework-owned to user-owned:
 2. **Built-in capabilities** (`sources`, `widgets`, `ml`, `session`) - what you wire in.
 3. **Your domain code** (sklearn, MyoVerse, scipy, PyTorch, ...) - what you bring.
 
-The framework deliberately ships nothing at layer 3 - DSP, ML models, feature extraction are user concerns. See [Design principles](concepts/design-principles.md).
+DSP, ML models and feature extraction are user concerns. `myogestic.recipes` supplies optional feature functions and estimator constructors as starting points. See [Design principles](concepts/design-principles.md).
 
 ## `App` - the orchestrator
 
@@ -125,10 +126,12 @@ A [`Stream`][myogestic.Stream] wraps a [`Source`](concepts/streams.md) plus a fi
 
 Two reads come out the other side:
 
-- `stream.get_window()` returns the most recent `window_ms` of data, **channels-first** `(n_channels, n_samples)`. This is what feature extractors and ML models consume.
+- `stream.get_window()` returns `(data, timestamps)`, with the most recent `window_ms` of data **channels-first** `(n_channels, n_samples)`. This is what feature extractors and ML models consume.
 - `stream.get_raw_snapshot_stable(duration_s)` returns a stable recent tail for rendering. [`SignalViewer`][myogestic.widgets.SignalViewer] requests only its visible duration and decimates it to the live plot width.
 
-[`app.streams(*streams)`][myogestic.App.streams] registers one or more. The same method takes any `Source` implementation, so swapping [`LSLSource`][myogestic.sources.LSLSource] for [`ReplaySource`][myogestic.sources.ReplaySource] (offline replay) or your own custom source changes one line.
+[`app.streams(*streams)`][myogestic.App.streams] registers one or more. Each registered `Stream` wraps any `Source` implementation, so swapping [`LSLSource`][myogestic.sources.LSLSource] for [`ReplaySource`][myogestic.sources.ReplaySource] (offline replay) or your own custom source changes one line.
+
+The stream starts detached. Start the upstream outlet and press **Connect** in the viewer, or call `stream.reconnect()` before headless acquisition.
 
 → Deep dive: [Streams](concepts/streams.md).
 
@@ -143,12 +146,12 @@ pipeline.load_model = load_pickle
 [`Pipeline(app)`][myogestic.ml.Pipeline] adds:
 
 - A predict thread that fires every `1/predict_hz` seconds.
-- Two new states (`training`, `predicting`) joined to the app's `idle ↔ recording` state machine.
+- Two new states (`training`, `predicting`). A take may also stay open while predicting, tracked separately by `ctx.recording`.
 - Three function-decorator slots (`extract`, `train`, `predict`) for your code.
 
 If your app is *just* recording and visualisation, skip the `Pipeline`. If it does ML, attach one.
 
-`save_model` / `load_model` are plain attribute slots. Setting them turns on the **Save Model** / **Load Model** buttons in the ML widgets. The default [`save_pickle`][myogestic.ml.save_pickle] / [`load_pickle`][myogestic.ml.load_pickle] round-trip anything pickleable.
+`save_model` / `load_model` are plain attribute slots. They enable the separate `SaveModelButton` / `LoadModelButton` widgets when those are added to the UI. `PipelinePanel` itself contains Train and Predict controls. The default [`save_pickle`][myogestic.ml.save_pickle] / [`load_pickle`][myogestic.ml.load_pickle] round-trip anything pickleable.
 
 → Deep dive: [Pipeline](concepts/pipeline.md).
 
@@ -190,9 +193,9 @@ def predict(model, features):
     return {"class": int(model.predict(features.reshape(1, -1))[0])}
 ```
 
-Fires once per `1/predict_hz` while the user is in **Predict** mode. **Must return a `dict[str, Any]`**; the result lands in `pipeline.predictions` for widgets to read.
+Fires at `predict_hz` while the user is in **Predict** mode and at least one input stream has data. **Must return a `dict[str, Any]`**; the result lands in `pipeline.predictions` for widgets to read.
 
-If you push to outputs (LSL, robots, VHI), do it inside `predict()` before returning. The output thread takes the latest pushed value and drains it at its own rate.
+Publish to an outlet or push a `ControlBus` from `predict()` before returning. A paced outlet sends its latest value at its own rate; a target may instead deliver commands directly.
 
 ## `@app.ui` - the rendering surface
 
@@ -213,7 +216,7 @@ def ui(ctx):
     ml_panel.ui()
 ```
 
-The `@app.ui` callback runs on the **main thread** every frame. The function body is a flat sequence of widget calls; each widget is a stateless function that draws ImGui commands from `ctx` (and arguments).
+The `@app.ui` callback runs on the **main thread** every frame. The function body is a flat sequence of widget calls; each widget is an object whose `.ui()` method draws ImGui commands from its live inputs. Its instance or identity-keyed state persists between frames.
 
 Three things live here:
 
@@ -236,7 +239,7 @@ Last line of every script. In order:
 1. Starts each `Stream`'s acquisition thread.
 2. Fires `before_run_hooks` (where `Pipeline` registers its predict thread).
 3. Hands control to the GUI event loop on the main thread - **blocks here**.
-4. On window close, runs `cleanup_hooks`, then stops all streams and bridges.
+4. On window close, runs `cleanup_hooks`, saves any open take inline, waits up to 30 seconds for pending saves, then stops streams, bridges and adopted subprocesses.
 
 `app.run(mode="gui")` is the default; `mode="headless"` skips the GUI and runs the threads only (useful for unattended recording).
 
@@ -261,9 +264,9 @@ program to read rather than to move something, an [`LSLOutlet`][myogestic.output
 pushed from `predict()` is the whole of it — see
 [Publish a data stream](how-to/add-an-output.md).
 
-## What's not in this script
+## Extending the skeleton
 
-- **Recording.** Streams *flow* whether you record or not. Recording starts when [`app.start_recording()`][myogestic.App.start_recording] is called (typically from the [`RecordingControls`][myogestic.widgets.RecordingControls] widget's **Record** button). See [Recording](concepts/recording.md).
+- **Recording lifecycle.** The controls above start and stop takes. Streams *flow* whether you record or not. Recording starts when [`app.start_recording()`][myogestic.App.start_recording] is called (typically from the [`RecordingControls`][myogestic.widgets.RecordingControls] widget's **Record** button). See [Recording](concepts/recording.md).
 - **Multi-stream.** A second `Stream("imu", ...)` and your `extract()` sees `windows["imu"]` too. Match the [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] pattern in `train()` for paired primary/target streams. See [Recording](concepts/recording.md).
 - **Bridges.** Heavy-data sources (webcam, ultrasound) run as subprocesses via [`app.bridges(...)`][myogestic.App.bridges]. See [Threading](concepts/threading.md).
 
@@ -274,7 +277,7 @@ The concept pages describe each component in more detail:
 - [Streams](concepts/streams.md) - ring buffer geometry, the channels-first contract, `get_display` decimation.
 - [Pipeline](concepts/pipeline.md) - state machine, decorator semantics, stale-tick guards.
 - [Recording](concepts/recording.md) - sessions, label tracks, the `.mg.zip` archive.
-- [Widgets](concepts/widgets.md) - the stateless-function pattern, `Grid` layout, pop-out windows.
+- [Widgets](concepts/widgets.md) - the construct-once `.ui()` pattern, `Grid` layout, pop-out windows.
 - [Architecture](concepts/architecture.md) - the runtime architecture (which thread runs what, the data flow diagram).
 - [Threading](concepts/threading.md) - GIL release, GPU contention rule, bridge subprocesses.
 - [Design principles](concepts/design-principles.md) - the eight rules the framework keeps to.

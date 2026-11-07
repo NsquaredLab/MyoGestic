@@ -1,0 +1,57 @@
+---
+import { GESTURES } from '../signal-field/index';
+---
+
+<div data-panels style="flex: 1 1 560px; min-width: 0; position: relative; padding: 14px">
+        <div aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 14px; height: 14px; border-top: 1px solid color-mix(in srgb, var(--mg-home-ink) 55%, transparent); border-left: 1px solid color-mix(in srgb, var(--mg-home-ink) 55%, transparent)"></div>
+        <div aria-hidden="true" style="position: absolute; top: 0; right: 0; width: 14px; height: 14px; border-top: 1px solid color-mix(in srgb, var(--mg-home-ink) 55%, transparent); border-right: 1px solid color-mix(in srgb, var(--mg-home-ink) 55%, transparent)"></div>
+        <div aria-hidden="true" style="position: absolute; bottom: 0; left: 0; width: 14px; height: 14px; border-bottom: 1px solid color-mix(in srgb, var(--mg-home-ink) 55%, transparent); border-left: 1px solid color-mix(in srgb, var(--mg-home-ink) 55%, transparent)"></div>
+        <div aria-hidden="true" style="position: absolute; bottom: 0; right: 0; width: 14px; height: 14px; border-bottom: 1px solid color-mix(in srgb, var(--mg-home-ink) 55%, transparent); border-right: 1px solid color-mix(in srgb, var(--mg-home-ink) 55%, transparent)"></div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; font: 500 11px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 75%, transparent)"><span>P-001 / myocontrol · live</span><span>2048 Hz · 64 ch</span></div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+
+          <div style="background: color-mix(in srgb, var(--mg-canvas) 90%, transparent); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 70%, transparent); border-radius: 6px; padding: 10px 12px 12px">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font: 500 10.5px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent)"><span>01 · Stream</span><span>EMG</span></div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 8px; font: 400 12.5px/1.2 var(--mg-font-mono)">
+              <span style="color: color-mix(in srgb, var(--mg-home-ink) 60%, transparent)">source</span><span style="text-align: right">LSLSource</span>
+              <span style="color: color-mix(in srgb, var(--mg-home-ink) 60%, transparent)">channels</span><span style="text-align: right">64</span>
+              <span style="color: color-mix(in srgb, var(--mg-home-ink) 60%, transparent)">rate</span><span style="text-align: right">2048 Hz</span>
+              <span style="color: color-mix(in srgb, var(--mg-home-ink) 60%, transparent)">window</span><span style="text-align: right">1000 ms</span>
+            </div>
+          </div>
+
+          <div style="background: color-mix(in srgb, var(--mg-canvas) 90%, transparent); border: 1px dashed color-mix(in srgb, var(--mg-home-ink) 42%, transparent); border-radius: 6px; padding: 10px 12px 12px">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font: 500 10.5px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent)"><span>02 · Prediction</span><span>LDA</span></div>
+            <div style="font-family: var(--mg-font-display); font-size: 56px; line-height: 1.05" data-prediction>Fist</div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px; font: 400 11.5px/1 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent)">
+              <span>p <span data-confidence>0.94</span></span>
+              <span style="flex: 1 1 auto; height: 4px; border-radius: 2px; background: var(--mg-home-control); overflow: hidden"><span data-confidence-bar style="display: block; height: 4px; width: 94%; background: var(--mg-info)"></span></span>
+            </div>
+          </div>
+
+          <div style="grid-column: 1 / -1; background: color-mix(in srgb, var(--mg-canvas) 90%, transparent); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 70%, transparent); border-radius: 6px; padding: 10px 12px 12px">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font: 500 10.5px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent)"><span>03 · Recording</span><span>click a gesture</span></div>
+            <div style="font-size: 12.5px; color: color-mix(in srgb, var(--mg-home-ink) 60%, transparent); margin-bottom: 6px">Gesture</div>
+            <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px">
+              {GESTURES.map((gesture, index) => (
+                <button type="button" data-gesture={gesture} aria-pressed={gesture === 'Fist'} class="gesture-chip" style={`--gesture-dot: var(--mg-palette-${index})`}><span aria-hidden="true"></span>{gesture}</button>
+              ))}
+              <button type="button" data-auto aria-pressed="true" style="height: 44px; border: 0; border-radius: 6px; color: color-mix(in srgb, var(--mg-home-ink) 85%, transparent); font: 500 11.5px/1 var(--mg-font-mono); cursor: pointer; background: var(--mg-selected)">Auto</button>
+            </div>
+            <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding: 0 10px; border-radius: 6px; background: color-mix(in srgb, var(--mg-record-fill) 18%, transparent); font-size: 13px"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--mg-record-fill)"></span>Recording</span><span data-record-label style="font: 400 11.5px/1 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent)">Fist</span></div>
+          </div>
+
+          <div style="background: color-mix(in srgb, var(--mg-canvas) 90%, transparent); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 70%, transparent); border-radius: 6px; padding: 10px 12px 12px">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font: 500 10.5px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent)"><span>04 · Model</span><span>Pipeline</span></div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding: 0 10px; border-radius: 6px; background: color-mix(in srgb, var(--mg-success) 14%, transparent); font-size: 13px"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--mg-success)"></span>Trained</span><span style="font: 400 11.5px/1 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent)">4 classes</span></div>
+            <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding: 0 10px; border-radius: 6px; background: color-mix(in srgb, var(--mg-primary-fill) 18%, transparent); font-size: 13px"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--mg-primary-fill)"></span>Predicting</span><span style="font: 400 11.5px/1 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent)">live</span></div>
+          </div>
+
+          <div style="background: color-mix(in srgb, var(--mg-canvas) 90%, transparent); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 70%, transparent); border-radius: 6px; padding: 10px 12px 12px">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font: 500 10.5px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent)"><span>05 · Targets</span><span>2</span></div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 32px; font-size: 13px"><span>Virtual Hand</span><span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; background: var(--mg-pill-bg); color: var(--mg-on-pill); font: 500 10.5px/1 var(--mg-font-mono)"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--mg-success)"></span>LIVE</span></div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 32px; font-size: 13px; border-top: 1px solid color-mix(in srgb, var(--mg-text) 6%, transparent)"><span>LSL outlet</span><span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; background: var(--mg-pill-bg); color: var(--mg-on-pill); font: 500 10.5px/1 var(--mg-font-mono)"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--mg-idle)"></span>IDLE</span></div>
+          </div>
+
+        </div>
+      </div>

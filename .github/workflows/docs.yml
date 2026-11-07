@@ -24,7 +24,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out repository
+        uses: actions/checkout@v6
 
       - name: Set up uv
         # astral-sh/setup-uv doesn't publish a moving major-version tag - must
@@ -33,18 +34,27 @@ jobs:
         with:
           enable-cache: true
 
-      # `properdocs` + mkdocstrings need `myogestic` itself plus every
-      # optional extra whose modules are referenced from the API pages -
-      # mkdocstrings walks each `:::` symbol at build time, and an
-      # ImportError on (say) `pyserial` aborts the whole build. Keep this
-      # list in sync with the autodoc references in docs/api/*.md.
-      - name: Sync project + docs extras
-        run: uv sync --locked --extra docs --extra grpc --extra serial
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: website/.nvmrc
+          cache: npm
+          cache-dependency-path: website/package-lock.json
 
-      # Browser playground (docs/playground/) installs the MyoGestic
+      # griffe reads API symbols statically; optional runtime extras are not
+      # needed to generate the reference pages.
+      - name: Sync project + docs extras
+        run: uv sync --locked --extra docs
+
+      - name: Install website dependencies + sync static assets
+        working-directory: website
+        run: npm ci && node scripts/sync-static.mjs
+
+      # Browser playground (website/public/playground/) installs the MyoGestic
       # wheel via micropip at runtime. Build a fresh one each CI run so
       # the deployed playground always carries the latest framework
-      # code. The wheel is gitignored at this path.
+      # code. Build after sync-static, which replaces public/playground/.
+      # The wheel is gitignored at this path.
       #
       # micropip parses the wheel filename and validates the version
       # segment against PEP 440 - we can't use a stable "latest" name.
@@ -54,21 +64,26 @@ jobs:
       # wheel. Keeps pyproject.toml the only source of truth.
       - name: Build MyoGestic wheel + write playground manifest
         run: |
-          uv build --wheel --out-dir docs/playground/wheels
-          built=$(ls docs/playground/wheels/myogestic-*-py3-none-any.whl | head -1)
+          uv build --wheel --out-dir website/public/playground/wheels
+          built=$(ls website/public/playground/wheels/myogestic-*-py3-none-any.whl | head -1)
           basename=$(basename "$built")
           echo "{\"wheel\": \"${basename}\"}" \
-            > docs/playground/wheels/manifest.json
-          ls -lh docs/playground/wheels/
+            > website/public/playground/wheels/manifest.json
+          ls -lh website/public/playground/wheels/
 
-      - name: Build docs site
-        run: uv run --locked --extra docs --extra grpc --extra serial properdocs build
+      - name: Install Playwright Chromium
+        working-directory: website
+        run: npx playwright install --with-deps chromium
+
+      - name: Build and check website
+        working-directory: website
+        run: npm run ci
 
       - name: Upload Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v5
         with:
-          path: site
+          path: website/dist
 
   deploy:
     # Only deploy on push to main. PRs and workflow_dispatch builds skip this.

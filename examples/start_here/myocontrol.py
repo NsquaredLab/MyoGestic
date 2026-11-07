@@ -120,6 +120,8 @@ pipeline = Pipeline(app, predict_hz=PREDICT_HZ, input_streams=("emg",))
 pipeline.save_model = save_pickle
 pipeline.load_model = load_pickle
 pipeline.autosave_dir = "data"
+# The model is a (mode, estimator) tuple; name the file after the estimator, not the tuple.
+pipeline.model_name = "catboost"
 link = ControlLink(
     CONTROL_MAP,
     [RemoteTarget(client=vhi_control, interface=vhi)],

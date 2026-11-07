@@ -1,6 +1,7 @@
-# Keep state between pipeline stages
-
-`@pipeline.extract` and `@pipeline.predict` are plain functions called once per predict tick (`1 / predict_hz` seconds). They get no implicit context object - if you need data to *survive* between ticks, you store it yourself. This page covers the four patterns that come up.
+---
+title: "Keep state between pipeline stages"
+---
+`@pipeline.extract` and `@pipeline.predict` are plain functions called on predict ticks with available input. The target interval is `1 / predict_hz` seconds. They get no implicit context object - if you need data to *survive* between ticks, you store it yourself. This page covers the four patterns that come up.
 
 ## The base case: stateless tick
 
@@ -141,7 +142,7 @@ The predict thread wakes every `1/predict_hz`. The acquisition thread may not ha
 ```python
 @pipeline.extract
 def extract(windows):
-    emg, ts = ctx.streams["emg"].get_window()  # framework helper
+    emg, ts = pipeline.app.ctx.streams["emg"].get_window()
     last_ts = float(ts[-1]) if ts.size > 0 else None
     return (emg, last_ts)
 
@@ -159,12 +160,14 @@ The model's `step()` checks `last_ts` against its own stored last value and retu
 | Storage                              | Safe without a lock?   |
 |--------------------------------------|------------------------|
 | Module-level scalar (int / str / bool / ref) | Yes (GIL atomic) |
-| Module-level `deque` written from one thread only | Yes |
-| Module-level `dict` mutated from one thread only | Yes |
+| Module-level `deque` written from one thread only | Keep iteration on that thread, or lock |
+| Module-level `dict` mutated from one thread only | Individual lookups; lock iteration during mutation |
 | Module-level container written from BOTH predict thread AND render thread | Use a `threading.Lock` or refactor to single-writer |
 | Stateful model object internal fields | Yes (predict thread is the only writer) |
 
-The render thread (running `@app.ui` at 60 fps) reads from these - reads are always safe. Writes from the render thread (e.g. a button click that updates a setting) into an object the predict thread reads need atomicity or a lock; for simple flags use scalar assignment (atomic), for richer state use `threading.Lock`.
+The render thread can read scalar references directly. Iterating a `dict` or `deque`
+while another thread mutates it can raise; copy the needed state under a shared lock.
+Writes from the render thread into richer state read by prediction also need a lock.
 
 ## See also
 

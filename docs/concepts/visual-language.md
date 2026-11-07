@@ -1,5 +1,6 @@
-# Visual language
-
+---
+title: "Visual language"
+---
 [Design principles](design-principles.md) is the *code* contract: no base classes, one name one
 meaning, a public API that fits on a page. This page is the *visual* one, the small set of tokens
 and rules every widget already follows, so a new control looks like it belongs instead of like a
@@ -306,5 +307,5 @@ Heatmap("IN1", widget_id="grid:IN1")  # defaults to the label
 SignalViewer("emg", widget_id="emg:grid:IN1")  # defaults to the stream name
 ```
 
-Without it, two instances share one state and render identically. Prefer a stable, unique string;
+Without distinct IDs, two viewers share their identity-keyed state; other widgets can collide in ImGui or in their shared helper caches. Prefer a stable, unique string;
 user-facing labels can repeat.
