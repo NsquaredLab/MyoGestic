@@ -26,11 +26,12 @@ def resolve_plot_height(requested: float, *, show_controls: bool) -> float:
     """Height for the plot, in pixels. Call inside the viewer's own layout.
 
     A positive ``requested`` sets the height. Otherwise use the available space,
-    reserving a footer row only while the chrome is visible.
+    reserving a footer row only while the chrome is visible. Collapsing the
+    chrome returns that space to the plot without leaving an empty strip.
 
-    The footer contains text and a `small_button`. Its height follows
-    ``text_line_height_with_spacing`` and ``ui_scale``. A fixed 25 px row would
-    ignore font scaling.
+    The footer contains one text line and a `small_button`, which ImGui draws
+    at text height. Its height is ``text_line_height_with_spacing`` and follows
+    ``ui_scale``. A fixed 25 px row would ignore font scaling.
     """
     if requested > 0:
         return requested
@@ -186,8 +187,8 @@ def robust_channel_ranges(
     Split the visible window into equal-time bins, each contributing a min and max.
     Drop the ``k`` most extreme bin maxima/minima, with ``k`` covering the transient
     budget, and use the next extrema as the range. Duration distinguishes
-    transients; a 10 ms artefact fills ~2 dropped bins, while a 50 ms contraction
-    fills ~11 bins and is kept. ``rectify`` / ``rms_env`` are one-sided (lower bound pinned to 0, only the top
+    artefacts from contractions. Amplitude is not the criterion. A 10 ms artefact
+    fills ~2 dropped bins, while a 50 ms contraction fills ~11 bins and is kept. ``rectify`` / ``rms_env`` are one-sided (lower bound pinned to 0, only the top
     trimmed), and ``rms_env``'s envelope is already time-binned, so its own points are the bins
     with the RMS smear folded into ``k``. ``transient_ms == 0`` degrades to plain min/max, as
     does too few bins.
@@ -245,10 +246,13 @@ def update_auto_scale(
 ) -> None:
     """Ease `v.y_min`/`v.y_max` toward the drawn data's padded range (auto mode only).
 
-    Expands instantly to contain peaks in the gain-scaled window and contracts
-    over ``_SCALE_EASE_S`` to limit downward jitter. Snaps on the first frame,
-    after a large ``dt``, or when ``(active stream, channels, display filter,
-    notch, gain)`` changes. Runs only in auto mode with per-channel scaling off.
+    Uses a grow-fast / shrink-slow ease toward the drawn window's gain-scaled
+    global min/max, replacing ImPlot's per-frame `auto_fit`. Expands instantly
+    to avoid clipping peaks and contracts over ``_SCALE_EASE_S`` to limit
+    downward jitter. Snaps on the first frame, after a large ``dt`` such as a
+    pause, or when ``(active stream, channels, display filter, notch, gain)``
+    changes so unrelated scales are never eased together. Runs only in auto
+    mode with per-channel scaling off.
     """
     if v.scale_mode != "auto" or v.per_channel_scale:
         # Force a snap when auto resumes, so re-entering auto doesn't ease from stale/manual bounds.
@@ -390,8 +394,9 @@ def _nice_step(raw: float) -> float:
 def _time_ticks(window: float, width: float = math.inf) -> tuple[list[float], list[str]]:
     """X-axis ticks over ``[0, window]``, with the centre tick relabelled ``Time (s)``.
 
-    Start with ~10 intervals and keep labels that fit the current font size,
-    working outward from the unit label. Wide plots keep all ticks.
+    The unit label replaces the axis-title row, leaving more vertical space
+    for the trace. Start with ~10 nice intervals and keep labels that fit the
+    current font size, working outward from the unit label. Wide plots keep all ticks.
     """
     if window <= 0:
         return [0.0], ["Time (s)"]
@@ -478,6 +483,7 @@ def setup_axes(
     # Channel-identity gutter: one y-tick per lane at its baseline (the same
     # `-col_idx * channel_height` offset plot_channel draws at), labelled with the channel
     # name — needed past the ~10 distinguishable trace colours.
+    # At very high enabled channel counts, these labels can crowd.
     if channel_map:
         positions = [-col_idx * channel_height for col_idx in range(len(channel_map))]
         implot.setup_axis_ticks(implot.ImAxis_.y1, positions, channel_labels)
@@ -600,7 +606,8 @@ def channel_diagnostics(
     `valid_channels` are real channel indices into `data_win`'s columns (ascending). The
     three arrays are aligned to `valid_channels` order and NaN-propagating.
 
-    At 256 ch / 5 s / 10 kHz, ``data_win[:, valid]`` gathering costs ~43 ms.
+    Memory traffic dominates arithmetic. At 256 ch / 5 s / 10 kHz, a naive
+    ``data_win[:, valid]`` fancy-index gather alone costs ~43 ms.
     Skip it when all channels are enabled and use one ``einsum`` pass for
     sum-of-squares without a temporary array, reducing ~57 ms to ~7 ms.
     """

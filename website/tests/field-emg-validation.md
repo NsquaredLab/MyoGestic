@@ -1,6 +1,6 @@
 # Signal-field EMG validation
 
-The fit uses 8-channel forearm bracelet recordings sampled at 1000 Hz. The muscle-activity reference requires recordings; simulated narrowband common-mode signals cannot establish it. Only rounded RMS maps and scalar aggregates are committed. Recording arrays remain private; the optional comparison bridge holds excerpts in memory on loopback and is never used by the deployed website.
+The fit uses 8-channel forearm bracelet recordings sampled at 1000 Hz. This fit supersedes the previous simulated narrowband common-mode fit, which did not establish a muscle-activity reference. Only rounded RMS maps and scalar aggregates are committed. Recording arrays remain private; the optional comparison bridge holds excerpts in memory on loopback and is never used by the deployed website.
 
 ## Selection and filtering
 
@@ -66,7 +66,7 @@ The table reports the selected recordings and generator seed 314159 after 2400 s
 
 The generator uses eight correlated carriers with a common component fitted to circular electrode correlation, a per-gesture negative AR(1) term at the displayed rate, and occasional broad innovations for the measured tails. Six summed uniforms approximate Gaussian innovations without frame-path allocations. Use this aggregate visual fit for display; it does not reconstruct motor-unit physiology or native-frequency spectra. Tests require active/rest RMS ratios within ±20%, both neighbour correlations within ±0.1, lag-1 within ±0.1, p99 within ±10%, p99.9 within ±15%, and kurtosis within ±25%.
 
-Raw stationary spectra are broad. Line notches reduce spectral flatness; compare raw and filtered values separately.
+The real recordings' raw stationary spectra are broad. Line notches intentionally reduce spectral flatness; compare raw and filtered values separately.
 
 | Gesture | Raw peak (Hz) | Raw flatness, 20–450 Hz | Filtered peak (Hz) | Filtered flatness, 20–450 Hz |
 | --- | ---: | ---: | ---: | ---: |
@@ -77,7 +77,7 @@ Raw stationary spectra are broad. Line notches reduce spectral flatness; compare
 
 ## Rendering and reproduction
 
-Rendering uses two-device-pixel quads, a Canvas 2D software-renderer fallback and renderer tiers, with sample cadence, gain, reduced-motion handling and offscreen scheduling. All per-frame storage is preallocated. The 64-lane texture budget remains 123136 bytes.
+The fit leaves rendering unchanged. It retains two-device-pixel quads, the Canvas 2D software-renderer fallback, renderer tiers, sample cadence, gain, reduced-motion handling and offscreen scheduling. All per-frame storage is preallocated. The 64-lane texture budget remains 123136 bytes.
 
 Define local take-path arrays, then run the reference script with repeated `--group` arguments, one group of local take arguments per recording set. It automatically selects the complete group with the largest minimum map distance. Standard output contains only aggregates; no path, identity or recording excerpt is printed. Add `--serve 4381` only for local comparison capture, then stop the bridge. From the website directory, with a built-site preview running:
 
@@ -92,7 +92,7 @@ The 1440×900 comparison shows one second each of Rest → Fist → Pinch → In
 
 ## Final verification
 
-The foreground `npm run ci` passed under Node 22.23.4 on 2026-11-07. All 19 unit-test files / 80 tests passed; 41 browser tests passed and three skipped. Two playground browser tests skip because this website-only build omits the optional wheel; the context-loss browser test skips when software rendering chooses Canvas 2D. Controller unit tests exercise context loss and replacement, while screenshot and performance checks use hardware WebGL. The gesture, distribution and map tests detect deviations from the measured reference. Final focused field tests (37) and the reference script's Ruff check also pass.
+The foreground `npm run ci` passed under Node 22.23.4 on 2026-11-07. All 19 unit-test files / 80 tests passed; 41 browser tests passed and three skipped. Two playground browser tests skip because this website-only build omits the optional wheel; the context-loss browser test skips when software rendering chooses Canvas 2D. Controller unit tests exercise context loss and replacement, while screenshot and performance checks use hardware WebGL. The gesture, distribution and map tests detect deviations from the measured reference. They were run against the old generator and failed before this implementation. Final focused field tests (37) and the reference script's Ruff check also pass.
 
 CI tail:
 

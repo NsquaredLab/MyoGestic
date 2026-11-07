@@ -8,7 +8,7 @@ later install knows what's already there.
 
 MyoGestic drives VHI over its control service, asking it what it exports. A
 release older than `MIN_VHI_TAG` has no control manifest to answer with, so this refuses
-to install one.
+to install one because it would fail at every launch.
 
 Usage:
     python -m myogestic.tools.install_vhi                # latest, default dest
@@ -288,7 +288,7 @@ def _validate(target: Path) -> None:
 
 
 def _restore_exec_bits(target: Path) -> None:
-    """Restore Unix +x permissions on the binary unpacked from ZIP."""
+    """Restore Unix +x permissions lost when the binary is packaged in ZIP."""
     for rel in EXEC_PATHS.get(platform.system(), []):
         path = target / rel
         if path.exists():

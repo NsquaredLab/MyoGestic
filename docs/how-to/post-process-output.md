@@ -1,7 +1,7 @@
 ---
 title: "Post-process predictions"
 ---
-`myogestic.outputs.filters` smooths prediction vectors, including a 9-float pose or proportional actuator command. Filter raw EMG upstream of `extract()` with a domain library such as scipy.
+`myogestic.outputs.filters` smooths prediction vectors, including a 9-float pose or proportional actuator command. These are not DSP filters for raw EMG. Filter raw EMG upstream of `extract()` with a domain library such as scipy.
 
 ## Use the [`PostProcessor`][myogestic.widgets.PostProcessor] widget
 
@@ -124,13 +124,14 @@ def train(data):
 
 Inside `predict()`, before the bus `.push()`. The filter runs on the predict thread, smooths the freshly computed pose, and pushes the smoothed command. Both the target (`bus.push`) and the widgets (`pipeline.predictions`) receive smoothed values.
 
-Apply smoothing to raw model predictions so the user can tune it live.
+Keep filtering outside the model. The model should produce raw predictions;
+separate smoothing lets the user tune it live.
 
 ## Common mistakes
 
 See [Troubleshooting](../troubleshooting.md) for errors by symptom.
 
-- Filter raw EMG upstream of `extract()`, for example with scipy.signal. `SignalViewer`'s 50/60 Hz mains notch, rectify, dc removal and rms-envelope affect the display only.
+- Filter raw EMG upstream of `extract()`, for example with scipy.signal. `SignalViewer`'s 50/60 Hz mains notch, rectify, dc removal and rms-envelope affect the display only. They do not change what `extract()` receives.
 - Filtering classification output (integer class indices). The filter expects a float vector. For classification, hold a smoothed soft-output (probabilities) and argmax that, or use a model with its own temporal smoothing built-in.
 - Forgetting `pose_filter.reset()` after training. The first predictions blend with the previous model's tail.
 - Per-channel filter parameters. `OneEuroFilter` applies the same parameters to every dimension. If you want different smoothing per joint (e.g. fingertips smoother than wrist), run multiple filters and concatenate.

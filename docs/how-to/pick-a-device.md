@@ -48,7 +48,7 @@ something to remove, and paced to whatever rate you pick. Connect it and every
 panel supports plotting and recording, including naming and saving takes.
 
 Use it to learn the app or reproduce bugs without an amplifier. It is labelled
-as a test signal and listed last. Use real recordings for experimental data.
+as a test signal and listed last so real hardware leads. Use real recordings for experimental data.
 
 Five sliders appear once connected. Activation, Direction, Noise, Hum and
 Hum (Hz) retune the live signal without reconnecting. The plot keeps its history
@@ -56,11 +56,14 @@ and a recording keeps its geometry.
 
 Activation scales the synthetic contraction. At `0` the channels contain noise
 and mains hum; at `1` the carrier has full amplitude. Vary it between gestures
-to produce distinct training signals.
+to produce distinct training signals. At a fixed amplitude every gesture has
+the same waveform, so a classifier cannot separate them and a prediction demo
+provides no evidence of discrimination.
 
-Direction ranges from `-1` to `+1` and splits Activation between the channel halves.
+Direction ranges from `-1` to `+1` and splits Activation between the channel halves,
+like an agonist/antagonist pair on opposite sides of a limb.
 At `-1` only the first half carries the signal; at `+1` only the second does.
-At the default `0`, both carry it. Record "down" and "up" as distinct takes
+At the default `0`, both carry it and preserve the original signal exactly. Record "down" and "up" as distinct takes
 to train a regressor without hardware. Direction only attenuates; neither half
 exceeds the amplitude set by Activation.
 
@@ -155,13 +158,16 @@ the chosen values are passed to the factory as keyword arguments. Rows are
 drawn in the order you write them.
 
 `hint` and `steps` appear behind the ⓘ button beside the dropdown.
-Use one hint line and a numbered setup procedure. The button is hidden
+Use one hint line describing the device and a numbered setup procedure.
+Setup is a sequence of physical actions; list them in order so the reader
+does not have to recover the sequence from a paragraph. The button is hidden
 when both are empty.
 
 Two things to get right:
 
-- Use a descriptive `label` with the unit. Use `"Sample rate"` or `"Channels"`
-  for `"fs_mode"`-style keywords.
+- Use a descriptive `label` with the unit spelled out, such as `"Sample rate"`
+  or `"Channels"`. Never display constructor keywords such as `"fs_mode"`.
+  Only the device entry knows what those keywords mean.
 - Keep choices short. `"2048"` fits better than `"2048 Hz"`. When every choice
   fits on the row it is drawn as a segmented control, so all the alternatives
   stay visible and picking one is a single click. Wordy choices, or a narrow
@@ -173,7 +179,8 @@ and the source constructors stay the single source of truth.
 
 ## Devices that are discovered, not configured
 
-Choose an LSL outlet by scanning available streams.
+An LSL outlet has no device settings to choose. Scan available streams
+and select the outlet to subscribe to.
 Set `scan=True` and the picker draws a Scan button and a list of what
 `discover()` found, instead of option dropdowns, then hands the choice to
 `Stream.reconnect`:
@@ -219,8 +226,8 @@ silently connects a device nobody chose.
 
 ## Streams that come and go
 
-Declare streams with `app.streams(Stream("emg", ...))` or let the operator
-add them while the app runs:
+Declare as many streams as needed with `app.streams(Stream("emg", ...))`
+or let the operator add them while the app runs.
 
 ```python
 from myogestic import Stream

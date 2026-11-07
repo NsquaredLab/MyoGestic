@@ -1,7 +1,8 @@
 ---
 title: "Integrate the Virtual Hand Interface"
 ---
-The Virtual Hand Interface (VHI) is a Godot-based 3-D hand visualization.
+The Virtual Hand Interface (VHI) is a separate Godot-based 3-D hand visualization
+application shipped alongside MyoGestic.
 It is MyoGestic's [remote target](drive-a-remote-target.md), using LSL for
 continuous controls and read-backs, and gRPC for discrete controls.
 
@@ -34,6 +35,8 @@ an existing install in the writable checkout, then the per-user install root. It
 (defaults `127.0.0.1:50051`).
 
 The returned [`InterfaceSpec`][myogestic.remote.InterfaceSpec] locates VHI.
+It contains no control vocabulary. The running VHI supplies that vocabulary,
+so no local table can go stale.
 [`RemoteTarget`][myogestic.remote.RemoteTarget] queries the running VHI for its
 controls and names each stream by its address:
 
@@ -44,7 +47,8 @@ from myogestic.remote import RemoteTarget
 link = ControlLink(CONTROL_MAP, [RemoteTarget(client=vhi_control, interface=vhi)], hz=32)
 ```
 
-One target drives the whole map, including both hands.
+One target drives the whole map, including both hands. You do not name
+or count streams yourself.
 See [Negotiating with the target](../api/controls.md#negotiating-with-the-target) for what that
 resolves and what it refuses, and [Binding retries while the target is
 unavailable](../concepts/controls.md#binding-retries-while-the-target-is-unavailable) for why this is a
@@ -127,7 +131,7 @@ install message `launcher()` raises.
 
 ## VHI control names
 
-The manifest lists the running VHI's controls.
+The running VHI's manifest is the authority on its controls.
 `uv run --extra grpc python tools/inspect_control_map.py examples/controls/hand.toml`
 resolves a map without driving the hand. The address selects the hand:
 
@@ -169,10 +173,12 @@ recorded session uses this layout, defined by `PredictedHandSkeleton` and
 | 5     | Little flexion   |                                          |
 | 6-8   | Wrist flexion, abduction, rotation | bone 0, which parents every digit |
 
+Measurements established the thumb channel order and wrist behavior.
 Channel 0 is thumb flexion; channel 1 is thumb abduction. A recorded fist
 has channel 1 at `-1.0` because the thumb crosses the fingers. Channels 6-8
 drive the wrist. Archived sessions with these channels hardcoded to `0`
-do not contain recorded wrist movement.
+do not contain recorded wrist movement. Those zeros came from the recorder;
+VHI does respond to wrist channels.
 
 ## A ready-made movement palette
 
@@ -242,6 +248,8 @@ def _on_record() -> None:
 
 The call returns `False` without raising when the aid is unavailable.
 Decide whether an ungated recording is acceptable for your experiment.
+This is an experiment-integrity decision for the caller, so the client does
+not make it by raising.
 
 ## Testing without VHI
 

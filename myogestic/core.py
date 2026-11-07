@@ -203,7 +203,7 @@ class Context:
         The owning `App.finalize_hooks` list, also available to widgets that
         receive only a context. Hooks run after freeze and before metadata is saved.
     participant
-        Pseudonymized ID used to label recordings; empty when none is set.
+        Pseudonymized ID used to label new recordings; empty when none is set.
     require_participant
         Refuse recording until a participant ID is set. Recording widgets
         mirror this opt-in gate with a disabled Record button.
@@ -291,8 +291,9 @@ class Context:
         """Append a one-line app event for the `log_panel` widget.
 
         Bounded to `max_lines`, dropping the oldest entry. Use for lifecycle
-        events such as recording saves, training and model loads. Safe from any
-        thread because list.append/pop are GIL-atomic.
+        events such as recording saves, training start/done and model loads. Do not
+        log per-frame messages. Safe from any thread because list.append/pop
+        are GIL-atomic.
         """
         from time import strftime
 
@@ -311,11 +312,13 @@ class App:
     Construct one per process. Register streams via `app.streams(...)`,
     register your UI via `@app.ui`, then call `app.run()`. Optional
     extensions like `Pipeline(app)` register themselves via
-    `app.before_run_hooks` / `app.cleanup_hooks`.
+    `app.before_run_hooks` / `app.cleanup_hooks`. User code rarely needs to
+    modify those lists directly.
 
     On desktop, ImGui multi-viewport is on by default. Floating windows, including
     the signal viewer's channel-grid ``Edit…`` window, use native OS windows with
-    square corners and opaque backgrounds. Browser mode skips multi-viewport.
+    square corners and opaque backgrounds. Browser mode skips multi-viewport
+    because it has no backend for extra OS windows.
 
     Parameters
     ----------
@@ -330,7 +333,8 @@ class App:
         registered via ``app.popout(...)`` become tearable DockableWindows. macOS
         Retina viewport sizing of detached windows can be wrong on the first draw.
     ui_scale
-        Fixed UI zoom factor for fonts, imgui style metrics and `Px` tracks.
+        Fixed UI zoom factor for fonts, imgui style metrics including padding,
+        spacing and rounding, and every `Px` track.
         The default ``None`` multiplies OS display scale by a window-size
         factor, updating as the window is resized or moved between monitors.
         ``$MYOGESTIC_UI_SCALE`` overrides both. Clamped to ``[0.5, 2.0]``. No
@@ -397,7 +401,7 @@ class App:
         """Register a stream, and start it if the app is already running.
 
         Pairs with [`remove_stream`][myogestic.App.remove_stream] for runtime
-        device changes. Before `run`, registers the stream with a return value.
+        device changes. Before `run`, behaves like `streams` with a return value.
         While running, also calls `Stream.start`; `run` starts registered streams
         once during startup.
 
@@ -455,11 +459,13 @@ class App:
         """Register one or more Bridge subprocesses with the app.
 
         Bridges run webcam, ultrasound or depth-camera acquisition in separate
-        processes and publish LSL clock streams for the app. Call
-        ``bridge.start()`` after registration. Each bridge is stored in
+        processes and publish LSL clock streams that the app subscribes to.
+        Registration does not start them. Call ``bridge.start()`` yourself,
+        unlike [`streams`][]. Each bridge is stored in
         ``ctx.bridges`` by ``.name``; the same name overwrites.
 
-        Use ``bridge.status`` and ``bridge.alive`` to display its state.
+        Bridges have no automatic UI. Use ``bridge.status`` and ``bridge.alive``
+        to display their state.
 
         Parameters
         ----------
@@ -492,7 +498,8 @@ class App:
     ) -> None:
         """Register a dockable window before `run()`.
 
-        Gives Hello ImGui the complete DockableWindow list before launch.
+        Prefer this over `popout_panel(...)` inside `@app.ui`. It gives Hello
+        ImGui the complete DockableWindow list before launch.
         Calls to `popout_panel(...)` inside `@app.ui` register on the first frame.
         """
         self._popout_specs = [spec for spec in self._popout_specs if spec[0] != title]

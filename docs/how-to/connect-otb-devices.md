@@ -2,6 +2,7 @@
 title: "Connect OT Bioelettronica devices"
 ---
 Use OTB Muovi/Muovi+ and Quattrocento directly as a `Source` in a `Stream`.
+They need neither Qt nor an external bridge.
 
 ## Muovi / Muovi+ (Wi-Fi)
 

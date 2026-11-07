@@ -123,7 +123,8 @@ For models that need many short trials per session, record cycle-style:
 [Stop]
 ```
 
-One Record→Stop cycle yields one session, with one labelled segment per gesture selection. `iter_labeled_windows` includes the first segment and slices each segment into as many full windows as fit. Repeated activations provide separate trials.
+One Record→Stop cycle yields one session, with one labelled segment per gesture selection. `iter_labeled_windows` includes the first segment and slices each segment into as many full windows as fit. Repeated activations provide separate trials. Extra overlapping windows from
+one sustained hold do not add activations.
 
 ## Reading sessions programmatically
 
@@ -269,6 +270,7 @@ print("matched", close.mean(), "max |Δpose|", np.abs(pr[j][close] - pl[close]).
 ```
 
 For exact matches, anchor the `extract` frame grid to data timestamps.
+The app chooses that anchoring; a grid based on ring position does not provide it.
 
 ## Common mistakes
 

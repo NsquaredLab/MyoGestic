@@ -1,7 +1,8 @@
 ---
 title: "Use the recipe feature set"
 ---
-`myogestic.recipes.features` provides five time-domain EMG features:
+`myogestic.recipes.features` provides five classic time-domain EMG features.
+Starter examples previously copied these implementations into each script.
 
 | Name  | Function                | What it captures                                       |
 |-------|-------------------------|--------------------------------------------------------|
@@ -11,12 +12,13 @@ title: "Use the recipe feature set"
 | `var` | Variance                | Energy around the per-window mean.                     |
 | `zc`  | Zero-crossing count     | Per-channel oscillation rate.                          |
 
-Use these baselines for a five-minute setup check. Choose and add
-features suited to your experiment for further work.
+Use these baselines for a five-minute setup check. They are not the
+framework's recommended feature set. For work beyond a smoke test, mix them
+with features suited to your experiment.
 
 ## The shape contract
 
-Every function takes an EMG window of shape `(n_channels, n_samples)`
+Every function takes one argument, an EMG window of shape `(n_channels, n_samples)`
 and returns a per-channel scalar vector of
 shape `(n_channels,)` with dtype `float32`.
 
@@ -60,7 +62,8 @@ def ui(ctx):
 ```
 
 `feats(window)` concatenates the selected features. Toggling a feature changes
-output dimensionality without invalidating the trained model. Sklearn and
+output dimensionality without invalidating the trained model. `FeatureSelector`
+only mutates its active-feature set. Sklearn and
 CatBoost raise shape-mismatch errors if prediction uses a different shape.
 Choose one of these patterns:
 

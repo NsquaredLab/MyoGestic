@@ -1,7 +1,10 @@
 ---
 title: "Record good training data"
 ---
-Record repeated activations and inspect the extracted trials before training. Overlapping windows from one hold provide limited variation.
+Poor training data accounts for most reports that a model does not work.
+Record repeated activations and inspect the extracted trials before training.
+Overlapping windows from one hold provide limited variation. The framework
+cannot compensate for a one-click recording; neither can scikit-learn.
 
 ## The failure mode
 
@@ -58,7 +61,7 @@ Each row shows a gesture tag, source, energy bar and trial number. Gesture colou
 - Return to rest between gestures. Don't transition gesture → gesture directly. Rest is the framework's reference; muddy rest segments degrade both training and prediction.
 - Record several sessions on different days if you can. Cross-day variance is the largest noise source for surface EMG; one-day models often fail tomorrow.
 - Check your signal viewer first. If the live signal looks like noise across all channels even when you flex, your electrode placement is wrong - fix it before recording.
-- Use `RecordingControls`'s gesture buttons to label the take. Each button click writes a [`LabelEvent`][myogestic.session.LabelEvent]; the trial slicer needs those events to know where one trial ends and the next begins.
+- Use `RecordingControls`'s gesture buttons to label the take. Pressing Record alone does not provide the trial boundaries. Each button click writes a [`LabelEvent`][myogestic.session.LabelEvent]; the trial slicer needs those events to know where one trial ends and the next begins.
 
 ## Common mistakes
 

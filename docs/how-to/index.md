@@ -2,7 +2,7 @@
 title: "Guides"
 ---
 Start with [EMG classification](../tutorials/emg-classification.md). It runs in one command
-and introduces the App + Stream + Pipeline pattern.
+and introduces the App + Stream + Pipeline pattern that the other guides assume.
 
 ## Start here
 
@@ -36,7 +36,7 @@ system itself.
 - [Enable on-disk recording](enable-recording.md) - the four lines that start writing sessions.
 - [Record and replay](record-and-replay.md) - capture sessions, read them back programmatically.
 - [Record good training data](record-good-training-data.md) - cycle-style recording, how many cycles you actually need, verifying templates before training.
-- [Record for proportional control](record-for-proportional-control.md) - graded target levels and a followed-cursor block for proportional control.
+- [Record for proportional control](record-for-proportional-control.md) - three cued classes supply only three target values regardless of the estimator. Add graded levels with a followed-cursor block.
 - [Track a force target](track-a-force-target.md) - isometric force tracking against a trapezoid, on an amplifier AUX channel, with the target recorded as its own stream.
 
 ## Models and features

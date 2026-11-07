@@ -1,4 +1,4 @@
-"""Browser myocontrol with labelled takes and LDA prediction.
+"""Browser myocontrol. Connect, record labelled takes, train LDA, then predict.
 
 The public widgets and Session lifecycle are shared with examples/start_here/
 myocontrol.py. Pyodide schedules acquisition/prediction per frame and keeps the

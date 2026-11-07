@@ -2,6 +2,7 @@
 title: "Add a custom widget"
 ---
 A widget is a class with a `.ui()` method. Construct it once, then call `.ui(...)` inside `@app.ui` each frame.
+There is no registration list, base class or decorator.
 
 ## The simplest widget
 
@@ -134,7 +135,7 @@ class SimplePrediction:
         imgui.text(f"Class: {pred.get('class')}")
 ```
 
-Read scalar fields directly. Use `dict(self._pipeline.predictions)` to copy multiple fields.
+Read scalar fields directly. Use `dict(self._pipeline.predictions)` for a coherent snapshot of multiple fields.
 
 ## Common mistakes
 

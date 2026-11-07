@@ -3,7 +3,8 @@ title: "Drive your own device"
 ---
 A target drives a prosthesis, motor controller, cursor or robot arm. Implement
 its three methods and pass the object to a
-[`ControlBus`][myogestic.controls.ControlBus].
+[`ControlBus`][myogestic.controls.ControlBus]. The target is a plain object.
+It needs no registration, subclassing or discovery by name.
 
 ## Run it first
 
@@ -31,7 +32,8 @@ teardown, which rests every control first:
 
 [`ControlBus`][myogestic.controls.ControlBus] clamps `5.0` to `1.0` using the declared `hi=1.0`
 and replaces `NaN` with `0.0`. It returns every control to rest before teardown
-so the device releases its last grip.
+so the device releases its last grip. The bus supplies these checks, keeping
+clamping, invalid-value handling and resting out of the three target methods.
 
 ## Change these three things
 
@@ -192,6 +194,7 @@ Targets are user-owned. In an app, register `link.stop()` with
 `app.cleanup_hooks` so normal shutdown rests and closes them too.
 
 Call `ensure()` from a UI handler or training thread that can wait for it.
+Never call it from `@pipeline.predict`; it can block.
 In `@pipeline.predict`, read `link.bus` and skip output while it is `None`
 to keep the predict thread within its deadline.
 
@@ -200,7 +203,8 @@ If a UI loop should reconnect automatically, wrap the link in
 `poll()` from that loop. Resolution is atomic across all targets in one link; use separate maps
 and links when one output should keep working while another is unavailable.
 
-For a fixed vocabulary with known capabilities, build the bus directly:
+For a fixed vocabulary with known capabilities, build the bus directly.
+`connect_controls` is a convenience for lazy resolution.
 
 ```python
 from myogestic.controls import ControlBus, resolve
@@ -221,6 +225,7 @@ bus = ControlBus(controls, targets=[cursor, vhi_target], hz=32)
 ```
 
 The bus checks at bind that a target claims every alias, catching addresses that no target drives.
+Without that check, an undriven control could appear to work while the device stays still.
 
 ## A servo hand target
 
@@ -234,12 +239,12 @@ uv run python examples/synthetic/servo_hand.py
 --8 < --"examples/synthetic/servo_hand.py"
 ```
 
-`hand.thumb` couples two servos in the target. `frame` iterates `SERVOS` by name
-to preserve the device's wire order. `stop` returns the hand to rest before closing.
+`hand.thumb` couples two servos in the target, keeping that coupling out of the map.
+`frame` iterates `SERVOS` by name to preserve the device's wire order. `stop` returns the hand to rest before closing.
 
 ## Control value convention
 
-A control value is normalized to `[-1, 1]`, with `0` at rest. `+1` means the
+A control value is signed and normalized to `[-1, 1]`, with `0` at rest. `+1` means the
 direction the name denotes. `cursor.x` at `+1` should move right if you called it *right*.
 A one-way control declares `lo=0.0` instead.
 

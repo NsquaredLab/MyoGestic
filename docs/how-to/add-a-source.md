@@ -1,7 +1,7 @@
 ---
 title: "Add a custom source"
 ---
-A `Source` implements three methods of a [Protocol](https://docs.python.org/3/library/typing.html#typing.Protocol). Pass the instance to `Stream(...)` for threading and buffering, with recording handled by the framework.
+A `Source` implements three methods of a [Protocol](https://docs.python.org/3/library/typing.html#typing.Protocol). No inheritance is required. Pass the instance to `Stream(...)` for threading and buffering, with recording handled by the framework.
 
 ## The protocol
 
@@ -20,7 +20,7 @@ class Source(Protocol):
 
 ### `connect() -> StreamInfo`
 
-Open the device, file or socket. Return a [`StreamInfo`][myogestic.StreamInfo] with `n_channels`, `fs`, optional `dtype` and optional `channel_names`. `dtype` defaults to `np.float32`. Discover these values from the source where possible.
+Open the device, file or socket. Return a [`StreamInfo`][myogestic.StreamInfo] with `n_channels`, `fs`, optional `dtype` and optional `channel_names`. `dtype` defaults to `np.float32`. Discover these values from the source where possible. Require manual values only when the source cannot describe itself.
 
 If the source can't connect, raise. `Stream.reconnect()` returns `False` and stores the error in `stream.last_error`; the connection widgets show it.
 
@@ -102,7 +102,7 @@ app.run()
 
 ## Worked example: bridge a third-party SDK
 
-Use a queue to adapt a vendor SDK that emits chunks through a callback:
+Use the adapter pattern with a queue for a vendor SDK that emits chunks through a callback.
 
 ```python
 import threading

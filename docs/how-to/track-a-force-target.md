@@ -54,7 +54,7 @@ trapezoids identical.
 
 ## Wire the force in
 
-Connect the transducer to an auxiliary amplifier input. Its channel follows
+The transducer is not a biosignal channel. Connect it to an auxiliary amplifier input. Its channel follows
 the bio block on the EMG stream when auxiliary inputs are enabled. Every OTB entry in the picker has an
 `include_aux` row, off by default:
 
@@ -65,17 +65,21 @@ the bio block on the EMG stream when auxiliary inputs are enabled. Every OTB ent
 | Quattrocento | `AUX IN + accessory` | 16 AUX IN, then 8 accessory | any of the 16 back-panel AUX IN |
 
 Muovi's accessory block contains IMU and counters, with no analogue input.
+That is why its picker row names IMU and counters rather than AUX.
 A plain Sessantaquattro reports a 4- or 6-wide accessory block without AUX
 channels. The `aux0`/`aux1` pair requires Sessantaquattro+. The source probes
-accessory width from the ramp counter on connection.
+accessory width from the ramp counter on connection. You cannot configure
+that width; connect to find out what the device provides.
 
-Pick `aux0` by name in the panel's Channel dropdown. Its index varies:
+Do not count channel indices. The panel's Channel dropdown lists the stream's
+own names; pick `aux0` by name. Its index varies:
 on a Sessantaquattro+ it is 64 at 64 channels monopolar but 32 in `Bipolar`, which
 halves the bio block. `channel=` in the constructor is only where the dropdown
 opens.
 
 `include_aux` is off by default because Muovi and Sessantaquattro append raw
-counts beside bio channels scaled to millivolts. Display bio channels in the
+counts beside bio channels scaled to millivolts. A shared plot range cannot
+usefully show both scales. Display bio channels in the
 signal viewer and force in the tracking panel to give each a suitable range.
 
 ## Calibrate with two captures
@@ -95,7 +99,8 @@ Both captures and the live trace use the chosen channel's mean over
 
 Units never come up. `Calibration` is a two-point map in whatever the channel
 happens to carry, so it works identically on Sessantaquattro counts and on
-Quattrocento volts. Use the transducer's datasheet to report newtons.
+Quattrocento volts. You do not need the transducer's datasheet to run the
+task; use it when reporting newtons.
 
 The calibration row says Capture zero, then MVC until both captures exist.
 Zero and MVC sit beside that instruction; during MVC capture the same row
@@ -135,8 +140,9 @@ and recording amplifier data under `target`.
 
 ## Try it without a transducer
 
-`SyntheticForceSource` simulates a transducer. Watch the target and drag
-`effort` to simulate pushing on a load cell.
+`SyntheticForceSource` simulates a transducer. It does not simulate a
+participant following the target. You act as the participant by watching
+the target and dragging `effort` to simulate pushing on a load cell.
 
 ```python
 from myogestic import Stream
@@ -165,9 +171,12 @@ Its offset and smoothing model transducer readings:
   `lag_s` is a first-order time constant so a drag reads as a contraction. Set
   it to `0` to follow the slider exactly.
 
-Move `effort` yourself to produce the tracking error the task measures.
+Nothing follows the target automatically. Move `effort` yourself to produce
+the tracking error the task measures. Automatic tracking would fabricate an
+error that no participant produced.
 
-To capture an MVC, raise `effort` while no block is running.
+To capture an MVC, raise `effort` while no block is running. The target asks
+for nothing then; effort alone drives the force channel.
 
 ## Shape the trapezoid
 
@@ -179,11 +188,11 @@ in two columns, falling back to one in narrow cells. The segment fields on
 
 | Field | Default | What it is |
 |---|---|---|
-| `rest_s` | 3.0 | Baseline before the ramp for the pre-contraction reference. |
+| `rest_s` | 3.0 | Baseline before the ramp. Every analysis needs this pre-contraction reference. |
 | `ramp_up_s` | 5.0 | Linear rise to `level_pct`. Recruitment happens here, so slow enough to resolve it. |
 | `hold_s` | 10.0 | Seconds at the plateau. The steady-state segment discharge-rate estimates come from. |
-| `ramp_down_s` | 5.0 | Linear fall to baseline for de-recruitment. |
-| `recover_s` | 5.0 | Baseline before the next repetition for fatigue control. |
+| `ramp_down_s` | 5.0 | Linear fall to baseline for de-recruitment, the counterpart to ramp up. |
+| `recover_s` | 5.0 | Baseline before the next repetition for fatigue control. Do not treat it as padding. |
 | `level_pct` | 30.0 | Plateau height, in percent of MVC. |
 | `reps` | 1 | How many times the shape repeats back to back. |
 
@@ -204,7 +213,8 @@ The Target and Force legend chips toggle visibility without discarding data.
 
 Force is drawn up to the current moment. Look ahead sets how many seconds of
 future target are visible. A shorter preview reduces the opportunity to memorize
-the shape. Set it to zero to hide the future target or to a full repetition
+the shape. The task measures following, so showing the whole ending from
+the first frame changes how the participant can approach it. Set it to zero to hide the future target or to a full repetition
 to show the whole trajectory in advance.
 
 Look ahead changes the display only. It is absent from `Trapezoid` and
@@ -234,10 +244,10 @@ an amplifier, so a `Stream` records it exactly as it records EMG. Two channels, 
 | Channel | Name | Contents |
 |---|---|---|
 | 0 | `target_pct` | The commanded level, percent of MVC. |
-| 1 | `phase` | Segment code stored as a float. |
+| 1 | `phase` | Segment code stored as a float. This stream carries floats, so segment names are encoded as numbers. |
 
-`myogestic.sources.target.PHASE_CODES` defines stable codes. Additions preserve
-existing numbers so analysis scripts can read recordings across versions.
+`myogestic.sources.target.PHASE_CODES` is frozen. Only add codes; never
+renumber existing ones. Analysis scripts must read recordings across versions.
 
 ```
 rest 0 · ramp_up 1 · hold 2 · ramp_down 3 · recover 4 · done 5 · idle 6
@@ -249,12 +259,15 @@ for the operator to press Start.
 
 The recorded trajectory shares the EMG's `local_clock()` domain sample by sample.
 It preserves the target used during the take without reconstructing it from
-a start time and saved settings.
+a start time and saved settings. Reconstruction would depend on two clocks
+agreeing and on nobody editing a segment between noting the settings and
+recording the take.
 
 Two consequences of it being a real stream:
 
-- Call `target_stream.reconnect()`. `start_recording` skips streams whose
-  `info is None`, leaving them out of the session.
+- Call `target_stream.reconnect()`. `start_recording` silently skips streams
+  whose `info is None` because it has no schema to allocate their arrays. An
+  unattached target stream is absent from the session.
 - It emits baseline while stopped, marked `idle`, to keep data continuous
   between blocks. A source that stops producing leaves a hole exactly where the
   operator was setting the next block up, and a hole is indistinguishable from a
@@ -281,7 +294,8 @@ level = target[:, 0]  # percent of MVC
 phase = target[:, 1]  # PHASE_CODES
 ```
 
-Use the phase code to extract blocks from a session:
+Use the phase code to extract blocks from a session. The gap codes supply
+everything needed; no start time, settings or second clock is required.
 
 ```python
 import numpy as np
@@ -298,7 +312,8 @@ blocks = [
 ]
 ```
 
-Align by timestamps because the target runs at 100 Hz and EMG at kilohertz. For training,
+Align by timestamps because the target runs at 100 Hz and EMG at kilohertz.
+Do not align by sample index. For training,
 [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] does that for
 you: each EMG window is paired with the target sample nearest its midpoint.
 
@@ -322,10 +337,12 @@ for window, targets, ts in iter_aligned_windows(
 ```
 
 The exact `== 2.0` holds because `n_alignment_samples` defaults to 1, so the phase
-comes from one recorded sample, preserving segment boundaries. Raise it and
+comes from one recorded sample rather than a mean across a segment boundary. Raise it and
 compare with a tolerance, or round.
 
-Use the recorded phase channel to select hold segments for force regression.
+Force regression usually needs hold segments rather than ramps. Use the
+recorded phase channel to select them; the recording answers which samples
+were holds without reconstructing them from remembered settings.
 
 ## See also
 

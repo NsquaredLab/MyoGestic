@@ -3,7 +3,9 @@ title: "Record for proportional control"
 ---
 A proportional decoder estimates effort and direction. Half a contraction moves
 the paddle half as fast. Cued Down, Rest and Up provide three distinct target
-values. Tree ensembles benefit from more levels; a linear model can interpolate
+values. Recording only those cues leaves a three-class target problem
+regardless of the estimator's name. Establish level coverage in the recording
+before choosing a model. Tree ensembles benefit from more levels; a linear model can interpolate
 between three. See [the measurement below](#the-active-ingredient-is-the-number-of-distinct-levels).
 
 This page is the graded counterpart to [Record good training data](record-good-training-data.md),
@@ -25,23 +27,27 @@ densely covered levels cuts intermediate-effort error 14x, with CatBoost MAE
 !!! warning "Check monotonicity in effort"
     The same recordings also made CatBoost non-monotonic in effort: scaling every
     channel by 1.0 → 1.3 → 1.6 walked its Up prediction 1.000 → 0.882 → 0.723, so
-    contracting harder drove the paddle the wrong way. Check the estimator even with
-    dense levels. Refit the same CatBoost on a full
+    contracting harder drove the paddle the wrong way. This is an estimator
+    failure; adding dense target levels does not fix it. Refit the same CatBoost on a full
     `Pursuit` block (411 distinct levels, the protocol below) and the same sweep still
     reads 0.811 → 0.905 → 0.849, still non-monotone, with or without the "Down was
     recorded harder" asymmetry that caused it. `directional_decoder` on the identical
     block reads 0.792 → 1.0 → 1.0. One regressor over raw features conflates effort
-    and direction; the estimator must separate them. See [Fit it](#fit-it).
+    and direction. No recording protocol can separate those quantities for it;
+    the estimator must do so. See [Fit it](#fit-it).
 
 ## The active ingredient is the number of distinct levels
 
 !!! warning "Distinct target levels"
-    The measured factor is the number of distinct target levels. A cued staircase of eleven holds beat the pursuit block on the
+    The measured factor is the number of distinct target levels. It does not
+    establish a benefit from pursuit or continuity. A cued staircase of eleven holds beat the pursuit block on the
     same metric, 0.0367 against 0.0548 MAE, on 4 of 4 seed pairs.
 
     The gain applies to the tree ensembles this project ships. A linear model
     gains nothing because least squares interpolates between three levels.
 
+Do not choose a followed cursor on the claim that it is more accurate than
+a staircase. The reason to prefer it is human feedback.
 A cursor gives participants continuous visual error feedback to reach intermediate
 levels. A staircase cue such as "go to 0.6" requires them to judge what 0.6 feels like.
 
@@ -59,7 +65,9 @@ arithmetic on the hop index, so two sessions record the identical path and an of
 script can assert an exact value.
 
 [`TargetSource`][myogestic.sources.TargetSource] records the cursor as a stream
-on the EMG's clock, providing aligned targets for training.
+on the EMG's clock, providing aligned targets for training. Reconstructing
+from a start time and saved parameters would require trusting that the clocks
+agree and that nobody edited the parameters between the note and the take.
 
 ```python
 from myogestic import Stream
@@ -73,7 +81,8 @@ target_stream = Stream("target", source=cursor, window_ms=200)
 
 Follow these four wiring steps:
 
-- Call `target_stream.reconnect()`. `start_recording` skips a stream whose `info is None`.
+- Call `target_stream.reconnect()`. A software source has nothing physical to
+  attach it automatically. `start_recording` silently skips a stream whose `info is None`.
 - Press Record first, then start the block. `cursor.start()` restarts task time from
   zero; the stream runs from `reconnect()` to `disconnect()` either way.
 - Exclude the target with `DevicePicker("emg", exclude=("target",))`.
@@ -92,11 +101,13 @@ repetitions are identical and can be learned after the first.
 
 [`iter_target_windows`][myogestic.session.iter_target_windows] pairs each EMG window with
 the recorded cursor value at the window's end. This trains the model to estimate
-the current command from a trailing window. A centre target is half a window
+the current command from a trailing window. This is the causal target choice. A centre target is half a window
 behind; a window mean introduces ramp lag.
 
 By default it includes windows ending in followed phases. It excludes `PHASE_CODES`
-`idle` and `done`, which hold target `0` before and after a block.
+`idle` and `done`, which hold target `0` before and after a block. Those
+phases have no following task, and the participant may move freely, so their
+zero targets do not describe the participant's effort.
 
 The block below fabricates a rehearsal recording so the page is self-checking; with a real
 session you replace the path and keep everything from `features` down.
@@ -245,7 +256,7 @@ that to 0.1 % costs four fifths of the windows, which is the wrong side of the t
 short recording.
 
 The direction estimate uses every non-rest window, including quiet ones.
-Restricting it to the same strong windows changed mean MAE
+This choice was measured. Restricting it to the same strong windows changed mean MAE
 0.0820 → 0.0812 over five seed pairs, a 1 % difference that swaps sign across levels, for
 two thirds fewer rows in the covariance.
 
@@ -253,6 +264,7 @@ two thirds fewer rows in the covariance.
 
 Both protocols produce a signed `[-1, +1]` target column and can train together.
 Cued `Down / Rest / Up` correspond to constant levels `-1 / 0 / +1`.
+This compatibility is the reason for the signed target standard.
 [`split_sessions_by_stream`][myogestic.session.split_sessions_by_stream] routes each
 session by target-stream presence, allowing cued recordings to contribute:
 
@@ -270,11 +282,14 @@ for path in split.without_stream:  # cued blocks: the class as a level
         ...
 ```
 
-Three cued sessions plus one cursor session provide fewer distinct levels than
-four cursor sessions. A fit dominated by cued data still sees mostly three levels.
+Do not expect three cued sessions plus one cursor session to behave like
+four cursor sessions. Distinct target levels matter, and a fit dominated
+by cued data still sees mostly three levels.
 
 !!! danger "Check target units and followed phases"
-    `split.with_stream` checks stream presence only. Check units and content before fitting.
+    `split.with_stream` checks stream presence only. It does not validate units
+    or content. Both traps below can worsen a model without an error from
+    the split itself. Check them before fitting.
 
     A force-ramp session is not a cursor session. The other recorded-target protocol,
     [Track a force target](track-a-force-target.md), writes its `Trapezoid` through the

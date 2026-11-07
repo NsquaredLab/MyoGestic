@@ -11,7 +11,7 @@ title: "Publish a data stream"
 Use an outlet to publish numbers for another application to read.
 
 Construct an output in `main()`, keep a reference and call `.push(data)`
-from `@pipeline.predict`. Outputs are user-owned. [`Outlet`][myogestic.outputs.Outlet]
+from `@pipeline.predict`. Outputs are user-owned and are not registered with the app. [`Outlet`][myogestic.outputs.Outlet]
 runs a daemon thread at your `hz` that sends whatever was last pushed.
 
 ## Writing one
@@ -72,9 +72,10 @@ latency never reaches the predict loop.
 
 ## Choosing `hz`
 
-Match `hz` to the consumer's input rate. A dashboard redrawing at 20 Hz gains
+Match `hz` to the consumer's input rate rather than the predict rate. A dashboard redrawing at 20 Hz gains
 nothing from 200. If you push faster than `hz`, only the latest value is sent;
-if you push slower, the same value is sent again.
+if you push slower, the same value is sent again. This latest-wins policy
+spends bandwidth on repeats without changing their value.
 
 ## Common mistakes
 
@@ -85,4 +86,4 @@ See [Troubleshooting](../troubleshooting.md) for errors by symptom.
 - Heavy work inside `_send`. It runs at `hz`; longer than `1/hz` and the thread falls
   behind. Keep it non-blocking, or lower `hz`.
 - Calling `_send` from `predict()`. Blocks predict on transport latency. Go through `push`.
-- Assuming `push(...)` delivers everything. Push twice between ticks and only the second value is sent. Use a queue for events.
+- Assuming `push(...)` delivers everything. Delivery is fire-and-forget through a latest-value slot. Push twice between ticks and only the second value is sent. Do not use it for events; use a queue.

@@ -39,7 +39,7 @@ if _ZARR_V3 and find_spec("zarrs") is not None:
     zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 
 #: ``meta.json`` schema version. Bump whenever its on-disk shape changes.
-#: Version 4 supports the optional ``finished`` flag; older files remain readable.
+#: Version 4 introduces the optional ``finished`` flag; older files remain readable.
 #: Readers must stay tolerant of older, unversioned meta.json files
 #: (see `open_session_store`), so this is informational rather than enforced.
 _META_SCHEMA_VERSION = 4
@@ -122,16 +122,18 @@ def _install_windows_zarr_atomic_write_retry(*, retries: int = 10, delay_s: floa
     over the destination (``zarr.storage._local._atomic_write``). On POSIX that
     rename never fails; on Windows the underlying ``MoveFileEx`` raises
     ``PermissionError`` (WinError 5 / 32) whenever another handle to the file is
-    still open, for example during antivirus scanning or search indexing.
-    High-rate recording repeatedly grows arrays through [`Session.append`][]
-    and renames trailing chunks, increasing exposure to this race.
+    still open, for example during antivirus scanning, search indexing or an OS
+    delay in releasing the handle. High-rate multi-stream recording repeatedly
+    grows arrays through [`Session.append`][] and renames trailing chunks. A
+    single lost rename race crashes the recording.
 
     Retry the rename itself. Retrying ``zarr.Array.append`` is unsafe because
     it persists the resized shape before writing chunks; a partial failure
-    would leave the retry writing at the wrong offset.
+    would leave the retry writing at the wrong offset and corrupt the array.
 
-    This Windows-only wrapper applies bounded back-off to ``_atomic_write``.
-    If zarr's internals change, the guard skips the patch.
+    The fix belongs upstream in zarr. This Windows-only wrapper applies bounded
+    back-off to ``_atomic_write`` in the meantime. If zarr's internals change,
+    the guard skips the patch so it cannot break import.
     """
     if sys.platform != "win32":
         return
@@ -237,8 +239,9 @@ ARCHIVE_SUFFIX = ".mg.zip"
 def _slug(name: str) -> str:
     """Filename-safe form of a user-typed session name, or ``""`` if nothing survives.
 
-    Replaces characters outside ASCII alphanumerics, ``-`` and ``_`` with
-    dashes. This excludes path separators, ``..`` and non-portable characters.
+    The result is concatenated into a path. Use a whitelist of ASCII
+    alphanumerics, ``-`` and ``_``; replace everything else with dashes. This
+    excludes path separators, ``..`` and non-portable characters.
     """
     kept = "".join(c if c.isascii() and (c.isalnum() or c in "-_") else "-" for c in name)
     return "-".join(filter(None, kept.split("-")))[:_SLUG_MAX].strip("-_")
@@ -763,9 +766,10 @@ class Session:
         Parameters
         ----------
         dtype
-            Dtype fixed by the first declaration of ``name``. Later rows are
-            coerced to that dtype. Defaults to ``float32`` for signals and
-            features. Use ``float64`` for clocks such as LSL timestamps or
+            Dtype fixed by the first declaration of ``name``. Later calls ignore
+            their ``dtype`` argument and coerce rows to the stored dtype.
+            Callers cannot change a declared stream's dtype. Defaults to ``float32``
+            for signals and features. Use ``float64`` for clocks such as LSL timestamps or
             ``local_clock()``. Float32 has about 7 significant digits and loses
             millisecond precision after roughly a day of uptime.
         """
@@ -1080,6 +1084,7 @@ class Session:
     def discard(self) -> None:
         """Delete this session's folder and everything recorded into it.
 
+        Use for a discarded recording, such as a false start or bad trial.
         Releases Zarr handles before removal, as `pack_to_zip` does. Windows
         cannot remove the folder while any chunk file remains open.
         """

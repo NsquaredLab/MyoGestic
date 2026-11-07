@@ -2,7 +2,8 @@
 title: "Install the Virtual Hand Interface"
 ---
 The Virtual Hand Interface (VHI) is a separate Godot 4.5 application.
-Download its platform-specific release binary for `virtual_hand()` to find it.
+It is not bundled in the MyoGestic wheel. Download its platform-specific
+release binary once; the `virtual_hand()` registry finds it automatically.
 
 ## TL;DR
 
@@ -21,6 +22,8 @@ without an integrity check.
 !!! warning "MyoGestic 2.x needs VHI 2.0 or newer"
     MyoGestic queries VHI's manifest through the v2 control contract.
     Pre-2.0 builds lack this manifest and cannot work with MyoGestic 2.x.
+    The v1 bridge has been removed, so MyoGestic cannot fall back to it or
+    guess the exported controls.
 
     Both the installer and the launcher check. `install_vhi` checks the requested
     tag and resolves `latest` before downloading when the API is reachable. It refuses
@@ -69,11 +72,12 @@ The release matrix:
 
 On Intel Macs, run the Godot source project under "Source-mode" below.
 The released binary requires arm64; Rosetta translates x86_64 → arm64
-and cannot run it on Intel.
+and cannot run it on Intel. You can also use a different machine.
 
 ## Pin a version for reproducibility
 
-Pin the tag for reproducible installs:
+`latest` is convenient for a fresh checkout. Pin the tag in production
+so installs behave the same months later.
 
 ```bash
 uv run python -m myogestic.tools.install_vhi --tag v2.1.0
@@ -94,7 +98,7 @@ Launch method determines Gatekeeper behaviour:
 
 * Via MyoGestic's `ProcessLauncher` - works directly. The launcher
   calls `subprocess.Popen`, which bypasses Gatekeeper / LaunchServices
-  entirely.
+  entirely. This is the usual integrated launch workflow.
 * Via Finder / `open` / double-click - Gatekeeper blocks the first
   launch. The installer strips the `com.apple.quarantine` xattr after
   unpack, but Finder's first-launch check is separate. Once:
@@ -135,7 +139,8 @@ uv run python -m myogestic.tools.install_vhi --tag v2.1.0 --force
 ```
 
 `--force` is required when the destination is non-empty. Without it,
-the installer leaves the destination untouched.
+the installer refuses and leaves the destination untouched, protecting
+an unrelated directory from being overwritten.
 
 The installer downloads and prepares the replacement in a temporary directory
 beside the destination, on the same filesystem. Unpacking, validation, executable

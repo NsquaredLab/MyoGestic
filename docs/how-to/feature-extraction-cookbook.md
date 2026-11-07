@@ -1,7 +1,7 @@
 ---
 title: "Feature-extraction cookbook"
 ---
-Implement DSP and feature extraction in [`@pipeline.extract`][myogestic.ml.Pipeline.extract] with scipy, MyoVerse or numpy. The recipes below cover five or six common starting features.
+The framework supplies no implementation inside [`@pipeline.extract`][myogestic.ml.Pipeline.extract]. DSP and feature engineering belong to user code. Implement them with scipy, MyoVerse or numpy. The recipes below cover five or six common starting features.
 
 Each recipe slots into `@pipeline.extract` (section 1 also shows the `FeatureSelector` that feeds it). Drop one into your script, swap it for another, and re-train.
 
@@ -101,7 +101,7 @@ Median frequency is a fatigue signature; mean frequency tracks motor-unit recrui
 
 ## 4. Sliding RMS (stride tricks)
 
-Compute per-window RMS estimates for time-frequency analysis or a sequence model.
+Compute every per-window RMS estimate for time-frequency analysis or a sequence model. This retains a sequence rather than reducing the input to one RMS estimate.
 
 ```python
 import numpy as np

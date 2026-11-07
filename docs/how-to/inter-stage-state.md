@@ -1,7 +1,7 @@
 ---
 title: "Keep state between pipeline stages"
 ---
-`@pipeline.extract` and `@pipeline.predict` are plain functions called on predict ticks with available input. The target interval is `1 / predict_hz` seconds. Store persistent state explicitly using one of the four patterns below.
+`@pipeline.extract` and `@pipeline.predict` are plain functions called on predict ticks with available input. The target interval is `1 / predict_hz` seconds. The callbacks receive no implicit context object. Store persistent state explicitly using one of the four patterns below.
 
 ## Stateless ticks
 
@@ -20,7 +20,7 @@ No state to keep. The pipeline calls `extract` then `predict`, the dict goes int
 
 ## Pattern 1: module-level mutable state
 
-For anything that needs to persist across ticks, put it at module scope and mutate from inside the callback. The predict and render threads share the object. CPython's GIL makes scalar and reference assignment atomic.
+For anything that needs to persist across ticks, put it at module scope and mutate from inside the callback. The predict and render threads share the object. CPython's GIL makes scalar and reference assignment atomic, so simple assignments need no lock.
 
 ```python
 import numpy as np
@@ -81,7 +81,7 @@ def predict(model, features):
     return {"class": pred, "raw_rms": features["raw"]}
 ```
 
-`features` can be any object your model accepts, including a tuple, dict or dataclass. The framework passes it through.
+`features` can be any object your model accepts, including a tuple, dict or dataclass. It need not be pickleable. The framework passes it through.
 
 ## Pattern 3: stateful model objects
 
@@ -115,7 +115,7 @@ A retrain replaces the model object (and its state). If you need state that *sur
 
 ## Pattern 4: gating side-effects on state changes
 
-Use [`EdgeTrigger`](../concepts/edge-trigger.md) to run an RPC, audio cue or serial write when the prediction changes:
+Use [`EdgeTrigger`](../concepts/edge-trigger.md) to run an RPC, audio cue or serial write only when the prediction changes. Unchanged ticks do not fire the effect.
 
 ```python
 from myogestic.outputs import EdgeTrigger
@@ -133,7 +133,7 @@ def predict(model, features):
 
 `fire_if_changed` returns `True` when the callback ran and `False` when suppressed. Use it to pair effects, such as logging a gesture change.
 
-See [Edge trigger](../concepts/edge-trigger.md) for `rebase()` and thread safety.
+See [Edge trigger](../concepts/edge-trigger.md) for `rebase()`, thread safety and the reasons for change-gated side effects.
 
 ## Detect stale ticks
 

@@ -3,10 +3,12 @@ title: "Drive a remote target"
 ---
 A remote target runs as a separate application, reached over gRPC and driven
 over LSL. For a device in the MyoGestic process, use an
-[in-process target](add-a-target.md) that `ControlBus` calls directly.
+[in-process target](add-a-target.md) that `ControlBus` calls directly on the
+thread MyoGestic already owns. This simpler route needs no transport. Use the
+remote contract only when the device is its own program.
 
 If you have not chosen between the two yet, [Concepts › Controls](../concepts/controls.md)
-explains how to choose. For a tutorial with runnable stages, see
+explains how to choose. This page defines the contract. For a tutorial with runnable stages, see
 [Your first remote target](../tutorials/your-first-remote-target.md).
 
 ## Stream direction
@@ -19,6 +21,7 @@ MyoGestic  --[ vhi.prediction.index, 1 channel ]-->  your target     (you read t
 ```
 
 Use the manifest address as the stream name. Each stream has one channel.
+There is no extra transport declaration, width setting or positional layout to agree on.
 A DOF applies each sample on arrival and holds its last command between samples.
 These DOFs are independently actuated, possibly driven by different processes at different
 rates. Two programs can each drive a different DOF.
@@ -36,12 +39,12 @@ and catch a sign error.
 |---|---|
 | serve `GetControlManifest` | lets a control map resolve each address against its kind, range and states |
 | report `vocabulary_version` `"2"` or newer | MyoGestic refuses an older target by name at bind. The applications are installed separately; a mismatch can leave a target waiting silently for an unpublished stream |
-| advertise one address per control | the address identifies the control and names its stream. Multiple spellings prevent collision checks from recognizing aliases for the same control |
-| read one stream per address, exactly one `float32` channel wide | validate the width and dtype. Reading element zero of a nine-channel pose can silently apply another DOF's value to the address named by the stream |
+| advertise one address per control | the address identifies the control and names its stream. Multiple spellings create a second vocabulary to maintain and prevent collision checks from recognizing aliases for the same control |
+| read one stream per address, exactly one `float32` channel wide | refuse any other width or dtype. Do not read only element zero. Reading element zero of a nine-channel pose can silently apply another DOF's value to the address named by the stream |
 
 | you may | for |
 |---|---|
-| serve `SetControl` | held states and gestures. Both maps use manifest addresses as keys. Resolve the control from the key and the state from the value; refuse unexported addresses. Two discrete controls can share a state name |
+| serve `SetControl` | discrete held states and gestures belong off the per-tick stream. Both maps use manifest addresses as keys. Resolve the control from the key and the state from the value; refuse unexported addresses. Two discrete controls can share a state name, so resolving by state alone cannot distinguish them |
 | serve `SweepControl` | letting a client sweep one DOF and read back the degrees it produced, as a direction check |
 | serve `SetPresentation` | for a client asking you to smooth incoming poses |
 | serve the four recording RPCs | driving a ground-truth hand through a capture session |
@@ -58,18 +61,20 @@ Implement these runtime checks and policies in the target; the client cannot ver
 
 The reference target below demonstrates transport only. It accepts any correctly shaped
 sample, uses `{info.name: info}` without duplicate detection and holds the last command.
-`stop()` sets a flag without joining the reader or closing inlets.
+`stop()` sets a flag without joining the reader or closing inlets. It meets none
+of the four runtime requirements; hold-last is an omission rather than a chosen
+policy. Do not deploy this transport example as a template.
 For deployment, build all four runtime checks and policies using
 [Your first remote target](../tutorials/your-first-remote-target.md), which also
 documents the limit of its duplicate check.
 
 ## Client calls
 
-[`RemoteTarget`][myogestic.remote.RemoteTarget] drives the
+You do not need to write client code. [`RemoteTarget`][myogestic.remote.RemoteTarget] drives the
 wire through two clients, `RemoteClient` and `RecordingClient`. Both are built from the
 [`InterfaceSpec`][myogestic.remote.InterfaceSpec] that says where your target listens, and both
 are reached as `spec.control_client()` and `spec.recording_client()`. Calls return
-`None` or `False` while the target is unavailable, allowing the app to stay responsive
+`None` or `False` without raising while the target is unavailable, allowing the app to stay responsive
 during launch.
 
 | the client calls | when, and what it needs back |
@@ -87,7 +92,7 @@ need a reply. `set_control` is queued to meet the predict thread's deadline.
 
 ## The whole target
 
-The reference target implements the service in
+The complete reference target includes every method without elision. It implements the service in
 `myogestic/remote/_proto/remote_control.proto`. Generate stubs from that file
 for languages other than Python:
 
@@ -106,7 +111,8 @@ whether sent as one nine-channel sample or nine one-channel samples.
 
 Watch the device to verify direction. Contract tests can pass despite a sign error;
 [the one convention a device may not redefine](../concepts/controls.md#the-one-convention-a-device-may-not-redefine)
-explains why.
+explains why. This repository previously shipped a sign error while its
+contract suite passed.
 
 ## Design notes
 

@@ -1,7 +1,7 @@
 ---
 title: "Enable on-disk recording"
 ---
-Capture every connected `Stream`'s samples to a Zarr-backed `.mg.zip` archive through GUI controls or the headless API.
+Capture every connected `Stream`'s samples to a Zarr-backed `.mg.zip` archive through GUI controls or the headless API. Both flows produce the same artefact. The API gives full programmatic control over configuration, lifecycle, storage and read-back.
 
 ## Enable recording in four lines
 
@@ -57,6 +57,7 @@ requires a participant, Record stays disabled with a visible reminder to set the
 The name is written to `meta.json` and appended to the archive filename, so a saved take is `<ID>_<YYYYMMDD-HHMM>[_<codes>][_<name>].mg.zip` beside its original recording folder and appears in `SessionManager` with gesture chips, time, and duration; its tooltip preserves the take name and archive filename. The optional codes segment holds a short code for each class with recorded time, in class-index order, joined with `+` (`Fist` and `Open hand` give `F+Oh`); past 40 characters it becomes the first three codes and a count (`R+F+P+6-more`). The typed name is slugged down to ASCII letters, digits, `-` and `_`. Naming is optional; a take with neither codes nor a name is `<ID>_<YYYYMMDD-HHMM>.mg.zip`. A second take with the same name in the same minute gets `-2`. See [File names](../concepts/file-names.md) for how codes are chosen and pinned.
 
 Discard calls `app.discard_recording()` to remove the take folder without writing an archive.
+It is a separate counterpart to `stop_recording()`. It does not save a take and then clean it up.
 
 ## Lifecycle in detail
 
@@ -138,7 +139,7 @@ Recording uses [Zarr v3](https://zarr.readthedocs.io/) with these defaults, appl
 | Timestamp array dtype | `float64` | LSL clock seconds |
 | Outer zip compression | `ZIP_STORED` (none) | Zarr chunks already compress internally |
 
-Defaults are computed from each `Stream`'s `StreamInfo`. Set the storage location with `base_path`. Install the `[zarrs]` extra to use a Rust-accelerated codec pipeline:
+Defaults are computed from each `Stream`'s `StreamInfo`; they are not configured per recording. Set the storage location with `base_path`. Install the `[zarrs]` extra to use a Rust-accelerated codec pipeline:
 
 ```bash
 uv sync --extra zarrs    # transparent speedup; no code change needed

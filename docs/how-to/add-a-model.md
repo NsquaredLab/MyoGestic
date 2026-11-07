@@ -3,7 +3,7 @@ title: "Add a custom model"
 ---
 [`Pipeline`][myogestic.ml.Pipeline] accepts any pickleable model, including Sklearn, CatBoost, PyTorch, state machines and lookup tables. For unpickleable models, provide `save_model` / `load_model`.
 
-The protocol is three decorators on plain functions:
+The protocol uses three decorators on plain functions. No inheritance is required.
 
 ```python
 from myogestic.ml import Pipeline, save_pickle, load_pickle
@@ -137,7 +137,7 @@ def train(data):
     return MultiOutputRegressor().fit(np.array(X), np.array(Y))
 ```
 
-See [`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression.py) for a fallback to `iter_labeled_windows` when no aligned target stream was recorded.
+See [`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression.py) for the complete regression example, including a fallback to `iter_labeled_windows` when no aligned target stream was recorded.
 
 ## Pushing predictions to outputs
 
@@ -182,7 +182,7 @@ See [Troubleshooting](../troubleshooting.md) for errors by symptom.
 
 - Returning a non-dict from `predict()`. Silently dropped. Always `return {...}`.
 - Forgetting to set `pipeline.save_model`. The Save button stays disabled until a model and save callback are available.
-- Share feature extraction. Use one `extract()` for training and prediction, or a shared `featurize(window) -> features` helper.
-- Train on the training thread. Call `model.fit()` from `train()`. Calling it from `predict()` blocks prediction.
-- Separate effort and direction for a two-directional DOF. A regressor on raw features can learn the louder cue and move the output the wrong way as contraction increases. Use [`directional_decoder`][myogestic.recipes.estimators.directional_decoder] to estimate effort and direction separately and multiply them.
+- Share feature extraction. Putting it only in `train()` leaves `predict()` running different code on the same window shape. Use one `extract()` for training and prediction, or a shared `featurize(window) -> features` helper.
+- Train on the training thread. Call `model.fit()` from `train()`. Calling it from `predict()` blocks prediction. Training has its own thread and state.
+- Separate effort and direction for a two-directional DOF. Amplitude alone gives effort without direction. A regressor on raw features can learn the louder cue and move the output the wrong way as contraction increases. Use [`directional_decoder`][myogestic.recipes.estimators.directional_decoder] to estimate effort and direction separately and multiply them.
 - Profile `predict()`. `predict_hz` sets a target rate. A model that takes 100 ms cannot keep up with `predict_hz=50`, a 20 ms interval. Lower `predict_hz` or speed up the model.
