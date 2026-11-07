@@ -59,11 +59,9 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* "Back to docs" pill - small, top-left, above the canvas. ImGui
-     still gets pointer events for everything else; this just carves
-     out a ~140x32 px region for navigation. */
+  /* app.py reserves the last 80 px of the bare header row for this link. */
   #back-to-docs {
-    position: fixed; top: 12px; left: 12px;
+    position: fixed; top: 24px; right: 20px;
     padding: 6px 12px;
     background: rgba(13, 17, 23, 0.85);
     color: #c9d1d9;
@@ -121,9 +119,11 @@
   const PURE_PY_DEPS = [
     "dvg-ringbuffer",
     "platformdirs",
-    // Pyodide 0.29.4 ships numcodecs 0.15.1; zarr >= 3.4.1 needs 0.16+, which
-    // has no pure-Python wheel. Keep in step with uv.lock.
-    "zarr==3.1.6",
+    // Zarr 3's sync API starts an IO thread, forbidden by Pyodide. Zarr 2
+    // writes the same portable directory/zip takes synchronously. Its codec
+    // dependency matches Pyodide's bundled numcodecs 0.15.1; MyoGestic uses
+    // one Blosc thread here (see session/_core.py).
+    "zarr==2.18.7",
     "joblib",
     "numpy",          // already bundled in Pyodide but ensures resolution
     "scikit-learn",   // for the playground app's LDA classifier
