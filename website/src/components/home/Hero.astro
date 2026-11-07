@@ -7,7 +7,7 @@ const version = readFileSync(new URL('../../../../pyproject.toml', import.meta.u
 if (!version) throw new Error('Could not read the package version from pyproject.toml');
 ---
 
-<section id="top" class="home-hero" aria-label="Live EMG field" style="position: relative; overflow: hidden; background: var(--mg-field-bg); border-bottom: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent)">
+<section id="top" class="home-hero" aria-label="Live EMG field" style="position: relative; overflow: hidden; background: var(--mg-field-bg)">
   <canvas data-signal-field aria-hidden="true" class="hero-field"></canvas>
   <div aria-hidden="true" class="hero-scrim"></div>
 
@@ -58,9 +58,9 @@ if (!version) throw new Error('Could not read the package version from pyproject
 
     </div>
 
-    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding-top: 18px; border-top: 1px solid color-mix(in srgb, var(--mg-home-hairline) 45%, transparent); font: 400 11px/1.5 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 55%, transparent)">
-      <span>The background shows 64 channels of synthetic EMG.</span>
-      <span>Click a gesture to change it.</span>
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding-top: 18px; font: 400 11px/1.5 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 55%, transparent)">
+      <span style="padding: 3px 6px; margin: -3px -6px; border-radius: 4px; background: color-mix(in srgb, var(--mg-field-bg) 82%, transparent)">The background shows 64 channels of synthetic EMG.</span>
+      <span style="padding: 3px 6px; margin: -3px -6px; border-radius: 4px; background: color-mix(in srgb, var(--mg-field-bg) 82%, transparent)">Click a gesture to change it.</span>
     </div>
   </div>
 </section>
@@ -72,6 +72,8 @@ if (!version) throw new Error('Could not read the package version from pyproject
     width: 100%;
     height: 100%;
     display: block;
+    /* The traces settle into the rule below the hero instead of stopping at it. */
+    mask-image: linear-gradient(var(--mg-text) calc(100% - 96px), transparent);
   }
 
   .hero-scrim {
@@ -93,7 +95,7 @@ if (!version) throw new Error('Could not read the package version from pyproject
     .hero-field {
       top: var(--hero-field-top, 100%);
       height: calc(100% - var(--hero-field-top, 100%));
-      mask-image: linear-gradient(transparent, var(--mg-text) 48px);
+      mask-image: linear-gradient(transparent, var(--mg-text) 48px, var(--mg-text) calc(100% - 96px), transparent);
     }
   }
 

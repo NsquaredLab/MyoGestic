@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { channelColor, CONFIDENCE, createFieldState, GESTURES, mulberry32, setGesture, stepField } from './field';
+import { channelColor, CONFIDENCE, createFieldState, GESTURES, mulberry32, setGesture, stepField, settle } from './field';
 
 describe('synthetic signal field', () => {
   it('exposes the approved gestures and confidences', () => {
@@ -74,5 +74,15 @@ describe('synthetic signal field', () => {
     expect(channelColor(0.5)).toEqual([142, 149, 218]);
     expect(channelColor(1)).toEqual([177, 132, 217]);
     expect(channelColor(0.25)).toEqual([125, 157, 219]);
+  });
+});
+
+describe('settling band', () => {
+  it('keeps upper lanes at full swing and flattens the bottom lanes', () => {
+    expect(settle(0, 64)).toBe(1);
+    expect(settle(54, 64)).toBe(1);
+    expect(settle(60, 64)).toBeGreaterThan(0.3);
+    expect(settle(60, 64)).toBeLessThan(0.6);
+    expect(settle(63, 64)).toBeLessThan(0.1);
   });
 });

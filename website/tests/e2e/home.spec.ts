@@ -151,10 +151,11 @@ for (const width of [390, 768]) {
         const centre = { x: panels!.x + panels!.width / 2, y: panels!.y + panels!.height / 2 };
         expect(centre.x).toBeGreaterThanOrEqual(field!.x);
         expect(centre.x).toBeLessThanOrEqual(field!.x + field!.width);
-        // The mask is fully opaque after the first 48 px, including the centre.
-        await expect(canvas).toHaveCSS('mask-image', /^linear-gradient\(rgba\(0, 0, 0, 0\), rgb\(\d+, \d+, \d+\) 48px\)$/);
+        // The mask fades in over the first 48 px and out over the last 96 px, where the
+        // traces settle into the rule; the panels' centre is in the opaque part between.
+        await expect(canvas).toHaveCSS('mask-image', /^linear-gradient\(rgba\(0, 0, 0, 0\), rgb\(\d+, \d+, \d+\) 48px, rgb\(\d+, \d+, \d+\) calc\(100% - 96px\), rgba\(0, 0, 0, 0\)\)$/);
         expect(centre.y).toBeGreaterThan(field!.y + 48);
-        expect(centre.y).toBeLessThan(field!.y + field!.height);
+        expect(centre.y).toBeLessThan(field!.y + field!.height - 96);
         await expect(canvas).toHaveCSS('opacity', '1');
     });
 }
@@ -222,6 +223,40 @@ for (const width of [320, 390, 768]) {
     });
 }
 
+test('Hello EMG code and screenshot point at each other', async ({ page }) => {
+    await page.goto(home);
+    const spot = page.locator('[data-spot]');
+    const recording = page.locator('.hello-line[data-link="recording"]');
+    await recording.first().scrollIntoViewIfNeeded();
+    await recording.first().hover();
+    await expect(spot).toBeVisible();
+    await expect(page.locator('[data-spot-label]')).toHaveText('RecordingControls');
+    await expect(recording.nth(1)).toHaveClass(/is-active/); // recording.ui(ctx) lights up too
+    await page.locator('.hello-hit[data-link="title"]').hover();
+    await expect(page.locator('.hello-line[data-link="title"]')).toHaveClass(/is-active/);
+    await page.mouse.move(1, 1);
+    await expect(spot).toBeHidden();
+    await page.locator('.hello-line[data-link="viewer"]').first().focus();
+    await expect(page.locator('[data-spot-label]')).toHaveText('SignalViewer');
+    await page.keyboard.press('Escape');
+    await expect(spot).toBeHidden();
+});
+
+for (const width of [1440, 390]) {
+    test(`Hello EMG code never scrolls sideways and the panels line up at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(home);
+        const code = page.locator('.hello-code');
+        await code.scrollIntoViewIfNeeded();
+        expect(await code.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+        const shot = await page.locator('.hello-shot').boundingBox();
+        const frame = await page.locator('.hello-window').boundingBox();
+        const panel = await code.locator('..').boundingBox();
+        expect(shot!.width).toBeGreaterThan(frame!.width - 24);
+        if (width > 1200) expect(Math.abs(frame!.height - panel!.height)).toBeLessThanOrEqual(2);
+    });
+}
+
 test('Hello EMG ships a sized WebP in tens of kilobytes', async ({ page }) => {
     await page.goto(home);
     const image = page.getByRole('img', { name: 'Hello EMG app with SignalViewer and RecordingControls in the dark theme' });
@@ -233,6 +268,28 @@ test('Hello EMG ships a sized WebP in tens of kilobytes', async ({ page }) => {
     expect(response.headers()['content-type']).toContain('image/webp');
     expect((await response.body()).length).toBeLessThan(80_000);
 });
+
+for (const width of [1440, 390]) {
+    test(`Cite shows the full width of page 1 and links it to the PDF at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(home);
+        const link = page.getByRole('link', { name: 'Open the PDF, 14 pages' });
+        await expect(link).toHaveAttribute('href', 'https://www.science.org/doi/pdf/10.1126/sciadv.ads9150');
+        const image = link.getByRole('img', { name: 'First page of the MyoGestic paper in Science Advances' });
+        await image.scrollIntoViewIfNeeded();
+        const shot = (await image.boundingBox())!;
+        const frame = (await link.boundingBox())!;
+        expect(Math.abs(shot.width - frame.width)).toBeLessThan(1);
+        expect(shot.x).toBeGreaterThanOrEqual(0);
+        expect(shot.x + shot.width).toBeLessThanOrEqual(width);
+        await expect(page.getByRole('link', { name: 'PDF', exact: true })).toHaveCount(0);
+        if (width === 1440) {
+            await page.evaluate(() => document.fonts.ready);
+            const authors = (await page.getByText('Sîmpetru, Braun, Simon').boundingBox())!;
+            expect(authors.height).toBeLessThan(24);
+        }
+    });
+}
 
 for (const width of [1440, 390]) {
     test(`axe: no serious or critical violations at ${width}px`, async ({ page }) => {
