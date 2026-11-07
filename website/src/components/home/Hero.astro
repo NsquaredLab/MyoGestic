@@ -10,10 +10,6 @@ if (!version) throw new Error('Could not read the package version from pyproject
 <section id="top" class="home-hero" aria-label="Live EMG field" style="position: relative; overflow: hidden; background: var(--mg-field-bg); border-bottom: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent)">
   <canvas data-signal-field aria-hidden="true" class="hero-field"></canvas>
   <div aria-hidden="true" class="hero-scrim"></div>
-  <div aria-hidden="true" class="hide-sm" style="position: absolute; top: 0; bottom: 0; left: var(--hero-probe-x, 51.5%); border-left: 1px dashed color-mix(in srgb, var(--mg-home-ink) 18%, transparent)"></div>
-  <div aria-hidden="true" class="hide-sm" style="position: absolute; left: var(--hero-probe-x, 51.5%); right: 0; top: 640px; border-top: 1px dashed color-mix(in srgb, var(--mg-home-ink) 18%, transparent)"></div>
-  <div aria-hidden="true" class="hide-sm" style="position: absolute; top: 631px; left: calc(var(--hero-probe-x, 51.5%) - 9px); width: 18px; height: 18px; border: 1.5px solid var(--mg-text); border-radius: 50%"></div>
-  <div aria-hidden="true" class="hide-sm" style="position: absolute; top: 652px; left: calc(var(--hero-probe-x, 51.5%) + 12px); background: var(--mg-text); color: var(--mg-field-bg); font: 500 10px/1 var(--mg-font-mono); letter-spacing: 0.04em; padding: 4px 6px">CH 23</div>
 
   <div class="pad-x" style="position: relative; max-width: 1360px; margin: 0 auto; padding: 0 40px 28px">
     <nav aria-label="Main" class="home-nav" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 22px 0">
@@ -84,12 +80,11 @@ if (!version) throw new Error('Could not read the package version from pyproject
     background: linear-gradient(90deg, color-mix(in srgb, var(--mg-field-bg) 95%, transparent) 0%, color-mix(in srgb, var(--mg-field-bg) 82%, transparent) 36%, color-mix(in srgb, var(--mg-field-bg) 20%, transparent) 60%, color-mix(in srgb, var(--mg-field-bg) 5%, transparent) 100%);
   }
 
-  /* Keep the layout, field band and decorations on the same breakpoint:
+  /* Keep the layout and field band on the same breakpoint:
      520 + 560 px columns, 48 px gap and 80 px page padding. */
   @media (max-width: 1208px) {
     .hero-content { flex-direction: column; }
     .hero-copy, .hero-content :global([data-panels]) { flex: none !important; width: 100%; }
-    .hide-sm { display: none; }
     .hero-scrim {
       height: var(--hero-field-top, 100%);
       bottom: auto;
