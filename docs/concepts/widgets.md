@@ -1,7 +1,7 @@
 ---
 title: "Widgets"
 ---
-A widget is a **class**. You construct it once with its configuration, then call `.ui(...)` each frame with the live per-frame inputs. No required `Widget` base, no registration with the app — just a plain class with a `.ui()` method.
+A widget is a class. You construct it once with its configuration, then call `.ui(...)` each frame with the live per-frame inputs. The class needs only a `.ui()` method.
 
 ```python
 class EmgViewer:
@@ -30,20 +30,20 @@ def ui(ctx):
     viewer.ui(ctx)  # every frame
 ```
 
-The public widget classes follow this shape — `SignalViewer("emg").ui(ctx)`, `Heatmap("Confusion").ui(cm)`, `PipelinePanel(pipeline).ui()`. Functional helpers such as `panel_header` and `popout_panel` are called directly.
+Public widget calls include `SignalViewer("emg").ui(ctx)`, `Heatmap("Confusion").ui(cm)`, `PipelinePanel(pipeline).ui()`. Functional helpers such as `panel_header` and `popout_panel` are called directly.
 
-`ProcessLauncher(processes)` shows a full-width process selector and **Launch**.
-While running, its tinted state row gives the PID, elapsed time and **Stop**;
-failures show the exit code, **Show output** and **Launch again**. The header's
+`ProcessLauncher(processes)` shows a full-width process selector and Launch.
+While running, its tinted state row gives the PID, elapsed time and Stop;
+failures show the exit code, Show output and Launch again. The header's
 pop-out icon opens the selected process's log, which stays open when another
 process is selected. Each launcher gets its own identity by default; set
 `widget_id` explicitly to keep that identity across reconstruction.
 
 `TargetPanel(targets, connectors=...)` is the card for the processes an app *drives*,
-one row each: a tinted state in words, PID and elapsed time in mono, one action and the
-process output. A target with a `ControlLinkConnector` gets **Connect**, which binds to
-one already running and launches only when none answers; one without gets **Launch**.
-**Stop** appears only for a process the card started.
+with one row each showing state in words, PID and elapsed time in mono, one action and the
+process output. A target with a `ControlLinkConnector` gets Connect, which binds to
+one already running and launches only when none answers; one without gets Launch.
+Stop appears only for a process the card started.
 
 `PostProcessor(hz=50)` defaults to a compact Smoothing row with a filter combo,
 mono delay and a settings popover for the description, captioned sliders and
@@ -52,14 +52,19 @@ same full-panel controls for a custom filter palette.
 
 ## The contract
 
-1. **Construct once; render every frame.** The instance holds state, so build it at module/app scope and only call `.ui(...)` inside the frame. Constructing a widget *inside* `@app.ui` rebuilds it every frame and can reset its instance state (for example, filter tuning). Identity-keyed caches, such as viewer channel selection, may outlive the instance.
-2. **Config in `__init__`, per-frame in `.ui(...)`.** Stable configuration (stream name, pipeline, plot options) goes to the constructor. `.ui(...)` receives only what can't be held ahead of time: `ctx` for stream/recording/log widgets, live `data` arrays for plots, or nothing for widgets that read from held references (`pipeline.predictions`, a filter, the feature map).
-3. **One file per widget.** ~100–200 LOC. If a widget grows past that, split its private helpers into underscore-prefixed modules (`_state.py`, `_controls.py`, `_plot.py`) — never split the public class across files.
-4. **Bound render work.** Widgets read recent snapshots and prediction state. Signal display filtering and decimation run on the render thread, bounded by the visible window. Model training and other heavy work belong outside the render path.
+1. Construct once; render every frame. The instance holds state, so build it at module/app scope and only call `.ui(...)` inside the frame. Constructing a widget *inside* `@app.ui` rebuilds it every frame and can reset its instance state, such as filter tuning. Identity-keyed caches, such as viewer channel selection, may outlive the instance.
+2. Config in `__init__`, per-frame in `.ui(...)`. Stable configuration such as stream name, pipeline or plot options goes to the constructor. Pass live inputs to `.ui(...)`, such as `ctx` for stream/recording/log widgets or `data` arrays for plots. Widgets holding `pipeline.predictions`, a filter or the feature map need no per-frame arguments.
+3. One file per widget. ~100–200 LOC. If a widget grows past that, split its private helpers into underscore-prefixed modules (`_state.py`, `_controls.py`, `_plot.py`). Keep the public class in one file.
+4. Bound render work. Widgets read recent snapshots and prediction state. Signal display filtering and decimation run on the render thread, bounded by the visible window. Model training and other heavy work belong outside the render path.
 
-## Why `ctx` is a `.ui()` argument, not constructor state
+<a id="why-ctx-is-a-ui-argument-not-constructor-state"></a>
 
-`ctx.streams` is populated by `app.streams(...)` — possibly *after* the widget is constructed — and its contents mutate across frames (a reconnect replaces a stream's buffers and flips its status). So a widget re-reads `ctx.streams.get(name)` fresh every frame rather than capturing a `Stream` at construction. That's why the split is `SignalViewer("emg")` (stable config) + `.ui(ctx)` (live, per-frame). Widgets that render a `Pipeline` hold it in the constructor (it's a stable object) and take nothing per-frame: `PipelinePanel(pipeline).ui()`.
+## Passing `ctx` to `.ui()`
+
+`app.streams(...)` can populate `ctx.streams` after widget construction. A reconnect replaces
+stream buffers and changes status, so widgets read `ctx.streams.get(name)` each frame.
+`SignalViewer("emg")` stores configuration; `.ui(ctx)` reads live state. A `Pipeline` is stable,
+so `PipelinePanel(pipeline)` holds it and takes no per-frame arguments in `.ui()`.
 
 ## ImGui immediate mode
 
@@ -73,11 +78,11 @@ def ui(ctx):
         print("clicked")  # only true on the frame the click landed
 ```
 
-The widget is a class only so it has somewhere to keep state between frames — the *rendering* is still immediate-mode draw calls issued fresh each frame from `.ui()`.
+The class holds state between frames. `.ui()` issues draw calls each frame.
 
 ## State and the `_<widget>_state.py` pattern
 
-Persistent per-widget state — selected channels, scroll offsets, popup flags — lives with the widget. Small widgets keep it as instance attributes. Larger ones (the signal viewer) keep a private state module so the public class stays short:
+Persistent state, such as selected channels, scroll offsets or popup flags, lives with the widget. Small widgets keep it as instance attributes. Larger widgets such as the signal viewer keep a private state module so the public class stays short:
 
 ```text
 myogestic/widgets/signals/
@@ -89,9 +94,13 @@ myogestic/widgets/signals/
 └── _scan.py      # private: shared scan/discovery cache
 ```
 
-A few caches are deliberately **shared across widgets**, keyed by identity rather than owned by one instance — e.g. the stream discovery/scan cache in `_scan.py` is shared by `SignalViewer`, `RawSignalViewer`, and `StreamPanel` so a scan started from one appears in the others. Those stay module-level, keyed by stream name.
+Some module-level caches are shared across widgets and keyed by identity. The stream
+discovery cache in `_scan.py` is keyed by stream name and shared by `SignalViewer`,
+`RawSignalViewer` and `StreamPanel`, so a scan started from one appears in the others.
 
-## Layout: `Grid`
+<a id="layout-grid"></a>
+
+## Grid layout
 
 [`Grid(rows, cols)`][myogestic.Grid] is a matplotlib-style helper for the common "panels in a grid" layout. It uses ImGui's `BeginChild` under the hood to allocate fixed-size cells.
 
@@ -141,16 +150,16 @@ app.run()
 
 Drag the tab outside the main OS window and it floats. Layout state persists in `.imgui_state/<App>.ini` so the next launch restores your arrangement.
 
-`popout_panel(title, gui_fn)` is the inline fallback — it renders `gui_fn` directly inside `@app.ui` if docking is off, or creates a docked window if docking is on. Useful for big secondary panels you may want to tear off on multi-monitor setups.
+`popout_panel(title, gui_fn)` renders `gui_fn` directly inside `@app.ui` if docking is off, or creates a docked window if docking is on. Useful for big secondary panels you may want to tear off on multi-monitor setups.
 
 !!! warning "Pop-outs are experimental on macOS"
     Retina viewport sizing of detached windows can be wrong on initial draw. Native dialogs (`pfd.open_file`) plus detached viewports may stack badly. Treat it as experimental until verified for your specific use case.
 
 ## Common mistakes
 
-See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
+See [Troubleshooting](../troubleshooting.md) for symptoms and fixes.
 
-- **Constructing a widget inside `@app.ui`.** `SignalViewer("emg").ui(ctx)` in the frame loop rebuilds the widget every frame and can reset instance state. Build it once, outside.
-- **Calling `.ui(...)` outside `@app.ui`.** It'll throw because no ImGui context is bound. Widgets only render inside the frame.
-- **Putting computation in the widget.** If you find yourself doing `np.fft.rfft(stream.get_window()[0])` inside `.ui()`, move it to a thread (acquisition or predict) and stash the result on `ctx` or your own object.
-- **Reading `pipeline.predictions` mid-write.** `predictions` is a dict; widgets get a reference. Read scalar fields and you're fine. The pipeline replaces the whole dict after a successful prediction. Hold one local reference for a coherent result; avoid mutating the published dict in place.
+- Constructing a widget inside `@app.ui`. `SignalViewer("emg").ui(ctx)` in the frame loop rebuilds the widget every frame and can reset instance state. Build it once, outside.
+- Calling `.ui(...)` outside `@app.ui`. It'll throw because no ImGui context is bound. Widgets only render inside the frame.
+- Putting computation in the widget. If you find yourself doing `np.fft.rfft(stream.get_window()[0])` inside `.ui()`, move it to the acquisition or predict thread and store the result on `ctx` or your own object.
+- Reading `pipeline.predictions` mid-write. `predictions` is a dict; widgets get a reference. Read scalar fields and you're fine. The pipeline replaces the whole dict after a successful prediction. Hold one local reference for a coherent result; avoid mutating the published dict in place.

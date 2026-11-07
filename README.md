@@ -25,22 +25,20 @@
   <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/gifs/pong.gif" alt="examples/start_here/pong.py mid-rally: a model trained in the app turns a synthetic wrist's EMG into the paddle command" width="820">
 </p>
 
-MyoGestic is a compact Python framework that turns a short script into a live
-experiment with signal viewers, recording, training and prediction, without
-classes, registries or config files.
+MyoGestic turns a short Python script into a live experiment with signal
+viewers, recording, training and prediction.
 
-Built at the [n-squared lab](https://www.nsquared.tf.fau.de/) at
-Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU) for the myocontrol
-research community. Version 2 is a ground-up rewrite of
-[MyoGestic v1](https://github.com/NsquaredLab/MyoGestic/tree/v1) focused on
-small, composable API surfaces and live extensibility.
+MyoGestic is built at the [n-squared lab](https://www.nsquared.tf.fau.de/) at
+Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU) for myocontrol research.
+Version 2 supports small, composable APIs and live extensibility.
+[MyoGestic v1](https://github.com/NsquaredLab/MyoGestic/tree/v1) is also available.
 
 ## Try it in your browser
 
 A live MyoGestic app runs entirely in your browser via Pyodide at
-**[nsquaredlab.github.io/MyoGestic/playground](https://nsquaredlab.github.io/MyoGestic/playground/)**.
+[nsquaredlab.github.io/MyoGestic/playground](https://nsquaredlab.github.io/MyoGestic/playground/).
 It streams synthetic electromyography (EMG), records in memory, trains a
-scikit-learn linear discriminant classifier and predicts live. No install.
+scikit-learn linear discriminant classifier and predicts live.
 
 ## Install
 
@@ -48,10 +46,10 @@ scikit-learn linear discriminant classifier and predicts live. No install.
 pip install myogestic
 ```
 
-Extras add optional parts: `examples` (CatBoost, MyoVerse, PyTorch and
-scikit-learn for the demos), `grpc` (the Virtual Hand control plane),
-`brainflow`, `bdi`, `serial`, `keyboard`, `zarrs`, `docs` and `dev`. Install
-one with `pip install "myogestic[grpc]"`.
+Extras add optional parts. `examples` adds CatBoost, MyoVerse, PyTorch and
+scikit-learn for the demos; `grpc` adds the Virtual Hand control plane. Other
+extras are `brainflow`, `bdi`, `serial`, `keyboard`, `zarrs`, `docs` and `dev`.
+Install one with `pip install "myogestic[grpc]"`.
 
 To run the examples, clone the repository and sync it with uv:
 
@@ -86,15 +84,15 @@ def ui(ctx):
 app.run()
 ```
 
-That's the whole loop. Add a `Pipeline`, decorate `extract` / `train` /
-`predict`, and you have a closed-loop experiment.
+Add a `Pipeline` and decorate `extract` / `train` / `predict` for a closed-loop
+experiment.
 
 ## Run a session
 
 [`examples/start_here/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/start_here)
 holds complete protocols you can take to a session unmodified. Each picks its
 hardware from a dropdown, so the same file runs against any supported amplifier
-or against the synthetic one when you have none.
+or the synthetic amplifier.
 
 | Script | Protocol |
 | --- | --- |
@@ -142,14 +140,14 @@ See every widget in the [widget gallery](https://nsquaredlab.github.io/MyoGestic
 
 ## What MyoGestic provides
 
-**MyoGestic provides** live Lab Streaming Layer (LSL) ingest, on-disk recording
-(Zarr → `.mg.zip`), the machine-learning pipeline lifecycle with training
+MyoGestic provides live Lab Streaming Layer (LSL) ingest, on-disk recording
+from Zarr to `.mg.zip`, a machine-learning pipeline with training
 and prediction on their own threads, Dear ImGui widgets, output filters, and
 gRPC plus LSL integration with the
 [Virtual Hand Interface](https://github.com/NsquaredLab/MyoGestic-VHI).
 
-**You bring** the signal processing, features and models, with scipy,
-MyoVerse, CatBoost, PyTorch or whatever fits.
+Write signal processing, features and models with scipy, MyoVerse, CatBoost
+or PyTorch.
 
 ## More examples
 
@@ -159,7 +157,7 @@ holds runnable demos and templates to copy.
 | Script | Shows |
 | --- | --- |
 | `my_session_app.py` | A session app to copy. Change the classes, features, training and prediction. |
-| `emg_classification.py` | The reference first read (CatBoost, binary), with an optional Virtual Hand. |
+| `emg_classification.py` | Binary CatBoost classification with an optional Virtual Hand. |
 | `emg_regression.py` | Continuous regression of five degrees of freedom. |
 | `emg_regression_raulnet.py` | The same flow with a PyTorch Lightning convolutional network. |
 | `emg_32ch_multi_model.py` | A selectable classifier with Save and Load. |
@@ -231,12 +229,13 @@ multiple spared motor dimensions in individuals with neural lesions.
 
 </details>
 
-## License
+<a id="license"></a>
+
+## Licence
 
 MyoGestic is licensed under the
 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
-(GPL-3.0), matching the v1 release. Derivative work must remain open under
-the same license.
+(GPL-3.0). Derivative work must remain open under the same licence.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/myogestic/assets/app_settings/icon.png" alt="" width="48"><br>
