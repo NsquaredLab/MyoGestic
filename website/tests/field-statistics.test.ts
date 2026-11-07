@@ -38,6 +38,7 @@ function statistics(gesture: Gesture) {
   };
 }
 
+// Seeded statistics over many samples take ~6 s on a GitHub runner, past the 5 s default.
 it('matches bracelet contrast, circular spatial correlation and sampled amplitude distributions', () => {
   const measured = Object.fromEntries(GESTURES.map(g => [g, statistics(g)])) as Record<Gesture, ReturnType<typeof statistics>>;
   console.info('Matched field statistics', JSON.stringify(measured));
@@ -51,7 +52,7 @@ it('matches bracelet contrast, circular spatial correlation and sampled amplitud
     expect(Math.abs(synthetic.p999 / real.p999 - 1), `${gesture} p99.9`).toBeLessThanOrEqual(0.15);
     expect(Math.abs(synthetic.kurtosis / real.kurtosis - 1), `${gesture} kurtosis`).toBeLessThanOrEqual(0.25);
   }
-});
+}, 30_000);
 
 it('keeps all four circular maps distinct by at least 0.18 normalized RMS', () => {
   const maps = GESTURES.map(g => { const s = createFieldState(); setGesture(s, g); return s.target; });
