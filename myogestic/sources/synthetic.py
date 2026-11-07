@@ -226,7 +226,7 @@ class SyntheticSource:
         return StreamInfo(n_channels=self._n, fs=self._fs, dtype=np.dtype("float32"))
 
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
-        """Return the next chunk; in a browser, return no data until it is due."""
+        """Return the next chunk; in a browser, every chunk that is due, or no data yet."""
         from mne_lsl.lsl import local_clock
 
         from myogestic._browser import IS_BROWSER
@@ -235,15 +235,25 @@ class SyntheticSource:
         # `fs` instead of spinning and squashing thousands of chunks onto one
         # x-position. Mirrors a real LSL inlet's blocking pull_chunk.
         assert self._next_tick is not None
-        target = self._next_tick + self._CHUNK / self._fs
         now = local_clock()
-        if target > now:
-            if IS_BROWSER:
+        chunks = 1
+        if IS_BROWSER:
+            # The frame loop calls this once per frame, so a slow frame must not slow
+            # the signal: hand out every chunk that is due. After a long stall (a
+            # hidden tab) drop all but one second of backlog and keep the clock.
+            chunks = int((now - self._next_tick) * self._fs // self._CHUNK)
+            if chunks < 1:
                 return None, None
+            cap = max(1, int(self._fs // self._CHUNK))
+            if chunks > cap:
+                self._next_tick = now - cap * self._CHUNK / self._fs
+                chunks = cap
+        target = self._next_tick + chunks * self._CHUNK / self._fs
+        if not IS_BROWSER and target > now:
             time.sleep(target - now)
         self._next_tick = target
 
-        n = self._CHUNK
+        n = self._CHUNK * chunks
         t = (self._pos + np.arange(n)) / self._fs
         self._pos += n
         # One distinct sine (5..5+n_channels Hz) + noise per channel, plus a

@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def css_tokens():
     path = ROOT / "website/src/styles/tokens.css"
     assert path.is_file(), "The website token stylesheet has not been created"
-    source = re.sub(r"/\*.*?\*/", "", path.read_text(), flags=re.S)
+    source = re.sub(r"/\*.*?\*/", "", path.read_text(encoding="utf-8"), flags=re.S)
     return {
         selector.strip(): dict(re.findall(r"(--[\w-]+)\s*:\s*([^;]+);", body))
         for selector, body in re.findall(r"([^{}]+)\{([^{}]*)\}", source)
@@ -66,7 +66,7 @@ def test_palette_tokens_match_common(css_tokens):
 
 
 def test_theme_ladders_match_theme_py(css_tokens):
-    module = ast.parse((ROOT / "myogestic/_theme.py").read_text())
+    module = ast.parse((ROOT / "myogestic/_theme.py").read_text(encoding="utf-8"))
     apply_theme = next(node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == "apply_theme")
     branch = next(node for node in apply_theme.body if isinstance(node, ast.If) and isinstance(node.test, ast.Name) and node.test.id == "dark")
     names = {

@@ -14,7 +14,7 @@ SCRIPT = ROOT / "website/scripts/gen_api.py"
 def api():
     assert SCRIPT.is_file(), "website/scripts/gen_api.py is missing"
     subprocess.run(["uv", "run", "--extra", "docs", "python", str(SCRIPT)], cwd=ROOT, check=True)
-    return json.loads((ROOT / "website/src/generated/api.json").read_text())
+    return json.loads((ROOT / "website/src/generated/api.json").read_text(encoding="utf-8"))
 
 
 def test_pipeline_signature_and_page(api):
@@ -167,7 +167,7 @@ def test_inherited_public_members_and_aliases(api):
 
 def test_legacy_inventory_destinations_are_generated(api):
     """Aliases use the saved URI's destination, which can differ from the name."""
-    for line in (ROOT / "website/tests/legacy-symbols.txt").read_text().splitlines():
+    for line in (ROOT / "website/tests/legacy-symbols.txt").read_text(encoding="utf-8").splitlines():
         name, _, uri = line.split("\t")
         page, anchor = uri.split("#")
         target = anchor.replace("$", name)
