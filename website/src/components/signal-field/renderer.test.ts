@@ -15,14 +15,14 @@ function contextGL() {
   const gl: Record<string, any> = {};
   const constants = ['TEXTURE_2D', 'TEXTURE_MIN_FILTER', 'TEXTURE_MAG_FILTER', 'NEAREST', 'TEXTURE_WRAP_S',
     'TEXTURE_WRAP_T', 'CLAMP_TO_EDGE', 'R32F', 'TEXTURE0', 'TEXTURE1', 'VERTEX_SHADER', 'FRAGMENT_SHADER',
-    'COMPILE_STATUS', 'LINK_STATUS', 'BLEND', 'ONE', 'DEPTH_TEST', 'RED', 'FLOAT', 'COLOR_BUFFER_BIT', 'LINE_STRIP'];
+    'COMPILE_STATUS', 'LINK_STATUS', 'BLEND', 'ONE', 'DEPTH_TEST', 'RED', 'FLOAT', 'COLOR_BUFFER_BIT', 'TRIANGLES'];
   constants.forEach((name, i) => { gl[name] = i + 1; });
   for (const name of ['createTexture', 'createProgram', 'createVertexArray', 'createShader', 'getUniformLocation']) {
     gl[name] = vi.fn(() => ({}));
   }
   for (const name of ['deleteTexture', 'deleteVertexArray', 'deleteProgram', 'deleteShader', 'activeTexture',
     'bindTexture', 'texParameteri', 'texStorage2D', 'shaderSource', 'compileShader', 'attachShader', 'linkProgram',
-    'useProgram', 'bindVertexArray', 'uniform1i', 'uniform3fv', 'clearColor', 'enable', 'blendFunc', 'disable',
+    'useProgram', 'bindVertexArray', 'uniform1i', 'uniform2f', 'uniform3fv', 'clearColor', 'enable', 'blendFunc', 'disable',
     'texSubImage2D', 'clear', 'drawArraysInstanced', 'viewport', 'lineWidth']) gl[name] = vi.fn();
   gl.NO_ERROR = 0;
   gl.getError = vi.fn(() => 0);
@@ -47,6 +47,21 @@ function canvas(gl: ReturnType<typeof contextGL> | null, ctx = context2D()) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('WebGL renderer', () => {
+  it.each([[64, 480], [32, 240]])('keeps geometric stroke width at both DPRs in the %i-channel tier', (channels, samples) => {
+    const gl = contextGL();
+    const { original } = canvas(gl);
+    const renderer = createGLRenderer(original, undefined, channels, samples, true)!;
+    const state = field.createFieldState(channels, samples);
+    for (const dpr of [1, 2]) {
+      renderer.resize(800, 600, dpr);
+      expect(gl.uniform2f).toHaveBeenLastCalledWith(expect.anything(), 800 * dpr, 600 * dpr);
+      renderer.draw(state);
+      expect(gl.drawArraysInstanced).toHaveBeenLastCalledWith(gl.TRIANGLES, 0, (samples - 1) * 6, channels);
+    }
+    expect(gl.lineWidth).not.toHaveBeenCalled();
+    expect(gl.blendFunc).not.toHaveBeenCalled();
+    renderer.destroy();
+  });
   it('preserves reduced-motion still pixels through the probe and renderer context requests', () => {
     const gl = contextGL();
     gl.getExtension = vi.fn(() => null);
@@ -85,8 +100,9 @@ describe('WebGL renderer', () => {
     const s = field.createFieldState();
     renderer.upload(s, 0, s.samples);
     renderer.draw(s);
-    expect(gl.drawArraysInstanced).toHaveBeenCalledExactlyOnceWith(gl.LINE_STRIP, 0, 480, 64);
-    expect(gl.blendFunc).toHaveBeenCalledWith(gl.ONE, gl.ONE);
+    expect(gl.drawArraysInstanced).toHaveBeenCalledExactlyOnceWith(gl.TRIANGLES, 0, 2874, 64);
+    expect(gl.disable).toHaveBeenCalledWith(gl.BLEND);
+    expect(gl.uniform2f).toHaveBeenCalled();
     renderer.destroy();
     renderer.destroy();
     expect(gl.deleteTexture).toHaveBeenCalledTimes(2);
@@ -130,6 +146,16 @@ describe('WebGL renderer', () => {
 });
 
 describe('Canvas 2D fallback', () => {
+  it.each([[64, 480], [32, 240]])('doubles Canvas stroke width at both DPRs in the %i-channel tier', (channels, samples) => {
+    const { original, ctx } = canvas(null);
+    const renderer = createCanvas2DRenderer(original, undefined, channels, samples);
+    for (const dpr of [1, 2]) {
+      renderer.resize(800, 600, dpr);
+      expect(ctx.lineWidth).toBe(512);
+      expect(ctx.setTransform).toHaveBeenLastCalledWith(dpr / 256, 0, 0, dpr / 256, 0, 0);
+    }
+    renderer.destroy();
+  });
   it('replaces a context-locked canvas and precomputes all stroke styles', () => {
     const { original, replacement, ctx } = canvas(contextGL());
     const colors = vi.spyOn(field, 'channelColor');
@@ -141,6 +167,7 @@ describe('Canvas 2D fallback', () => {
     renderer.resize(390, 844, 4);
     expect(replacement.width).toBe(780);
     expect(ctx.setTransform).toHaveBeenCalledWith(2 / 256, 0, 0, 2 / 256, 0, 0);
+    expect(ctx.lineWidth).toBe(512);
     const s = field.createFieldState(2, 8);
     s.head = 6;
     s.data[6] = 1;
@@ -153,7 +180,7 @@ describe('Canvas 2D fallback', () => {
     expect(ctx.stroke).toHaveBeenCalledTimes(4);
     expect(colors).toHaveBeenCalledTimes(2);
     expect(ctx.fillStyle).toBe('rgb(15, 16, 18)');
-    expect(ctx.strokeStyle).toBe('rgba(177,132,217,0.21875)');
+    expect(ctx.strokeStyle).toBe('rgba(177,132,217,0.28125)');
     expect(ctx.globalCompositeOperation).toBe('source-over');
     renderer.resize(390, 422, 4);
     renderer.draw(s);

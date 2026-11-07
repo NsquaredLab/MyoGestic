@@ -12,14 +12,16 @@ describe('synthetic signal field', () => {
     const s = createFieldState();
     const target = s.target;
     setGesture(s, 'Fist');
-    expect(s.target[21]).toBeGreaterThan(0.9);
-    expect(s.target[63]).toBeLessThan(0.05);
+    expect(s.target[0]).toBe(1);
+    expect(s.target[21]).toBeCloseTo(0.789);
+    expect(s.target[63]).toBeCloseTo(0.787);
     setGesture(s, 'Open');
-    expect(s.target[44]).toBeGreaterThan(0.89);
+    expect(s.target[44]).toBeGreaterThan(0.77);
     setGesture(s, 'Pinch');
-    expect(s.target[10]).toBeGreaterThan(0.89);
+    expect(s.target[16]).toBeGreaterThan(0.78);
     setGesture(s, 'Rest');
-    expect(s.target.every((v) => v === 0)).toBe(true);
+    expect(s.target[0]).toBeCloseTo(0.136);
+    expect(s.target[63]).toBeCloseTo(0.089);
     expect(s.target).toBe(target);
     expect(s.gesture).toBe('Rest');
   });
@@ -28,6 +30,7 @@ describe('synthetic signal field', () => {
     const a = createFieldState();
     const b = createFieldState();
     const data = a.data, act = a.act, target = a.target;
+    const phase = a.phase, pulse = a.pulse, rest = a.rest;
     const randA = mulberry32(17), randB = mulberry32(17);
     setGesture(a, 'Fist');
     setGesture(b, 'Fist');
@@ -39,17 +42,24 @@ describe('synthetic signal field', () => {
     expect(a.data).toBe(data);
     expect(a.act).toBe(act);
     expect(a.target).toBe(target);
+    expect(a.phase).toBe(phase);
+    expect(a.pulse).toBe(pulse);
+    expect(a.rest).toBe(rest);
     expect(a.data).toEqual(b.data);
     expect(a.act).toEqual(b.act);
   });
 
-  it('uses the specified sample envelope, easing and spikes', () => {
+  it('eases RMS using the measured 18 ms onset and 18 ms offset constants', () => {
     const s = createFieldState(1, 8);
-    s.target[0] = 1;
-    stepField(s, 1, () => 0);
-    expect(s.act[0]).toBeCloseTo(0.02);
-    expect(s.data[0]).toBeCloseTo((-1.5 - 1.6) * 0.07);
-    expect(Number.isFinite(s.target[0])).toBe(true);
+    setGesture(s, 'Fist');
+    const before = s.act[0];
+    stepField(s, 1, () => 0.5);
+    expect(s.act[0]).toBeCloseTo(before + (s.target[0] - before) * (1 - Math.exp(-1 / (120 * 0.018))));
+    setGesture(s, 'Rest');
+    const active = s.act[0];
+    stepField(s, 1, () => 0.5);
+    expect(s.act[0]).toBeCloseTo(active + (s.target[0] - active) * (1 - Math.exp(-1 / (120 * 0.018))));
+    expect(Number.isFinite(s.data[0])).toBe(true);
   });
 
   it('keeps the reference Mulberry32 sequence when storing its seed in place', () => {
