@@ -411,13 +411,23 @@ def _install(
 
     # Fetch the expected digest before download so a missing-tag-on-API error
     # surfaces immediately, not after a 150 MB download.
-    expected_digest = None if no_verify else _fetch_release_digest(resolved, asset)
+    if no_verify:
+        print(
+            "  WARNING: --no-verify skips SHA-256 verification — "
+            "downloaded archive will NOT be integrity-checked.",
+            file=sys.stderr,
+        )
+        expected_digest = None
+    else:
+        expected_digest = _fetch_release_digest(resolved, asset)
 
-    # Atomic install: stage in a temp dir, validate, then swap with dest.
-    # A failed download or malformed archive never leaves a half-installed
-    # dest behind.
-    with tempfile.TemporaryDirectory(prefix="myogestic-vhi-") as tmp:
-        tmp_path = Path(tmp)
+    # Prepare everything on the destination filesystem. Only renames touch the
+    # install path, so a failed replacement cannot expose a partly copied tree.
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = Path(tempfile.mkdtemp(prefix=".myogestic-vhi-", dir=dest.parent))
+    previous = tmp_path / "previous"
+    installed = False
+    try:
         archive = tmp_path / asset
         _download(url, archive)
         if not no_verify:
@@ -429,16 +439,35 @@ def _install(
         # ``latest`` is only a moving download selector. Persist the concrete tag
         # resolved above so the launch-time version gate can actually compare it.
         _write_marker(staging, resolved, asset)
+        _strip_quarantine(staging)
 
-        if dest.exists():
-            shutil.rmtree(dest)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        # `shutil.move` falls back to copy+rmtree across filesystems where
-        # plain rename() fails with EXDEV — temp dirs are often on a
-        # different mount than the install target.
-        shutil.move(str(staging), str(dest))
+        try:
+            if dest.exists() or dest.is_symlink():
+                dest.rename(previous)
+            staging.rename(dest)
+        except BaseException:
+            # Include interrupted installs: the old directory must be put back
+            # before propagating any failure from the replacement rename.
+            if previous.exists() or previous.is_symlink():
+                previous.rename(dest)
+            raise
+        installed = True
+    finally:
+        if not installed and (previous.exists() or previous.is_symlink()):
+            # Rollback itself can fail (e.g. permissions changed). Never let
+            # temporary-directory cleanup delete the only surviving old install.
+            print(
+                f"  WARNING: could not restore the previous VHI install; "
+                f"it is preserved at {previous}.",
+                file=sys.stderr,
+            )
+        else:
+            try:
+                shutil.rmtree(tmp_path)
+            except OSError as exc:
+                # Once the swap succeeds, housekeeping cannot invalidate it.
+                print(f"  WARNING: could not remove staging directory {tmp_path}: {exc}", file=sys.stderr)
 
-    _strip_quarantine(dest)
     print(f"✓ VHI {resolved} installed at {dest}")
     _macos_gatekeeper_note(dest)
 
