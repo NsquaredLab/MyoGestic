@@ -196,7 +196,7 @@ protocol was built for: it estimates *how much* (the row total, rescaled so rest
 and a full contraction 1) and *which way* (the amplitude-normalised row on a Fisher axis)
 apart, then multiplies them. A regressor over raw features conflates the two and learns
 whichever cue happened to be louder — which is where the non-monotonic CatBoost above came
-from. It has no dependencies. `catboost_regressor` also works on this data and is the
+from. It requires only NumPy. `catboost_regressor` also works on this data and is the
 comparison worth running; it is the estimator the 14x number above was measured on.
 
 ## Check before the subject does

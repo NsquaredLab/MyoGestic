@@ -14,10 +14,10 @@ python -m myogestic.tools.install_vhi
 myogestic-install-vhi
 ```
 
-That pulls the latest release for your OS/arch, integrity-checks the
-download against the SHA-256 GitHub publishes per asset, unpacks it
-atomically into the location `virtual_hand()` searches, and prints a
-single-line success summary.
+That pulls the latest release for your OS/arch, checks the download against
+GitHub's per-asset SHA-256 when available, unpacks it atomically into the
+location `virtual_hand()` searches, and prints a success summary. If the
+digest is unavailable, it warns and continues without an integrity check.
 
 !!! warning "MyoGestic 2.x needs VHI 2.0 or newer"
     MyoGestic drives VHI over the v2 control contract: it asks VHI which
@@ -25,10 +25,11 @@ single-line success summary.
     answer with, and the v1 bridge that used to cover for that was removed — so an
     older release is not limited, it does not work.
 
-    Both the installer and the launcher check. `install_vhi` resolves what `latest`
-    actually points at *before* downloading and refuses anything below 2.0, and
+    Both the installer and the launcher check. `install_vhi` checks the requested
+    tag and resolves `latest` before downloading when the API is reachable. It refuses
+    known versions below 2.0 and warns if `latest` cannot be resolved.
     `virtual_hand().launcher()` reads `vhi-version.txt` and refuses to start a
-    pre-2.0 install. Neither refuses when there is no marker, since a source-mode
+    pre-2.0 install. The launcher permits an install with no marker, since a source-mode
     checkout has none.
 
     Until a 2.x release is published, run a checkout from source:
@@ -47,15 +48,17 @@ The default install root mirrors what `virtual_hand()` looks at:
 | Writable git checkout (`MyoGestic/.git` exists)        | `<repo>/tools/MyoGestic-VHI` - visible next to source, gitignored.        |
 | Anywhere else (`pip install`, read-only checkouts)     | `<platformdirs.user_data_dir("myogestic")>/vhi`.                          |
 
-Override with `--dest /custom/path` or `$VHI_PATH`. `virtual_hand()`
-honours `$VHI_PATH` first, so the override survives a `pip uninstall`.
+Override the installer destination with `--dest /custom/path`. Set
+`VHI_PATH=/custom/path` as well so `virtual_hand()` finds that install;
+the installer does not read `$VHI_PATH`.
 
 Inside the install root you get:
 
 * `VHI.app` (macOS), `VHI.exe` (Windows), or `VHI.x86_64` (Linux) - the
   Godot-built binary the framework launches.
 * `vhi-version.txt` - install marker recording tag, asset name, platform.
-  A re-install reads this before clobbering; `--force` overrides.
+  The launcher reads its tag to check compatibility. Replacing a non-empty
+  install requires `--force`.
 
 ## Platform support
 
@@ -78,12 +81,12 @@ project (see "Source-mode" below).
 that needs to behave the same months from now - pin the tag:
 
 ```bash
-python -m myogestic.tools.install_vhi --tag v1.0.0
+uv run python -m myogestic.tools.install_vhi --tag v2.1.0
 ```
 
-The installer fetches the SHA-256 digest from the GitHub release API
-*before* downloading, so a typo'd or moved tag fails fast (no 150 MiB
-wasted on a download that won't verify).
+The installer requests the SHA-256 digest from the GitHub release API
+*before* downloading. A missing digest or failed API request does not stop
+the download; a digest mismatch refuses the install before unpacking.
 
 `--no-verify` is available but the warning is loud on purpose - use it
 only for ad-hoc local builds where no digest exists.
@@ -126,7 +129,7 @@ export GODOT_BIN=/usr/bin/godot4                                 # Linux
 uv run python examples/synthetic/emg_classification.py
 ```
 
-`virtual_hand()` auto-detects: if `$GODOT_BIN` is set (or `--godot-bin`
+`virtual_hand()` auto-detects: if `$GODOT_BIN` is set (or `godot_bin=...`
 is passed), it launches `godot --path $VHI_PATH` instead of the packaged
 binary. Force one or the other with `$VHI_LAUNCH_MODE=binary` or
 `=godot`.
@@ -135,7 +138,7 @@ binary. Force one or the other with `$VHI_LAUNCH_MODE=binary` or
 
 ```bash
 python -m myogestic.tools.install_vhi --force          # latest
-python -m myogestic.tools.install_vhi --tag v1.1.0 --force
+uv run python -m myogestic.tools.install_vhi --tag v2.1.0 --force
 ```
 
 `--force` is required when the destination is non-empty. Without it,

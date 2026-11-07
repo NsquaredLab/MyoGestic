@@ -57,6 +57,7 @@ Use it:
 
 ```python
 telemetry = TelemetryOutlet("127.0.0.1", 9000, hz=20)
+app.cleanup_hooks.append(lambda _app: telemetry.stop())
 
 
 @pipeline.predict

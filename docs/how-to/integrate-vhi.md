@@ -3,7 +3,8 @@ title: "Integrate the Virtual Hand Interface"
 ---
 The **Virtual Hand Interface (VHI)** is the Godot-based 3-D hand visualisation that ships
 alongside MyoGestic. It is the [remote target](drive-a-remote-target.md) this project ships
-with: a separate application, read from over LSL and commanded over gRPC.
+with: a separate application, driven over LSL for continuous controls and gRPC
+for discrete controls, with read-backs over LSL.
 
 So this page is only what is true of *this* target: where it is installed, how it is
 launched, what it calls its controls, and how to drive its control hand while recording. How
@@ -25,8 +26,8 @@ vhi_control = vhi.control_client()  # negotiates the control space (v2)
 recording = vhi.recording_client()  # recording session gate + trajectory playback
 ```
 
-`virtual_hand()` looks at `$VHI_PATH`, the per-user install root, and the local git checkout
-in that order. It reads `$VHI_GRPC_HOST` / `$VHI_GRPC_PORT` for the control endpoint
+`virtual_hand()` uses an explicit `vhi_path` or `$VHI_PATH` first. Otherwise it looks for
+an existing install in the writable checkout, then the per-user install root. It reads `$VHI_GRPC_HOST` / `$VHI_GRPC_PORT` for the control endpoint
 (defaults `127.0.0.1:50051`).
 
 Those three lines are the whole VHI-shaped part of pointing MyoGestic at it. The returned
@@ -52,7 +53,7 @@ binds before VHI exists.
 ## Launching the VHI process
 
 Drop the launcher into your `ProcessLauncher` panel and the user gets
-a Start/Stop button for VHI:
+a Launch/Stop button for VHI:
 
 ```python
 import sys
@@ -85,8 +86,9 @@ def ui(ctx):
         launcher.ui()
 ```
 
-`vhi.launcher()` prefers a packaged binary install when present and
-falls back to `godot --path <project>` for source-mode development. Set
+`vhi.launcher()` prefers a packaged binary install when present, unless
+`godot_bin` or `$GODOT_BIN` requests source mode. It falls back to
+`godot --path <project>` when a source project and Godot are available. Set
 `$VHI_LAUNCH_MODE=binary` or `=godot` to force one.
 
 If VHI is not installed, `launcher()` raises `FileNotFoundError` with the
@@ -127,7 +129,8 @@ install message `launcher()` raises.
 ## What VHI calls its controls
 
 A running VHI's manifest is the authority
-(`uv run --extra grpc python tools/inspect_control.py` prints it), but the shape of the
+(`uv run --extra grpc python tools/inspect_control_map.py examples/controls/hand.toml`
+resolves a map against it without driving the hand), but the shape of the
 vocabulary is worth knowing before you write a map, because **the address picks the hand**:
 
 | address | drives |
@@ -256,7 +259,7 @@ def predict(model, features):
     return {"pose": pose}
 ```
 
-Or point `uv run mne-lsl viewer` at one of the streams: `vhi.prediction.index` for a single DOF
+Or point `uv run mne-lsl viewer -s vhi.prediction.index` at a single DOF
 going out, `VHI_Predict` for all nine coming back. For the gRPC plane, the standard `grpcurl`
 works against the local server when VHI is running. The proto is at
 `myogestic/remote/_proto/remote_control.proto`.
@@ -290,8 +293,8 @@ about the control standard rather than about VHI.
 * [Control standard](../api/controls.md) - declaring a map, negotiation, the three layers
   of smoothing.
 * [Edge trigger](../concepts/edge-trigger.md) - fire-on-change pattern.
-* [Examples directory](../tutorials/examples-index.md) - every shipped
-  example wires VHI either via LSL, gRPC, or both.
+* [Examples directory](../tutorials/examples-index.md) - runnable protocols,
+  including those that wire VHI over LSL and gRPC.
 * [`myogestic.vhi.virtual_hand`](../api/core.md) - full signature.
 * [`myogestic.widgets.vhi.panel.VhiMovementPanel`](../api/widgets.md) -
   movement palette API.

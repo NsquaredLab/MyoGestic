@@ -52,8 +52,8 @@ feats = FeatureSelector(
 
 
 @pipeline.extract
-def extract(window):
-    return feats(window)  # → (n_features * n_channels,)
+def extract(windows):
+    return feats(windows["emg"])  # → (n_features * n_channels,)
 
 
 @app.ui
@@ -71,7 +71,7 @@ predict call will throw (sklearn / CatBoost both raise a clear
 shape-mismatch error). Two reasonable patterns:
 
 - **Lock the selector after training** - render the feature toggles
-  greyed out once `pipeline.state == "predicting"` so the user can't
+  greyed out once `pipeline.app.ctx.state == "predicting"` so the user can't
   silently break the live loop.
 - **Treat a toggle as "retrain me"** - keep your own snapshot of
   `feats.active_names` between frames and, when it changes, prompt the

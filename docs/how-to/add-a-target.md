@@ -75,9 +75,9 @@ class Target(Protocol):
     def capabilities(self) -> Sequence | None: ...  # optional
 ```
 
-`bind` runs once, on the main thread, and **may raise**. Refuse a configuration you cannot
-drive there, while a human is still reading the traceback. `send` runs on the predict thread
-and **must not raise**; every value it gets is already finite and inside its declared range,
+`bind` runs when the bus is constructed, on the caller's thread, and **may raise**. Refuse a configuration you cannot
+drive there, before sending any frames. `send` runs on the thread calling the bus
+(predict ticks, UI selections or teardown) and **must not raise**; every continuous value it gets is already finite and inside its declared range,
 because [`ControlBus`][myogestic.controls.ControlBus] sanitised the frame before fanning it
 out.
 
@@ -170,7 +170,7 @@ assert cursor.position == (0.5, -0.25)
 bus.stop()
 ```
 
-`connect_controls` answers `None` rather than raising while any target's `capabilities()` does,
+`connect_controls` answers `None` while any target's `capabilities()` returns `None`,
 so a target that is not up yet defers instead of failing.
 [`ControlLink`][myogestic.controls.ControlLink] holds the arguments and asks again for you,
 which saves you a module-level `bus` and a `global`:
@@ -191,6 +191,9 @@ on_click()
 assert link.bus is not None  # this target answers immediately; a remote one would not
 link.stop()  # rests every target and clears the bus
 ```
+
+Targets are user-owned. In an app, register `link.stop()` with
+`app.cleanup_hooks` so normal shutdown rests and closes them too.
 
 Call `ensure()` from anywhere that can afford to block: a UI handler, a training thread. Never
 from `@pipeline.predict`, which has its own thread and a deadline - read `link.bus` there and

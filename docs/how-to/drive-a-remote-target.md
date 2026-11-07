@@ -14,7 +14,7 @@ target](../tutorials/your-first-remote-target.md) instead.
 
 ## Which way the streams run
 
-MyoGestic writes, you read. **One stream per DOF** (one [degree of
+MyoGestic writes, you read. **One stream per continuous DOF** (one [degree of
 freedom](../reference/glossary.md#dof)), named for the DOF's own address and one channel wide:
 
 ```
@@ -29,7 +29,7 @@ These DOFs are independently actuated, possibly driven by different processes at
 rates. Two programs can each drive a different DOF.
 
 MyoGestic drives all of it with one [`RemoteTarget`](../api/controls.md), which publishes one
-outlet per address the map names.
+outlet per continuous address the map names and sends discrete changes over gRPC.
 
 Publishing a read-back of your own is optional; VHI does it (`VHI_Predict` and `VHI_Control`,
 nine positional channels each, whatever the inbound shape) so a client can verify what actually

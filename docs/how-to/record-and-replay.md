@@ -31,10 +31,10 @@ def ui(ctx):
 
 [`RecordingControls`][myogestic.widgets.RecordingControls] renders:
 
-- **Record / Stop** buttons that call `app.start_recording("data")` / `app.stop_recording()`.
+- **Record / Stop** buttons that call `app.start_recording()` / `app.stop_recording()` (`"data"` is the default root).
 - One **button** per class. Clicking a button writes a `LabelEvent(class_index, timestamp=local_clock())` to the active session's label track and fires your `on_gesture` callback. Use the callback to drive an external pattern (synthetic generator, robot, prompt screen).
 
-The `on_gesture` callback is yours; the label is added by `RecordingControls` itself before calling it. You don't need to call `ctx.session.add_label()` manually.
+The `on_gesture` callback is yours; while recording, the label is added by `RecordingControls` itself before calling it. The selected gesture is also labelled when capture starts. You don't need to call `ctx.session.add_label()` manually.
 
 ### Timed takes
 
@@ -123,7 +123,7 @@ For models that need many short trials per session, record cycle-style:
 [Stop]
 ```
 
-One Record→Stop cycle yields one session with 8–10 trials. The framework's training helpers skip the first segment (it's usually setup noise), so single-click sessions yield exactly one usable trial - too few for robust models.
+One Record→Stop cycle yields one session, with one labelled segment per gesture selection. `iter_labeled_windows` includes the first segment and slices each segment into as many full windows as fit. Repeated activations give you more trials, not just more overlapping windows from one hold.
 
 ## Reading sessions programmatically
 
@@ -143,7 +143,7 @@ info = sess.stream_info("emg")
 print(info.n_channels, info.fs, info.channel_names)
 
 # Per-trial slices
-for r in sess.get_trials("emg", pre_s=0, post_s=0):
+for r in sess.get_trials("emg", pre_s=0, post_s=0, class_names=sess.class_names):
     print(r.class_name, r.data.shape, r.timestamps.shape)
 ```
 
@@ -191,12 +191,12 @@ for window, targets, ts in iter_aligned_windows(
     n_alignment_samples=1,
 ):
     X.append(rms(window))
-    Y.append(targets["vhi_guide"])  # 1-D vector synchronised to ts[-1]
+    Y.append(targets["vhi_guide"])  # 1-D vector aligned to the window midpoint
 ```
 
-- `primary` is the stream you slice into windows.
-- `aligned` is a list of *target* streams whose latest value at the window's end is paired with the EMG window.
-- `n_alignment_samples` is the tolerance (samples) for the alignment lookup.
+- `primary_stream_name` is the stream you slice into windows.
+- `aligned_stream_names` lists the *target* streams sampled nearest the EMG window's midpoint.
+- `n_alignment_samples` is the number of nearby target samples to average, clipped at the stream's ends.
 
 ## Replay as a Source
 
@@ -218,6 +218,8 @@ app.streams(
         window_ms=1000,
     )
 )
+if not app.ctx.streams["emg"].reconnect():
+    raise RuntimeError(app.ctx.streams["emg"].last_error)
 app.run()
 ```
 
@@ -254,7 +256,7 @@ The model is pickled into the session when `pipeline.save_model` is set (the ML 
 
 ## Check a replay against the live run
 
-Run the same app on the recording with `ReplaySource(path, "emg")` in place of the device, press Predict, press Record, and stop after the replay has looped once. `ReplaySource` returns the recorded timestamps, so both sessions are in the same clock. The ticks do **not** fall on the same samples: the predict loop is paced by wall time, and an app whose feature frames are anchored to ring position shifts phase too. Compare by nearest timestamp within half a tick:
+Run the same app on the recording with `ReplaySource(path, "emg")` in place of the device, press Predict, press Record, and stop before the replay loops back to the start. `ReplaySource` returns the recorded timestamps, so both sessions are in the same clock. The ticks do **not** fall on the same samples: the predict loop is paced by wall time, and an app whose feature frames are anchored to ring position shifts phase too. Compare one monotonic pass by nearest timestamp within half a tick:
 
 ```python
 live = open_session_store("live.mg.zip")
@@ -273,7 +275,7 @@ Exact matches need an `extract` whose frame grid is anchored to data timestamps 
 
 See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
 
-- **Recording too short.** A session with 2 label clicks (e.g. Rest + Fist) and 1.5 s of data yields exactly **one** usable trial after skip-first. Cycle-style sessions are the only way to get robust models with limited recording time per session.
+- **Recording too short.** A labelled segment shorter than `window_ms` yields no training windows. Record repeated holds long enough for full windows, and check counts before training.
 - **`sess.class_names = [...]` after `save_meta`.** Class names persist only when passed as a kwarg to `save_meta(name, class_names=...)`. (`RecordingControls` handles this when it triggers `app.start_recording`.)
 - **Sample-major in user code.** `sess.get_continuous("emg")` returns sample-major (matches storage). `iter_labeled_windows` and `iter_aligned_windows` flip to channels-first (matches predict). Don't transpose twice by accident.
 - **Replay-then-predict-on-live.** `ReplaySource` and a real `LSLSource` can't share the stream name. Pick one per app.

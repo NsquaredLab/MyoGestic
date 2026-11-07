@@ -143,14 +143,16 @@ See [`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoG
 
 ## Pushing predictions to outputs
 
-Predictions go two places: into `pipeline.predictions` (read by widgets) and into your outputs (read by actuators / VHI / downstream apps). Push from inside `predict()`:
+The returned dict goes into `pipeline.predictions` for widgets. To drive a device,
+also push to its `ControlBus` from inside `predict()`. This example assumes the
+map has a continuous `grip` alias:
 
 ```python
 @pipeline.predict
 def predict(model, features):
     pose = model.predict(features.reshape(1, -1))[0]
     pose_smooth = pose_filter(pose, timestamp=time.monotonic())
-    vhi_outlet.push(pose_smooth)  # to the actuator
+    bus.push({"grip": float(pose_smooth[0])})  # to the target
     return {"pose": pose_smooth}  # to widgets / pipeline.predictions
 ```
 
@@ -181,7 +183,7 @@ The model's `step` should return the previous state if `last_ts <= self._last_ts
 See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
 
 - **Returning a non-dict from `predict()`.** Silently dropped. Always `return {...}`.
-- **Forgetting to set `pipeline.save_model`.** The Save Model button does nothing; user clicks it expecting persistence.
+- **Forgetting to set `pipeline.save_model`.** The Save button stays disabled until a model and save callback are available.
 - **Putting feature extraction in `train()`.** Then `predict()` re-runs different code on the same window shape. Keep one `extract()` for both, or factor a shared `featurize(window) -> features` helper.
 - **Heavy training in the predict thread.** Don't call `model.fit()` from `predict()` - training has its own thread and its own state. The framework already separates them.
 - **Fitting one regressor on raw features for a two-directional DOF.** Amplitude says how *much*, not which *way*, so the fit latches onto whichever cue happened to be louder in your trials - and the symptom is that contracting harder moves the output the wrong way. Use [`directional_decoder`][myogestic.recipes.estimators.directional_decoder], which estimates effort and direction apart and multiplies them.

@@ -5,7 +5,7 @@ title: "Post-process predictions"
 
 ## The fastest path: [`PostProcessor`][myogestic.widgets.PostProcessor] widget
 
-Drop it in `@app.ui` and you get a compact Smoothing row with the One Euro / Gaussian / Identity options:
+Drop it in `@app.ui` and you get a compact Smoothing row with the One Euro / Gaussian / Identity options. Here `bus` has a continuous `grip` alias:
 
 ```python
 from myogestic.widgets import PostProcessor
@@ -18,7 +18,7 @@ pose_filter = PostProcessor(hz=20.0)
 def predict(model, features):
     pose = model.predict(features)
     pose_smooth = pose_filter(pose, timestamp=time.monotonic())
-    vhi_outlet.push(pose_smooth)
+    bus.push({"grip": float(pose_smooth[0])})
     return {"pose": pose_smooth}
 
 
@@ -47,7 +47,7 @@ One Euro's parameters update *in place* - no rebuild - so smoothing history surv
 
 | Filter | When to use it |
 |--------|----------------|
-| **OneEuro** | Hand tracking, pose vectors, anything where you want fast moves to cut through and slow moves to smooth. Default for pose output. |
+| **One Euro** | Hand tracking, pose vectors, anything where you want fast moves to cut through and slow moves to smooth. Default for pose output. |
 | **Gaussian** | Steady, predictable lag. Good when you want the same smoothing regardless of motion speed. |
 | **Identity** | Comparison baseline; passthrough. |
 
@@ -85,7 +85,7 @@ pose_filter = OneEuroFilter(hz=20.0, min_cutoff_hz=1.0, beta=0.02)
 def predict(model, features):
     pose = model.predict(features)
     pose_smooth = pose_filter(pose, timestamp=time.monotonic())
-    vhi_outlet.push(pose_smooth)
+    bus.push({"grip": float(pose_smooth[0])})
     return {"pose": pose_smooth}
 ```
 
@@ -122,7 +122,7 @@ def train(data):
 
 ## Where to put the filter
 
-**Inside `predict()`, before the output `.push()`.** That's the only place. The filter runs on the predict thread, smooths the freshly computed pose, and pushes the smoothed value. Both the actuator (`vhi_outlet.push`) and the widgets (`pipeline.predictions`) see the smoothed version.
+**Inside `predict()`, before the bus `.push()`.** The filter runs on the predict thread, smooths the freshly computed pose, and pushes the smoothed command. Both the target (`bus.push`) and the widgets (`pipeline.predictions`) receive smoothed values.
 
 Don't filter inside the model - the model should produce raw predictions; smoothing is a separate concern that the user can tune live.
 
