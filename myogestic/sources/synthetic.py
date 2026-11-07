@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from typing import Literal
 
 import numpy as np
 
@@ -10,7 +11,7 @@ from myogestic.stream import StreamInfo
 
 
 class SyntheticSource:
-    """In-process synthetic EMG — sine waves plus noise, paced by the wall clock.
+    """In-process test signals or stochastic EMG, paced by the wall clock.
 
     A stand-in for a real amplifier while you build an app, demonstrate one, or
     run a test. It implements the same ``connect`` / ``read`` / ``disconnect``
@@ -18,15 +19,21 @@ class SyntheticSource:
     ``discover`` / ``reconnect`` extensions, so every widget behaves exactly as
     it would against hardware.
 
-    Each channel carries one distinct sine (5 Hz, 6 Hz, …) with a shared mains
+    By default each channel carries one distinct sine (5 Hz, 6 Hz, …) with a shared mains
     hum on top, so the signal viewer's notch filter and per-channel controls
     have something real to act on. ``noise``, ``hum`` and ``hum_hz`` are public
     and can be changed **while streaming**.
 
-    This is a test signal, not a model of EMG: real EMG is a stochastic,
+    The default is a test signal, not a model of EMG: real EMG is a stochastic,
     burst-modulated process, and this is a fixed tone with white noise on it. It
     exercises the plot, the filters, the scaling and the recording path
     faithfully; a classifier trained on it learns which frequency a channel is.
+
+    Opt into ``waveform="emg"`` for band-limited, heavy-tailed noise with local
+    electrode correlation. Its spectrum and amplitude statistics approximate
+    aggregates from 8-channel forearm bracelet recordings, without replaying
+    samples. This is a demonstration texture, not a physiological motor-unit
+    model. Filter history persists across reads and reconnects.
 
     Timestamps come from the ``mne_lsl`` ``local_clock()`` domain rather than a
     relative counter, so "now" and last-sample age read correctly.
@@ -53,6 +60,17 @@ class SyntheticSource:
         Mains-hum frequency, 50 Hz in most of the world and 60 Hz in the
         Americas. Live — drag it away from whichever the viewer's Notch is set
         to and the hum comes back, which is the notch's bandwidth made visible.
+    activation
+        Carrier amplitude, normally 0..1. Live; background noise and hum remain
+        present at zero activation.
+    direction
+        Live agonist/antagonist balance, clamped to -1..1. Negative values
+        attenuate the second channel half; positive values attenuate the first.
+    waveform : {"sine", "emg"}, default "sine"
+        Carrier to generate. ``"sine"`` preserves the original test signal,
+        including its random-number sequence. ``"emg"`` uses a stateful FIR
+        filter, heavy-tailed innovations and circular neighbour mixing. Select
+        at construction; the amplitude, balance, noise and hum knobs stay live.
     require_target
         When ``True`` the source starts with **no** target selected, so
         ``connect()`` raises until one is chosen via ``reconnect()``. That makes
@@ -82,8 +100,12 @@ class SyntheticSource:
         hum_hz: float = 50.0,
         activation: float = 1.0,
         direction: float = 0.0,
+        waveform: Literal["sine", "emg"] = "sine",
         require_target: bool = False,
     ) -> None:
+        if waveform not in ("sine", "emg"):
+            raise ValueError("waveform must be 'sine' or 'emg'")
+        self._waveform = waveform
         self._n = n_channels
         self._fs = fs
         #: Gaussian noise standard deviation, against a sine of amplitude 1.
@@ -98,7 +120,7 @@ class SyntheticSource:
         #: Mains-hum frequency. Live. Sweeping it off the notch's 50 or 60 Hz is
         #: how you see how narrow that filter actually is.
         self.hum_hz = hum_hz
-        #: How hard the imaginary muscle is working, 0..1, scaling the sine amplitude.
+        #: How hard the imaginary muscle is working, 0..1, scaling the carrier amplitude.
         #: Live, like `noise`. Defaults to 1 so a source nobody touches is what it always
         #: was. It exists so a synthetic signal can carry a *state* worth classifying:
         #: with a fixed amplitude every gesture is the same waveform, so a model trained
@@ -115,6 +137,82 @@ class SyntheticSource:
         self._target: str | None = None if require_target else "Synthetic EMG"
         self._pos = 0
         self._next_tick: float | None = None
+        if waveform == "emg":
+            self._init_emg()
+
+    def _init_emg(self) -> None:
+        """Build a short frequency-sampled FIR once, using only aggregate constants."""
+        # Active-take median spectrum from 8-channel forearm bracelet recordings:
+        # 65 Hz peak, 80 Hz median, 173 Hz 90%-power roll-off, after 20–450 Hz
+        # band-pass and harmonic notches. Smooth over the notch gaps rather than
+        # baking a particular mains frequency into the carrier.
+        hz = [0, 15, 20, 30, 40, 60, 70, 80, 100, 120, 150, 180, 220, 280, 350, 450, 500]
+        power = [
+            0,
+            0,
+            0.08,
+            0.62,
+            0.79,
+            0.95,
+            1,
+            0.87,
+            0.68,
+            0.55,
+            0.18,
+            0.18,
+            0.09,
+            0.04,
+            0.004,
+            0,
+            0,
+        ]
+        taps = 2 * int(self._fs * 0.064) + 1
+        taps = max(taps, 33)
+        design_size = 1 << (4 * taps - 1).bit_length()
+        magnitude = np.sqrt(np.interp(np.fft.rfftfreq(design_size, 1 / self._fs), hz, power))
+        impulse = np.fft.fftshift(np.fft.irfft(magnitude, n=design_size))
+        centre, half = design_size // 2, taps // 2
+        self._emg_fir = impulse[centre - half : centre + half + 1] * np.hanning(taps)
+        # Arbitrary display units: with the playground's noise=.05 and
+        # activation=.8, match the paired Rest/Fist RMS ratio (median .101).
+        self._emg_fir *= 0.5 / np.linalg.norm(self._emg_fir)
+        concentration = np.sum(self._emg_fir**4) / np.sum(self._emg_fir**2) ** 2
+        spatial = (1 + 0.38**4) / (1 + 0.38**2) ** 2 if self._n > 1 else 1.0
+        # FIR averaging reduces excess kurtosis by sum(h**4)/sum(h**2)**2;
+        # compensate when fs changes so the texture stays equally bursty.
+        # A raw kurtosis of 4.8 gives about 4.32 after the calibration band's
+        # harmonic notches and the additive background noise.
+        self._emg_sigma = 0.5 * np.sqrt(np.log1p((4.8 - 3) / (3 * concentration * spatial)))
+        self._emg_history = np.zeros((taps - 1, self._n))
+        self._emg_fft_size = 0
+
+    def _emg_carrier(self, n: int) -> tuple[np.ndarray, np.ndarray]:
+        """Return continuous filtered innovations and independent background noise."""
+        # Draw per sample, not per process, so changing chunk size preserves the
+        # random stream. Lognormal scale gives short stochastic bursts; after
+        # filtering its Pearson kurtosis approximates the recorded median 4.32.
+        random = np.random.randn(n, 3 * self._n)
+        sigma = self._emg_sigma
+        carrier = random[:, : self._n] * np.exp(sigma * random[:, self._n : 2 * self._n] - sigma**2)
+        if self._n > 1:
+            # a/(1+a²) ≈ .332 at a=.38: correlate adjacent electrodes only,
+            # including the bracelet's last/first pair, independently of hum.
+            carrier = (carrier + 0.38 * np.roll(carrier, 1, axis=1)) / np.sqrt(1 + 0.38**2)
+        history = len(self._emg_history)
+        block = np.concatenate((self._emg_history, carrier))
+        fft_size = 1 << (len(block) - 1).bit_length()
+        if fft_size != self._emg_fft_size:
+            self._emg_transfer = np.fft.rfft(self._emg_fir, n=fft_size)[:, None]
+            self._emg_fft_size = fft_size
+        # Overlap-save: the history-length prefix contains circular aliasing;
+        # every returned sample is an ordinary causal FIR output.
+        filtered = np.fft.irfft(
+            np.fft.rfft(block, n=fft_size, axis=0) * self._emg_transfer,
+            n=fft_size,
+            axis=0,
+        )[history : history + n]
+        self._emg_history = block[-history:].copy()
+        return filtered, random[:, 2 * self._n :]
 
     # -- Source protocol ------------------------------------------------
 
@@ -174,11 +272,15 @@ class SyntheticSource:
         # what the electrode picks up whether or not the muscle is working, so scaling
         # them too would hand a classifier a clean signal-to-noise cue that no real
         # recording has.
-        data = (
-            gains * np.sin(2 * np.pi * np.outer(t, freqs))
-            + hum
-            + noise * np.random.randn(n, self._n)
-        ).astype(np.float32)
+        if self._waveform == "emg":
+            carrier, background = self._emg_carrier(n)
+            data = (gains * carrier + hum + noise * background).astype(np.float32)
+        else:
+            data = (
+                gains * np.sin(2 * np.pi * np.outer(t, freqs))
+                + hum
+                + noise * np.random.randn(n, self._n)
+            ).astype(np.float32)
         # Chunk of `n` samples ending at the wall clock we just paced to.
         ts = (target + (np.arange(n) - (n - 1)) / self._fs).astype(np.float64)
         return data, ts
