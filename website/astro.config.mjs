@@ -3,6 +3,7 @@ import { defineConfig } from 'astro/config';
 import { readFileSync } from 'node:fs';
 import starlight from '@astrojs/starlight';
 import { remarkPlugins, rehypePlugins } from './src/markdown/plugins';
+import { ASK_SITE_KEY } from './src/context7-ask.mjs';
 
 // Syntax colours are read from the same checked tokens as the app chrome.
 const tokens = readFileSync(new URL('./src/styles/tokens.css', import.meta.url), 'utf8');
@@ -27,6 +28,7 @@ export default defineConfig({
             head: [
                 { tag: 'link', attrs: { rel: 'icon', href: '/MyoGestic/favicon.ico', sizes: 'any' } },
                 { tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/MyoGestic/apple-touch-icon.png' } },
+                { tag: 'meta', attrs: { name: 'context7-site-verification', content: ASK_SITE_KEY } },
             ],
             customCss: ['./src/styles/fonts.css', './src/styles/tokens.css', './src/styles/docs.css'],
             expressiveCode: {
@@ -81,6 +83,7 @@ export default defineConfig({
             },
             components: {
                 Head: './src/components/starlight/Head.astro',
+                SkipLink: './src/components/starlight/SkipLink.astro',
                 Header: './src/components/starlight/Header.astro',
                 PageTitle: './src/components/starlight/PageTitle.astro',
                 Sidebar: './src/components/starlight/Sidebar.astro',

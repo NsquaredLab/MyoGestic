@@ -1,6 +1,7 @@
 import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parse, serialize } from 'parse5';
+import { ASK_SEARCH } from '../src/context7-ask.mjs';
 
 const docs = new URL('../../docs/', import.meta.url);
 const publicDir = new URL('../public/', import.meta.url);
@@ -10,7 +11,11 @@ for (const name of ['images', 'playground']) {
     await rm(destination, { recursive: true, force: true });
     await cp(new URL(name, docs), destination, { recursive: true });
 }
-await cp(new URL('llms.txt', docs), new URL('llms.txt', publicDir));
+// The published llms.txt gains the Context7 Ask search section after the title and summary.
+const llms = await readFile(new URL('llms.txt', docs), 'utf8');
+const summaryEnd = llms.indexOf('\n\n', llms.indexOf('\n>'));
+if (!llms.startsWith('# ') || summaryEnd < 0) throw new Error('docs/llms.txt must open with a title and a > summary');
+await writeFile(new URL('llms.txt', publicDir), `${llms.slice(0, summaryEnd)}\n\n## Search\n\n${ASK_SEARCH}${llms.slice(summaryEnd)}`);
 
 // The Playground stays a static app. Normalize only its published HTML URLs.
 async function normalizeHtml(directory) {

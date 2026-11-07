@@ -2,6 +2,8 @@
 import '../../styles/fonts.css';
 import '../../styles/tokens.css';
 import { readFileSync } from 'node:fs';
+import AskNote from '../AskNote.astro';
+import { ASK_SITE_KEY } from '../../context7-ask.mjs';
 
 const base = import.meta.env.BASE_URL;
 const readme = readFileSync(new URL('../../../../README.md', import.meta.url), 'utf8');
@@ -20,8 +22,10 @@ if (!description) throw new Error('README.md must contain the MyoGestic introduc
         <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
         <link rel="icon" href={`${base}favicon.ico`} sizes="any" />
         <link rel="apple-touch-icon" href={`${base}apple-touch-icon.png`} />
+        <meta name="context7-site-verification" content={ASK_SITE_KEY} />
     </head>
     <body>
+        <AskNote />
         <a class="skip-link" href="#main">Skip to content</a>
         <slot />
     </body>
