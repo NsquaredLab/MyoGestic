@@ -12,9 +12,22 @@ test('hero gesture chip holds the prediction', async ({ page }) => {
     await expect(prediction(page)).toHaveText('Pinch');
     await expect(chip).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: 'Record Pinch', exact: true })).toBeVisible();
-    await expect(page.locator('[data-confidence]')).toHaveText('0.88');
+    await expect(page.locator('[data-confidence]')).toHaveText('0.91');
     await page.waitForTimeout(4100);
     await expect(prediction(page)).toHaveText('Pinch');
+});
+
+test('hero exposes Rest, Fist, Pinch and Index in order and holds each prediction', async ({ page }) => {
+    await page.goto(home);
+    await expect(page.locator('[data-gesture]')).toHaveText(['Rest', 'Fist', 'Pinch', 'Index']);
+    for (const [gesture, confidence] of [['Rest', '0.97'], ['Fist', '0.94'], ['Pinch', '0.91'], ['Index', '0.88']]) {
+        const chip = page.getByRole('button', { name: gesture, exact: true });
+        await chip.click();
+        await expect(prediction(page)).toHaveText(gesture);
+        await expect(chip).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.locator('[data-confidence]')).toHaveText(confidence);
+        await expect(page.getByRole('button', { name: `Record ${gesture}`, exact: true })).toBeVisible();
+    }
 });
 
 test('auto chip resumes cycling', async ({ page }) => {

@@ -1,29 +1,23 @@
-export type Gesture = 'Rest' | 'Fist' | 'Open' | 'Pinch';
-export const GESTURES: readonly Gesture[] = ['Rest', 'Fist', 'Open', 'Pinch'];
-export const CONFIDENCE: Record<Gesture, number> = { Rest: 0.97, Fist: 0.94, Open: 0.91, Pinch: 0.88 };
+export type Gesture = 'Rest' | 'Fist' | 'Pinch' | 'Index';
+export const GESTURES: readonly Gesture[] = ['Rest', 'Fist', 'Pinch', 'Index'];
+export const CONFIDENCE: Record<Gesture, number> = { Rest: 0.97, Fist: 0.94, Pinch: 0.91, Index: 0.88 };
 
-// Rounded per-channel RMS / maximum Fist RMS from the local 320-channel take.
-// Highest-energy contiguous block: channels 45--108 (zero based). No samples.
-const REST_RMS = [
-  0.136, 0.088, 0.123, 0.092, 0.108, 0.106, 0.093, 0.121,
-  0.09, 0.119, 0.091, 0.113, 0.096, 0.102, 0.11, 0.099,
-  0.115, 0.097, 0.11, 0.09, 0.083, 0.098, 0.078, 0.106,
-  0.083, 0.102, 0.09, 0.087, 0.093, 0.079, 0.103, 0.083,
-  0.104, 0.088, 0.092, 0.095, 0.081, 0.099, 0.081, 0.102,
-  0.087, 0.096, 0.094, 0.086, 0.098, 0.083, 0.1, 0.086,
-  0.097, 0.092, 0.091, 0.097, 0.083, 0.097, 0.085, 0.097,
-  0.092, 0.094, 0.097, 0.088, 0.094, 0.085, 0.095, 0.089,
-];
-const FIST_RMS = [
-  1.0, 0.8, 0.79, 0.776, 0.796, 0.786, 0.786, 0.785,
-  0.789, 0.788, 0.785, 0.79, 0.786, 0.789, 0.788, 0.786,
-  0.787, 0.785, 0.789, 0.786, 0.788, 0.789, 0.79, 0.788,
-  0.784, 0.786, 0.79, 0.789, 0.787, 0.789, 0.789, 0.787,
-  0.785, 0.789, 0.788, 0.788, 0.788, 0.787, 0.787, 0.787,
-  0.789, 0.788, 0.788, 0.788, 0.786, 0.787, 0.788, 0.791,
-  0.789, 0.786, 0.787, 0.788, 0.79, 0.788, 0.789, 0.787,
-  0.788, 0.787, 0.785, 0.788, 0.785, 0.786, 0.787, 0.787,
-];
+// Derived RMS maps from 8-channel forearm bracelet recordings, divided by
+// maximum Fist RMS. Index denotes index flexion. No recording samples.
+const RMS: Record<Gesture, readonly number[]> = {
+  Rest: [0.0166, 0.0247, 0.0258, 0.0187, 0.0237, 0.0444, 0.0259, 0.0229],
+  Fist: [0.6122, 1.0000, 0.7758, 0.3918, 0.6676, 0.5276, 0.3552, 0.6188],
+  Pinch: [0.0851, 0.1671, 0.7326, 0.4169, 0.5279, 0.4671, 0.1561, 0.0877],
+  Index: [0.2221, 0.1321, 0.4732, 0.3591, 0.1783, 0.1133, 0.0770, 0.0653],
+};
+// [circular electrode correlation, displayed lag-1, broad-innovation probability,
+// broad-innovation scale]. Rounded aggregate fit at 120 columns/s.
+const TEXTURE: Record<Gesture, readonly number[]> = {
+  Rest: [0.106, -0.150, 0.02, 1.6],
+  Fist: [0.404, -0.152, 0.08, 2.3],
+  Pinch: [0.352, -0.217, 0.08, 2.2],
+  Index: [0.367, -0.125, 0.08, 2.3],
+};
 const patternCache = new WeakMap<FieldState, Record<Gesture, Float32Array>>();
 
 export interface FieldState {
@@ -35,8 +29,8 @@ export interface FieldState {
   target: Float32Array;
   gesture: Gesture;
   rest: Float32Array;
-  phase: Float32Array;
-  pulse: Float32Array;
+  noise: Float32Array;
+  texture: Float32Array;
 }
 
 export function mulberry32(seed: number): () => number {
@@ -64,82 +58,84 @@ export function createFieldState(channels = 64, samples = 480): FieldState {
     target: new Float32Array(channels),
     gesture: 'Rest',
     rest: new Float32Array(channels),
-    phase: new Float32Array(channels),
-    pulse: new Float32Array(2),
+    noise: new Float32Array(8),
+    texture: new Float32Array(8),
   };
   const patterns: Record<Gesture, Float32Array> = {
     Rest: new Float32Array(channels), Fist: new Float32Array(channels),
-    Open: new Float32Array(channels), Pinch: new Float32Array(channels),
+    Pinch: new Float32Array(channels), Index: new Float32Array(channels),
   };
   for (const gesture of GESTURES) fillPattern(patterns[gesture], channels, gesture);
   state.rest.set(patterns.Rest);
   state.act.set(patterns.Rest);
   state.target.set(patterns.Rest);
-  for (let c = 0; c < channels; c++) state.phase[c] = (c * 0.61803398875) % 1;
+  setTexture(state, 'Rest');
   patternCache.set(state, patterns);
   return state;
 }
 
 function fillPattern(target: Float32Array, channels: number, gesture: Gesture): void {
+  const map = RMS[gesture];
   for (let c = 0; c < channels; c++) {
-    const u = c / Math.max(1, channels - 1);
-    const position = u * 63;
-    const lo = Math.floor(position), hi = Math.min(63, lo + 1), mix = position - lo;
-    const map = gesture === 'Rest' ? REST_RMS : FIST_RMS;
-    let rms = map[lo] * (1 - mix) + map[hi] * mix;
-    // Open/Pinch remain synthetic; gentle spatial envelopes on the same map.
-    if (gesture === 'Open' || gesture === 'Pinch') {
-      const centre = gesture === 'Open' ? 0.68 : 0.25;
-      rms *= 0.22 + 0.78 * Math.exp(-0.5 * ((u - centre) / 0.27) ** 2);
-    }
-    target[c] = rms;
+    const position = c * 8 / channels;
+    const lo = Math.floor(position), mix = position - lo;
+    target[c] = map[lo] * (1 - mix) + map[(lo + 1) % 8] * mix;
   }
+}
+
+function setTexture(s: FieldState, gesture: Gesture): void {
+  const t = TEXTURE[gesture], out = s.texture;
+  out[0] = t[0];
+  out[1] = Math.sqrt(t[0]);
+  out[2] = Math.sqrt(1 - t[0]);
+  out[3] = t[1];
+  out[4] = Math.sqrt(1 - t[1] * t[1]);
+  out[5] = t[2];
+  out[6] = t[3];
+  out[7] = 1 / Math.sqrt(1 + t[2] * (t[3] * t[3] - 1));
 }
 
 export function setGesture(s: FieldState, gesture: Gesture): void {
   const cached = patternCache.get(s);
   if (cached) s.target.set(cached[gesture]);
   else fillPattern(s.target, s.channels, gesture);
+  setTexture(s, gesture);
   s.gesture = gesture;
 }
 
 /** Trace height in channel lanes per unit of signal: bulk activity stays inside its lane. */
 export const FIELD_GAIN = 0.26;
 
-// 120 columns/s, point sampling. Envelope taus are measured from 50 ms RMS
-// 10--90% widths, excluding cue offset. All mutable noise lives in buffers.
+// 120 columns/s, point sampling. Single-gesture takes lack transition cues,
+// so retain the 18 ms envelope constants. All mutable noise lives in buffers.
 export const ONSET_TAU = 0.018;
 export const OFFSET_TAU = 0.018;
 const ATTACK = 1 - Math.exp(-1 / (120 * ONSET_TAU));
 const RELEASE = 1 - Math.exp(-1 / (120 * OFFSET_TAU));
 
+// Six uniforms approximate a unit Gaussian without transcendental hot-path work.
+function normal(rand: () => number): number {
+  return (rand() + rand() + rand() + rand() + rand() + rand() - 3) * 1.41421356;
+}
+
+// Eight correlated carriers are interpolated on the same closed bracelet as the
+// RMS maps. Variance normalization keeps each lane's RMS equal to its map.
 // Hot path: no views, objects, closures, or per-column allocation.
 export function stepField(s: FieldState, k: number, rand: () => number): void {
+  const t = s.texture;
   for (let i = 0; i < k; i++) {
-    let spike = s.pulse[0];
-    s.pulse[0] = s.pulse[1];
-    s.pulse[1] = 0;
-    // Sparse biphasic low-effort potentials, shared with alternating polarity.
-    if (rand() < 0.0017) {
-      const sign = rand() < 0.5 ? -1 : 1;
-      spike += sign * 15;
-      s.pulse[0] -= sign * 5;
-      s.pulse[1] += sign * 1;
+    const scale = (rand() < t[5] ? t[6] : 1) * t[7];
+    const common = normal(rand) * t[1];
+    for (let e = 0; e < 8; e++) {
+      s.noise[e] = s.noise[e] * t[3] + (common + normal(rand) * t[2]) * scale * t[4];
     }
-    let previous = 0;
     for (let c = 0; c < s.channels; c++) {
       s.act[c] += (s.target[c] - s.act[c]) * (s.target[c] > s.act[c] ? ATTACK : RELEASE);
-      const effort = Math.max(0, Math.min(1, (s.act[c] - s.rest[c]) / Math.max(0.1, 0.79 - s.rest[c])));
-      // Reflected jitter preserves a uniform marginal while giving the sampled
-      // active texture its measured negative lag-1 correlation (~ -0.31).
-      let phase = 1 - s.phase[c] + (rand() - 0.5) * 0.564;
-      phase -= Math.floor(phase);
-      s.phase[c] = phase;
-      const r = 0.18 - 0.02 * effort;
-      const noise = (phase * 2 - 1) * 1.7320508 * Math.sqrt(1 - r * r) + previous * r;
-      previous = noise;
-      const v = noise * (0.84 + 0.16 * effort) + spike * (c % 2 ? -1 : 1) * (1 - effort);
-      s.data[c * s.samples + s.head] = v * s.act[c];
+      const position = c * 8 / s.channels;
+      const lo = Math.floor(position), mix = position - lo;
+      const noise = s.noise[lo] * (1 - mix) + s.noise[(lo + 1) % 8] * mix;
+      const variance = (1 - mix) * (1 - mix) + mix * mix + 2 * t[0] * mix * (1 - mix);
+      s.data[c * s.samples + s.head] = noise * s.act[c] / Math.sqrt(variance);
     }
     s.head = ((s.head + 1) % s.samples) | 0;
   }
