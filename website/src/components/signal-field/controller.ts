@@ -113,7 +113,8 @@ export function mountSignalField(canvas: HTMLCanvasElement, opts: FieldOptions =
   const reduced = env.reducedMotion();
   // Tiers only descend: full (0), reduced (1), still (2).
   const info = reduced ? getRendererInfo(canvas, true) : getRendererInfo(canvas);
-  let tier = /SwiftShader|llvmpipe|Software|Microsoft Basic Render/i.test(info) ? 1 : 0;
+  const software = /SwiftShader|llvmpipe|Software|Microsoft Basic Render/i.test(info);
+  let tier = software ? 1 : 0;
   let state = createFieldState(tier === 0 ? opts.channels ?? 64 : 32, tier === 0 ? 480 : 240);
   const samplesPerFrame = Math.max(1, Math.min(state.samples, Math.round(opts.samplesPerFrame ?? 2)));
   const autoCycleMs = Math.max(1, opts.autoCycleMs ?? 2800);
@@ -122,7 +123,10 @@ export function mountSignalField(canvas: HTMLCanvasElement, opts: FieldOptions =
   const background = getComputedStyle(canvas).getPropertyValue('--mg-field-bg').trim() || FIELD_BACKGROUND_FALLBACK;
   // A still must retain its pixels after compositing; animated contexts keep
   // the existing default so their GPU performance is unchanged.
-  let renderer = reduced
+  // Software WebGL compiles the geometry shader synchronously for about a
+  // second. The existing 2D fallback keeps the same reduced-tier cadence and
+  // density without making page startup wait for that compilation.
+  let renderer = software ? null : reduced
     ? createGLRenderer(canvas, background, state.channels, state.samples, true)
     : createGLRenderer(canvas, background, state.channels, state.samples);
   let usingGL = renderer !== null;

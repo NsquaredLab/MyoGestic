@@ -72,16 +72,33 @@ precision highp int;
 uniform highp sampler2D uSignal;
 uniform highp sampler2D uActivation;
 uniform int uHead;
+uniform vec2 uSize;
+uniform vec3 uBackground;
 uniform vec3 uColors[${channels}];
 out vec4 color;
+vec2 point(int i, int c) {
+  i = clamp(i, 0, ${samples - 1});
+  float v = texelFetch(uSignal, ivec2((uHead + i) % ${samples}, c), 0).r;
+  return vec2(float(i) / ${samples - 1}.0,
+    (float(c) + 0.5 - v * ${FIELD_GAIN.toFixed(2)}) / ${channels}.0) * uSize;
+}
 void main() {
   int c = gl_InstanceID;
-  int i = gl_VertexID;
-  float v = texelFetch(uSignal, ivec2((uHead + i) % ${samples}, c), 0).r;
+  int i = gl_VertexID / 6;
+  int corner = gl_VertexID % 6;
+  vec2 a0 = point(i, c);
+  vec2 b = point(i + 1, c);
+  vec2 delta = b - a0;
+  vec2 normal = normalize(vec2(-delta.y, delta.x));
+  bool end = corner == 2 || corner == 3 || corner == 5;
+  bool side = corner == 1 || corner == 4 || corner == 5;
+  // Each segment is a two-device-pixel quad, measured perpendicular to its
+  // slope. Even sharp MUAP reversals keep their width, without miter taper.
+  vec2 p = (end ? b : a0) + normal * (side ? 1.0 : -1.0);
   float a = 0.22 + 0.6 * texelFetch(uActivation, ivec2(c, 0), 0).r;
-  gl_Position = vec4(2.0 * float(i) / ${samples - 1}.0 - 1.0,
-    1.0 - 2.0 * (float(c) + 0.5 - v * ${FIELD_GAIN.toFixed(2)}) / ${channels}.0, 0.0, 1.0);
-  color = vec4(uColors[c] * a, a);
+  gl_Position = vec4(2.0 * p.x / uSize.x - 1.0, 1.0 - 2.0 * p.y / uSize.y, 0.0, 1.0);
+  // Composite once in the shader; overlaps cannot add bright glare.
+  color = vec4(uColors[c] * a + uBackground * (1.0 - a), 1.0);
 }`);
   gl.shaderSource(fragment, `#version 300 es
 precision highp float;
@@ -105,6 +122,7 @@ void main() { outputColor = color; }
   gl.uniform1i(gl.getUniformLocation(program, 'uSignal'), 0);
   gl.uniform1i(gl.getUniformLocation(program, 'uActivation'), 1);
   const head = gl.getUniformLocation(program, 'uHead');
+  const size = gl.getUniformLocation(program, 'uSize');
   const colors = new Float32Array(channels * 3);
   for (let c = 0; c < channels; c++) {
     const rgb = channelColor(c / Math.max(1, channels - 1));
@@ -120,8 +138,8 @@ void main() { outputColor = color; }
   ctx.fillRect(0, 0, 1, 1);
   const rgb = ctx.getImageData(0, 0, 1, 1).data;
   gl.clearColor(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, 1);
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.ONE, gl.ONE);
+  gl.uniform3fv(gl.getUniformLocation(program, 'uBackground'), new Float32Array([rgb[0] / 255, rgb[1] / 255, rgb[2] / 255]));
+  gl.disable(gl.BLEND);
   gl.disable(gl.DEPTH_TEST);
 
   // One fixed staging buffer. The WebGL2 srcOffset overload reads only w*h
@@ -150,14 +168,14 @@ void main() { outputColor = color; }
   function draw(s: FieldState): void {
     gl!.clear(gl!.COLOR_BUFFER_BIT);
     gl!.uniform1i(head, s.head);
-    gl!.drawArraysInstanced(gl!.LINE_STRIP, 0, samples, channels);
+    gl!.drawArraysInstanced(gl!.TRIANGLES, 0, (samples - 1) * 6, channels);
   }
   function resize(w: number, h: number, dpr: number): void {
     dpr = Math.min(2, dpr);
     canvas.width = Math.max(1, Math.round(w * dpr));
     canvas.height = Math.max(1, Math.round(h * dpr));
     gl!.viewport(0, 0, canvas.width, canvas.height);
-    gl!.lineWidth(dpr);
+    gl!.uniform2f(size, canvas.width, canvas.height);
   }
   return { canvas, resize, upload, draw, destroy };
 }

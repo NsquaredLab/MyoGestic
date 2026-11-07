@@ -28,6 +28,13 @@ test('reduced motion shows a still frame', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(home);
     await expect(prediction(page)).toHaveText('Fist');
+    // Load/idle mounting and font-driven ResizeObserver delivery must finish
+    // before comparing the still; panel text is available before canvas setup.
+    await expect.poll(() => canvasHasSignal(page)).toBe(true);
+    await page.evaluate(async () => {
+        await document.fonts.ready;
+        await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    });
     const pixels = await page.locator('[data-signal-field]').evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
     await page.waitForTimeout(4100);
     await expect(prediction(page)).toHaveText('Fist');

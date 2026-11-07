@@ -77,10 +77,12 @@ describe('signal field lifecycle', () => {
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
   it.each(['Google SwiftShader', 'llvmpipe (LLVM 15.0)', 'Software Rasterizer', 'Microsoft Basic Render Driver'])(
-    'starts at reduced density, half rate and DPR 1 for %s', info => {
+    'uses Canvas at reduced density, half rate and DPR 1 for %s', info => {
       mocks.info.mockReturnValue(info);
+      mocks.twoD.mockReturnValue(gl);
       const field = mountSignalField(canvas, { env });
-      expect(mocks.gl).toHaveBeenCalledWith(canvas, 'rgb(15, 16, 18)', 32, 240);
+      expect(mocks.gl).not.toHaveBeenCalled();
+      expect(mocks.twoD).toHaveBeenCalledWith(canvas, 'rgb(15, 16, 18)', 32, 240);
       expect(gl.resize).toHaveBeenLastCalledWith(1440, 800, 1);
       env.advance();
       env.advance();
@@ -230,7 +232,7 @@ describe('signal field lifecycle', () => {
     const s = gl.draw.mock.calls[0][0];
     expect(s.gesture).toBe('Fist');
     expect(s.head).toBe(120);
-    expect(s.act[21]).toBeGreaterThan(0.85);
+    expect(s.act[21]).toBeCloseTo(0.789);
     expect(env.pending.size).toBe(0);
     onGesture.mockClear();
     env.run(10000);

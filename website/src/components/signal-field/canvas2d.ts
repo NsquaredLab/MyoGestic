@@ -48,7 +48,7 @@ export function createCanvas2DRenderer(
     canvas.width = Math.max(1, Math.round(w * dpr));
     canvas.height = Math.max(1, Math.round(h * dpr));
     ctx.setTransform(dpr / 256, 0, 0, dpr / 256, 0, 0);
-    ctx.lineWidth = 256;
+    ctx.lineWidth = 512;
     if (lastState) upload(lastState, 0, samples);
   }
   // The draw path reads only cached integer coordinates and cached strings.
@@ -68,7 +68,6 @@ export function createCanvas2DRenderer(
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, width, height);
-    ctx.globalCompositeOperation = 'lighter';
     for (let c = 0; c < channels; c++) trace(c);
     ctx.globalCompositeOperation = 'source-over';
   }
