@@ -78,7 +78,8 @@ def render_plot(
         # amplitude — misleading, so suppress it.
         flags=implot.Flags_.no_legend | implot.Flags_.no_title | implot.Flags_.no_mouse_text,
     ):
-        setup_axes(v, enabled, channel_height, frame.channel_map, ch_names)
+        outer_width = plot_w if plot_w > 0 else imgui.get_content_region_avail().x + plot_w
+        setup_axes(v, enabled, channel_height, frame.channel_map, ch_names, outer_width)
         # Plot pixel width is only known once the plot is live — size the decimation
         # target off it (a few points per pixel) so draw cost tracks what's on screen.
         n_out = resolve_decimation_target(implot.get_plot_size().x, v)
@@ -392,11 +393,13 @@ def _nice_step(raw: float) -> float:
     return 10.0 * mag
 
 
-def _time_ticks(window: float) -> tuple[list[float], list[str]]:
+def _time_ticks(window: float, width: float = math.inf) -> tuple[list[float], list[str]]:
     """X-axis ticks over ``[0, window]``, with the centre tick relabelled ``Time (s)``.
 
     The unit on the middle tick replaces the dedicated axis-title row, reclaiming that
-    vertical space for the trace. ~10 intervals at a nice step.
+    vertical space for the trace. Start with ~10 nice intervals, then keep only
+    labels that fit at the current font size, working out from the unit label.
+    Wide plots retain their original ticks.
     """
     if window <= 0:
         return [0.0], ["Time (s)"]
@@ -407,7 +410,20 @@ def _time_ticks(window: float) -> tuple[list[float], list[str]]:
     center = window / 2.0
     ci = min(range(len(positions)), key=lambda i: abs(positions[i] - center))
     labels[ci] = "Time (s)"
-    return positions, labels
+    if not math.isfinite(width):
+        return positions, labels
+    widths = [imgui.calc_text_size(label).x for label in labels]
+    keep = [ci]
+    gap = ui_px(6)
+    for candidates in (range(ci - 1, -1, -1), range(ci + 1, len(positions))):
+        previous = ci
+        for i in candidates:
+            distance = abs(positions[i] - positions[previous]) / window * max(0.0, width)
+            if distance >= (widths[i] + widths[previous]) / 2 + gap:
+                keep.append(i)
+                previous = i
+    keep.sort()
+    return [positions[i] for i in keep], [labels[i] for i in keep]
 
 
 def setup_axes(
@@ -416,7 +432,17 @@ def setup_axes(
     channel_height: float,
     channel_map: list[int],
     ch_names: list[str] | None,
+    outer_width: float,
 ) -> None:
+    channel_labels = [
+        ch_names[ch] if ch_names and 0 <= ch < len(ch_names) else f"ch{ch}"
+        for ch in channel_map
+    ]
+    # Setup must precede get_plot_size(), which locks the axes. Reserve the
+    # y-label gutter and plot padding up front so the first narrow frame fits.
+    style = implot.get_style()
+    gutter = max((imgui.calc_text_size(label).x for label in channel_labels), default=0.0)
+    tick_width = outer_width - 2 * style.plot_padding.x - gutter - style.label_padding.x
     # No axis title — "Time (s)" rides on the centre tick instead (see `_time_ticks`).
     implot.setup_axis(implot.ImAxis_.x1)
     implot.setup_axis_limits(
@@ -425,7 +451,7 @@ def setup_axes(
         v.window,
         implot.Cond_.always,  # type: ignore[attr-defined]
     )
-    x_positions, x_labels = _time_ticks(v.window)
+    x_positions, x_labels = _time_ticks(v.window, tick_width)
     implot.setup_axis_ticks(implot.ImAxis_.x1, x_positions, x_labels)
 
     if v.per_channel_scale:
@@ -464,11 +490,7 @@ def setup_axes(
     # full-array raster overview, not this per-trace view.
     if channel_map:
         positions = [-col_idx * channel_height for col_idx in range(len(channel_map))]
-        labels = [
-            ch_names[ch] if ch_names and 0 <= ch < len(ch_names) else f"ch{ch}"
-            for ch in channel_map
-        ]
-        implot.setup_axis_ticks(implot.ImAxis_.y1, positions, labels)
+        implot.setup_axis_ticks(implot.ImAxis_.y1, positions, channel_labels)
 
 
 def plot_channel(

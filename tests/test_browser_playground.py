@@ -110,7 +110,7 @@ def test_standard_widgets_and_responsive_tracks(playground):
     assert layout._breakpoint == Px(1100)
     assert layout._wide._row_tracks == [Px(52), Fr(3), Fr(1), Px(110), Px(26)]
     assert layout._wide._col_tracks == [Fr(1), Px(400)]
-    assert layout._narrow._row_tracks == [Px(52), Fr(2), Fr(3), Fr(1.5), Px(110), Px(26)]
+    assert layout._narrow._row_tracks == [Px(52), Fr(2.4), Fr(4.5), Fr(1.5), Px(60), Px(26)]
     assert layout._wide._bare == layout._narrow._bare == {"header", "status"}
     assert len(app["device"]._devices) == 1
     assert app["recording"]._timed
@@ -216,3 +216,45 @@ def test_state_attribute_is_written_only_when_state_changes(playground, monkeypa
     state = json.loads(writes[-1][1])
     assert state["connected"] and state["step"] == "Connect"
     assert state["sessions"]["total"] == 0
+
+
+@pytest.mark.parametrize("step", [0, 1, 2, 3], ids=["connect", "record", "train", "predict"])
+def test_primary_action_fits_without_scrolling(playground, implot_frame, monkeypatch, step):
+    """The real canvas controls must fit their step card before any scrolling."""
+    from imgui_bundle import imgui
+
+    from myogestic import _theme
+
+    _theme.apply_theme()
+    imgui.get_style().font_size_base = 16.0
+    width = sys.modules["js"].window.innerWidth
+    height = sys.modules["js"].window.innerHeight
+    size = imgui.ImVec2(width, height)
+    imgui.get_io().display_size = size
+    playground["steps"].active = step
+    action = ["Connect", "##rec_btn", "Train", "Predict"][step]
+    measured = []
+    real_button = imgui.button
+
+    def button(label, *args, **kwargs):
+        result = real_button(label, *args, **kwargs)
+        if action in label:
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            origin, bounds = imgui.get_window_pos(), imgui.get_window_size()
+            measured.append((lo.y, hi.y, origin.y, origin.y + bounds.y))
+        return result
+
+    monkeypatch.setattr(imgui, "button", button)
+
+    def draw():
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(size)
+        imgui.begin("playground", flags=imgui.WindowFlags_.no_title_bar)
+        playground["ui"](playground["app"].ctx)
+        imgui.end()
+
+    for _ in range(3):
+        implot_frame(draw)
+    assert measured, action
+    top, bottom, card_top, card_bottom = measured[-1]
+    assert card_top <= top < bottom <= min(card_bottom, height), measured[-1]
