@@ -21,15 +21,14 @@ const button = 'display: inline-flex; align-items: center; height: 44px; padding
     </div>
     <a class="cite-page" href={pdf} aria-label="Open the PDF, 14 pages">
       <div class="cite-crop">
-        <Image src={page} widths={[520, 1040]} sizes="(max-width: 1100px) 100vw, 520px" format="webp" quality={80} alt="First page of the MyoGestic paper in Science Advances" loading="lazy" style="display: block; width: 100%; height: auto" />
+        <Image src={page} widths={[520, 1040]} sizes="(max-width: 1100px) 100vw, 480px" format="webp" quality={80} alt="First page of the MyoGestic paper in Science Advances" loading="lazy" style="display: block; width: 100%; height: auto" />
       </div>
     </a>
     <div class="cite-meta">
-      <p style="margin: 0; font-size: 15px; line-height: 1.55; color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent)">Sîmpetru, Braun, Simon, März, Cnejevici, Souza de Oliveira, Weber, Walter, Franke, Höglinger, Prahm, Ponfick, Del Vecchio</p>
+      <p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent)">Sîmpetru, Braun, Simon, März, Cnejevici, Souza de Oliveira, Weber, Walter, Franke, Höglinger, Prahm, Ponfick, Del Vecchio</p>
       <p style="margin: 6px 0 0; font: 400 12.5px/1.5 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 66%, transparent)">Sci. Adv. 11(15), eads9150 · doi:10.1126/sciadv.ads9150</p>
       <div style="margin-top: 28px; display: flex; flex-wrap: wrap; gap: 10px">
         <a href="https://www.science.org/doi/abs/10.1126/sciadv.ads9150" style={button}>Read the paper</a>
-        <a href={pdf} style={button}>PDF</a>
         <button type="button" data-copy-bibtex data-bibtex={bibtex} style={button}>Copy BibTeX</button>
       </div>
     </div>
@@ -38,7 +37,7 @@ const button = 'display: inline-flex; align-items: center; height: 44px; padding
 </section>
 
 <style>
-  .cite { margin-top: 36px; display: grid; grid-template-columns: minmax(0, 1fr) 520px; grid-template-rows: auto 1fr; grid-template-areas: 'head page' 'meta page'; gap: 0 72px; }
+  .cite { margin-top: 36px; display: grid; grid-template-columns: minmax(0, 1fr) 480px; grid-template-rows: auto 1fr; grid-template-areas: 'head page' 'meta page'; gap: 0 56px; }
   .cite-head { grid-area: head; padding-top: 48px; }
   .cite-meta { grid-area: meta; margin-top: 22px; }
   .cite-title { margin: 22px 0 0; font-family: var(--mg-font-display); font-size: 50px; line-height: 1.06; }

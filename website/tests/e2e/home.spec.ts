@@ -282,6 +282,11 @@ for (const width of [1440, 390]) {
         expect(Math.abs(shot.width - frame.width)).toBeLessThan(1);
         expect(shot.x).toBeGreaterThanOrEqual(0);
         expect(shot.x + shot.width).toBeLessThanOrEqual(width);
+        await expect(page.getByRole('link', { name: 'PDF', exact: true })).toHaveCount(0);
+        if (width === 1440) {
+            const authors = (await page.getByText('Sîmpetru, Braun, Simon').boundingBox())!;
+            expect(authors.height).toBeLessThan(24);
+        }
     });
 }
 
