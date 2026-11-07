@@ -1,4 +1,4 @@
-import { channelColor, FIELD_GAIN, FIELD_HOT, type FieldState } from './field';
+import { channelColor, FIELD_GAIN, FIELD_HOT, settle, type FieldState } from './field';
 import { FIELD_BACKGROUND_FALLBACK, type Renderer } from './gl';
 
 export function createCanvas2DRenderer(
@@ -84,7 +84,7 @@ export function createCanvas2DRenderer(
       alphas[c] = Math.min(32, Math.max(0, (s.act[c] * 32 + 0.5) | 0));
       for (let i = 0; i < count; i++) {
         const index = c * samples + (_from + i) % samples;
-        pixels[index] = (s.data[index] * amplitude) | 0;
+        pixels[index] = (s.data[index] * amplitude * settle(c, channels)) | 0;
       }
     }
   }

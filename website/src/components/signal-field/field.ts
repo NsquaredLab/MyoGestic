@@ -109,6 +109,13 @@ export const FIELD_GAIN = 0.26;
 export const HEAT_LOW = 0.08;
 export const HEAT_HIGH = 0.5;
 export const FIELD_HOT: [number, number, number] = [255, 232, 248];
+/** The bottom fraction of lanes calms to flat lines, so the field settles into the page's rule. */
+export const FIELD_SETTLE = 0.14;
+
+/** Swing scale for lane `c`: 1 above the settling band, falling to 0 at the bottom lane. */
+export function settle(c: number, channels: number): number {
+  return Math.min(1, Math.max(0, (1 - (c + 0.5) / channels) / FIELD_SETTLE));
+}
 
 // 120 columns/s, point sampling. Single-gesture takes lack transition cues,
 // so retain the 18 ms envelope constants. All mutable noise lives in buffers.

@@ -1,4 +1,4 @@
-import { channelColor, FIELD_GAIN, FIELD_HOT, HEAT_HIGH, HEAT_LOW, type FieldState } from './field';
+import { channelColor, FIELD_GAIN, FIELD_HOT, FIELD_SETTLE, HEAT_HIGH, HEAT_LOW, type FieldState } from './field';
 
 export const FIELD_BACKGROUND_FALLBACK = '#0F1012';
 
@@ -76,9 +76,13 @@ uniform vec2 uSize;
 uniform vec3 uBackground;
 uniform vec3 uColors[${channels}];
 out vec4 color;
+// The bottom lanes calm to flat lines (see settle() in field.ts).
+float settle(int c) {
+  return clamp((1.0 - (float(c) + 0.5) / ${channels}.0) / ${FIELD_SETTLE.toFixed(2)}, 0.0, 1.0);
+}
 vec2 point(int i, int c) {
   i = clamp(i, 0, ${samples - 1});
-  float v = texelFetch(uSignal, ivec2((uHead + i) % ${samples}, c), 0).r;
+  float v = texelFetch(uSignal, ivec2((uHead + i) % ${samples}, c), 0).r * settle(c);
   return vec2(float(i) / ${samples - 1}.0,
     (float(c) + 0.5 - v * ${FIELD_GAIN.toFixed(2)}) / ${channels}.0) * uSize;
 }
@@ -97,7 +101,7 @@ void main() {
   vec2 p = (end ? b : a0) + normal * (side ? 1.0 : -1.0);
   // Swing at this vertex, in lanes: large swings brighten and shift toward white.
   int s = clamp(end ? i + 1 : i, 0, ${samples - 1});
-  float swing = abs(texelFetch(uSignal, ivec2((uHead + s) % ${samples}, c), 0).r) * ${FIELD_GAIN.toFixed(2)};
+  float swing = abs(texelFetch(uSignal, ivec2((uHead + s) % ${samples}, c), 0).r) * settle(c) * ${FIELD_GAIN.toFixed(2)};
   float heat = smoothstep(${HEAT_LOW.toFixed(2)}, ${HEAT_HIGH.toFixed(2)}, swing);
   float a = mix(0.22 + 0.6 * texelFetch(uActivation, ivec2(c, 0), 0).r, 1.0, heat);
   vec3 hue = mix(uColors[c], vec3(${FIELD_HOT.map((v) => (v / 255).toFixed(3)).join(', ')}), 0.8 * heat);
