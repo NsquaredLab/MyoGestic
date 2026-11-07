@@ -5,13 +5,29 @@ On desktop, acquisition, prediction and sending use stdlib `threading`; the hot 
 
 ## What runs where
 
-```text
-Main thread           GUI event loop, ImGui, button clicks, display snapshots
-Acquisition threads   source.read → ring buffer → optional Zarr append
-Predict thread        get_window → extract → predict → pipeline.predictions
-Training thread       train → pipeline.model (one training run)
-Output threads        latest-value slot → transport at each outlet's hz
-Bridge subprocess     webcam → Zarr + LSL clock timestamps (optional)
+```mermaid
+flowchart LR
+    subgraph MAIN["Main thread"]
+        UI["GUI event loop<br/>ImGui render, button clicks<br/>display snapshots"]
+    end
+
+    subgraph DAEMONS["Daemon threads (desktop)"]
+        direction TB
+        AT["Acquisition thread (per Stream)<br/>source.read → ring buffer<br/>→ optional Zarr append"]
+        PT["Predict thread (only with Pipeline)<br/>get_window → extract → predict<br/>→ pipeline.predictions"]
+        TT["Training thread (one run)<br/>train → pipeline.model"]
+        OT["Output thread (per Outlet)<br/>latest-value slot → transport @ hz"]
+    end
+
+    subgraph BRIDGE["Subprocess (optional)"]
+        BR["Bridge process<br/>webcam → Zarr<br/>+ LSL clock timestamps"]
+    end
+
+    AT --> CTX["ctx.streams[name]<br/>(threading.Lock)"]
+    CTX --> PT
+    CTX --> UI
+    PT -.->|push| OT
+    BR -.->|LSL clock| AT
 ```
 
 

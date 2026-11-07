@@ -3,19 +3,24 @@ title: "Architecture"
 ---
 MyoGestic is built around three orthogonal concerns: **acquisition** (sources feeding ring buffers), **decision** (the predict thread), and **rendering** (the main thread drawing widgets). **Actuation** is a fourth: a `Target` driving a device from a sanitised control frame. Outputs are paced senders that a target may write through, or that user code owns directly.
 
-```text
-Source.read()                        acquisition thread per Stream
-    │ sample-major chunks + LSL timestamps
-    ▼
-Stream ring buffer ────────────────► attached Session → Zarr
-    │                                while a take is open
-    ├── get_window() ──────────────► Pipeline: extract → predict
-    │   channels-first               predict thread at predict_hz
-    └── get_raw_snapshot_stable() ─► Widgets on the main render thread
-        bounded tail
+```mermaid
+flowchart TB
+    SRC["Sources: LSLSource · ReplaySource · SerialSource · your Source<br/>one acquisition thread per Stream"]
 
-predict() → pipeline.predictions ──► Widgets
-          → outlet.push() ─────────► Output thread: latest value at its own hz
+    SRC -->|sample-major chunks<br/>+ LSL clock timestamps| BUF["Stream ring buffer<br/>(dvg-ringbuffer + Lock)"]
+    BUF -->|while a take is open| ZARR["Session → Zarr"]
+    BUF -->|get_window<br/>channels-first| PT
+    BUF -->|get_raw_snapshot_stable<br/>bounded tail| RT
+
+    subgraph THREADS["Consumers"]
+        direction LR
+        PT["Predict thread @ predict_hz<br/>extract → predict<br/>writes pipeline.predictions"]
+        RT["Render thread (main)<br/>Dear ImGui + ImPlot<br/>draws widgets"]
+        OUT["Output threads<br/>latest value @ each outlet's hz"]
+    end
+
+    PT -->|pipeline.predictions| RT
+    PT -.->|outlet.push| OUT
 ```
 
 
