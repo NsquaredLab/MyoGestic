@@ -1,6 +1,6 @@
 """Install the Virtual Hand Interface release binary for this platform.
 
-VHI ships pre-built artifacts on every release at
+VHI ships pre-built artefacts on every release at
 https://github.com/NsquaredLab/MyoGestic-VHI/releases. This CLI picks the
 right asset for the host OS/arch, downloads it, unpacks it into the location
 ``virtual_hand()`` looks at, and drops a ``vhi-version.txt`` marker so a
@@ -8,7 +8,7 @@ later install knows what's already there.
 
 MyoGestic drives VHI over its control service, asking it what it exports. A
 release older than `MIN_VHI_TAG` has no control manifest to answer with, so this refuses
-to install one rather than leave it to fail at every launch.
+to install one because it would fail at every launch.
 
 Usage:
     python -m myogestic.tools.install_vhi                # latest, default dest
@@ -19,8 +19,8 @@ Usage:
 Or after ``pip install myogestic``:
     myogestic-install-vhi
 
-Pin ``--tag`` in production: ``latest`` is not reproducible, so a later rebuild
-may pick up a different VHI version.
+Pin ``--tag`` in production for reproducible installs. ``latest`` may resolve
+to a different VHI version on a later rebuild.
 """
 
 from __future__ import annotations
@@ -133,8 +133,8 @@ def _resolve_latest_tag() -> str | None:
 def _check_supported(tag: str) -> str:
     """Refuse a release this MyoGestic cannot drive. Returns the resolved tag.
 
-    Checked *before* the download: an old binary installs happily and is then refused
-    by every `RemoteTarget` at bind time, far from the command that put it there.
+    Checks before downloading to prevent installing a binary that
+    `RemoteTarget` would refuse at bind time.
     """
     resolved = _resolve_latest_tag() if tag == "latest" else tag
     if resolved is None:
@@ -216,8 +216,7 @@ def _sha256(path: Path) -> str:
 def _verify(archive: Path, expected: str | None) -> None:
     """Compare the on-disk archive's SHA-256 against the expected digest.
 
-    Aborts the install on mismatch — a tampered or corrupted artifact must
-    never reach the unpack step. ``expected=None`` (digest unavailable from
+    Aborts on mismatch before unpacking a tampered or corrupted artefact. ``expected=None`` (digest unavailable from
     the API) warns instead of aborting.
     """
     if expected is None:
@@ -289,7 +288,7 @@ def _validate(target: Path) -> None:
 
 
 def _restore_exec_bits(target: Path) -> None:
-    """ZIPs lose Unix +x — restore it on the launched binary."""
+    """Restore Unix +x permissions lost when the binary is packaged in ZIP."""
     for rel in EXEC_PATHS.get(platform.system(), []):
         path = target / rel
         if path.exists():
@@ -300,8 +299,7 @@ def _restore_exec_bits(target: Path) -> None:
 def _strip_quarantine(target: Path) -> None:
     """Remove macOS Gatekeeper's `com.apple.quarantine` xattr so the .app launches.
 
-    Printed rather than done silently: this is security-sensitive, since it
-    means trusting the GitHub-hosted artifact.
+    Prints the change because removing quarantine trusts the GitHub artefact.
     """
     if platform.system() != "Darwin":
         return

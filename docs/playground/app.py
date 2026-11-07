@@ -1,8 +1,8 @@
-"""Browser myocontrol: connect, record labelled takes, train LDA, predict.
+"""Browser myocontrol. Connect, record labelled takes, train LDA, then predict.
 
 The public widgets and Session lifecycle are shared with examples/start_here/
 myocontrol.py. Pyodide schedules acquisition/prediction per frame and keeps the
-ordinary Zarr takes in its temporary filesystem (a reload clears them).
+Zarr takes in its temporary filesystem. Reloading clears them.
 """
 
 import json

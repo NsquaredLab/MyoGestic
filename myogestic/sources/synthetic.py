@@ -22,21 +22,21 @@ class SyntheticSource:
     By default each channel carries one distinct sine (5 Hz, 6 Hz, …) with a shared mains
     hum on top, so the signal viewer's notch filter and per-channel controls
     have something real to act on. ``noise``, ``hum`` and ``hum_hz`` are public
-    and can be changed **while streaming**.
+    and can be changed while streaming.
 
-    The default is a test signal, not a model of EMG: real EMG is a stochastic,
-    burst-modulated process, and this is a fixed tone with white noise on it. It
-    exercises the plot, the filters, the scaling and the recording path
-    faithfully; a classifier trained on it learns which frequency a channel is.
+    The default test signal is a fixed tone with white noise. Real EMG is
+    stochastic and burst-modulated. The default is not an EMG model. Use the
+    tone to test plotting, filters, scaling and recording. A classifier
+    trained on it learns channel frequencies.
 
     Opt into ``waveform="emg"`` for band-limited, heavy-tailed noise with local
     electrode correlation. Its spectrum and amplitude statistics approximate
     aggregates from 8-channel forearm bracelet recordings, without replaying
-    samples. This is a demonstration texture, not a physiological motor-unit
-    model. Filter history persists across reads and reconnects.
+    samples. Use it for demonstrations; it does not model motor-unit physiology.
+    Filter history persists across reads and reconnects.
 
-    Timestamps come from the ``mne_lsl`` ``local_clock()`` domain rather than a
-    relative counter, so "now" and last-sample age read correctly.
+    Timestamps use ``mne_lsl``'s ``local_clock()`` domain for current-time
+    and sample-age readings.
 
     On desktop, ``read`` blocks until the next chunk is due, the way a real
     inlet's blocking pull does. In a browser it returns ``(None, None)`` until
@@ -50,16 +50,16 @@ class SyntheticSource:
         Sample rate in Hz.
     noise
         Gaussian noise standard deviation, against a sine of amplitude 1. Also
-        a live attribute — assign to it while streaming and the next chunk
-        follows, no reconnect.
+        a live attribute; assignments while streaming affect the next chunk
+        without reconnecting.
     hum
         Mains-hum amplitude, common-mode across every channel. Live, like
         ``noise``. Turn it up to give the viewer's Notch control something
         obvious to remove.
     hum_hz
         Mains-hum frequency, 50 Hz in most of the world and 60 Hz in the
-        Americas. Live — drag it away from whichever the viewer's Notch is set
-        to and the hum comes back, which is the notch's bandwidth made visible.
+        Americas. Change it live to move the hum outside the viewer's Notch
+        bandwidth and make the hum reappear.
     activation
         Carrier amplitude, normally 0..1. Live; background noise and hum remain
         present at zero activation.
@@ -67,16 +67,14 @@ class SyntheticSource:
         Live agonist/antagonist balance, clamped to -1..1. Negative values
         attenuate the second channel half; positive values attenuate the first.
     waveform : {"sine", "emg"}, default "sine"
-        Carrier to generate. ``"sine"`` preserves the original test signal,
-        including its random-number sequence. ``"emg"`` uses a stateful FIR
+        Carrier to generate. ``"sine"`` preserves the original test signal
+        and its random-number sequence. ``"emg"`` uses a stateful FIR
         filter, heavy-tailed innovations and circular neighbour mixing. Select
         at construction; the amplitude, balance, noise and hum knobs stay live.
     require_target
-        When ``True`` the source starts with **no** target selected, so
-        ``connect()`` raises until one is chosen via ``reconnect()``. That makes
-        a fresh stream present as *disconnected*, which is what you want to
-        exercise a Scan → Connect flow. When ``False`` (default) it connects
-        immediately.
+        When ``True``, starts with no target selected. ``connect()`` raises
+        until ``reconnect()`` selects a target, so a fresh stream is disconnected.
+        Use this to test a disconnected stream's Scan → Connect flow. The default ``False`` permits immediate connection.
 
     Examples
     --------
@@ -121,18 +119,18 @@ class SyntheticSource:
         #: how you see how narrow that filter actually is.
         self.hum_hz = hum_hz
         #: How hard the imaginary muscle is working, 0..1, scaling the carrier amplitude.
-        #: Live, like `noise`. Defaults to 1 so a source nobody touches is what it always
-        #: was. It exists so a synthetic signal can carry a *state* worth classifying:
-        #: with a fixed amplitude every gesture is the same waveform, so a model trained
-        #: on it separates nothing and a demo of prediction proves nothing.
+        #: Live, like `noise`. Defaults to 1. Vary it between gestures to create distinct
+        #: synthetic training signals. With fixed amplitude every gesture has the same
+        #: waveform, so a model cannot separate them and prediction demonstrates nothing.
         self.activation = activation
         #: Which way the imaginary wrist is going, -1..+1, splitting `activation`
         #: between the first half of the channels and the second — an agonist /
         #: antagonist pair. Live, like `noise`. At -1 only the first half carries the
-        #: sines, at +1 only the second, at 0 (the default) both do and the source is
-        #: exactly what it was before this knob existed. Without it every direction of
-        #: a bidirectional gesture has the same RMS and MAV, so no regressor can tell
-        #: "down" from "up" and a proportional-control demo needs hardware.
+        #: sines; at +1 only the second does. At the default 0 both do. Use it to produce
+        #: distinct RMS and MAV for "down" and "up" in a proportional-control demo
+        #: without hardware. Otherwise both directions have the same RMS and MAV
+        #: and a regressor cannot distinguish them. Default settings preserve the
+        #: original signal exactly.
         self.direction = direction
         self._target: str | None = None if require_target else "Synthetic EMG"
         self._pos = 0
@@ -272,8 +270,8 @@ class SyntheticSource:
         hum = hum_amp * np.sin(2 * np.pi * hum_hz * t)[:, None]
         # `direction` splits `activation` across an agonist/antagonist pair by
         # attenuating one half only, so the loud half stays at `activation` and no
-        # steering exceeds what Activation alone gives — and at 0 both gains are
-        # exactly 1.0, which is what makes the default bit-for-bit unchanged.
+        # steering exceeds what Activation alone gives. At 0 both gains are 1.0,
+        # preserving the default signal bit for bit.
         gains = np.full(self._n, level, dtype=np.float64)
         half = self._n // 2
         gains[:half] *= 1.0 - max(direction, 0.0)
@@ -296,7 +294,7 @@ class SyntheticSource:
         return data, ts
 
     def disconnect(self) -> None:
-        """Nothing to release — the generator holds no handle."""
+        """Release no resources; the generator holds no handle."""
 
     # -- Optional extensions --------------------------------------------
 

@@ -1,12 +1,12 @@
 ---
 title: "Connect OT Bioelettronica devices"
 ---
-MyoGestic talks to OTB Muovi/Muovi+ and Quattrocento natively — no Qt, no
-external bridge. Each device is a `Source` you drop into a `Stream`.
+Use OTB Muovi/Muovi+ and Quattrocento directly as a `Source` in a `Stream`.
+They need neither Qt nor an external bridge.
 
 ## Muovi / Muovi+ (Wi-Fi)
 
-The PC is the TCP **server**; the probe connects to it.
+The PC is the TCP server; the probe connects to it.
 
 1. Hold the probe button ~5 s → it becomes a Wi-Fi access point `MVxxx-ID`.
 2. Join that network from the PC.
@@ -26,7 +26,7 @@ Defaults: 32-ch (Muovi) monopolar gain-8 EMG @ 2000 Hz, biosignal-only
 
 ## Sessantaquattro / Sessantaquattro+ (Wi-Fi)
 
-The PC is the TCP **server** on port 45454; the device connects in.
+The PC is the TCP server on port 45454; the device connects in.
 
 1. Join the device's access point, or set the PC's IP as "Server IP address" on
    the sessantaquattro's internal web page.
@@ -45,26 +45,24 @@ Defaults: 64-ch monopolar gain-8 EMG @ 2000 Hz, 16-bit, biosignal-only
 `fs_mode` 0..3 → 500/1000/2000/4000 Hz. `mode="bipolar"` halves the channel
 count, `mode="differential"` does not, and `mode="accelerometer"` pins it to 8
 at four times the rate. `high_res=True` switches to 24-bit. `include_aux=True`
-appends the accessory channels — 2 AUX, the IMU quaternion (divide by 16384 for
-a unit quaternion), buffer/trigger, and the sample counter.
+appends 2 AUX channels, the IMU quaternion, buffer/trigger and sample counter.
+Divide quaternion values by 16384 for a unit quaternion.
 
-**The accessory-channel count is probed, not configured.** Both protocol
+The source probes the accessory-channel count. Both protocol
 documents state "2 AUX + 2 accessory" for every NCH value, but a
 Sessantaquattro+ transmits eight. Since the frame is a flat run of words, a
-wrong count does not fail — it silently de-interleaves samples into the wrong
-channels. The last accessory channel is a ramp counter, so the source tries
+wrong count silently de-interleaves samples into the wrong channels. The last accessory channel is a ramp counter, so the source tries
 each candidate width on the first 32 samples and keeps the one that yields a
 clean ramp, raising if none does.
 
-That same counter measures loss: `source.dropped_samples` and
-`source.dropout_events` report samples the device produced that never arrived,
-and the first gap is logged as a warning. Check them after a session — a
-recording that silently lost half its samples looks completely normal
-otherwise.
+The counter also detects loss. `source.dropped_samples` and
+`source.dropout_events` report samples the device produced that never arrived.
+The first gap is logged as a warning. Check both counters after a session;
+sample loss may be invisible in the traces.
 
 ## Quattrocento (Ethernet)
 
-The PC is the TCP **client** to the amplifier (default `169.254.1.10:23456`).
+The PC is the TCP client to the amplifier (default `169.254.1.10:23456`).
 Give the PC NIC a `169.254.x.x` address on that segment.
 
 ```python
