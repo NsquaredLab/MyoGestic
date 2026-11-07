@@ -121,7 +121,9 @@
   const PURE_PY_DEPS = [
     "dvg-ringbuffer",
     "platformdirs",
-    "zarr",
+    // Pyodide 0.29.4 ships numcodecs 0.15.1; zarr >= 3.4.1 needs 0.16+, which
+    // has no pure-Python wheel. Keep in step with uv.lock.
+    "zarr==3.1.6",
     "joblib",
     "numpy",          // already bundled in Pyodide but ensures resolution
     "scikit-learn",   // for the playground app's LDA classifier
