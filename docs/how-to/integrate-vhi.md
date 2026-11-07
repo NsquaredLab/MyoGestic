@@ -1,20 +1,24 @@
 ---
 title: "Integrate the Virtual Hand Interface"
 ---
-The **Virtual Hand Interface (VHI)** is the Godot-based 3-D hand visualisation that ships
-alongside MyoGestic. It is the [remote target](drive-a-remote-target.md) this project ships
-with: a separate application, driven over LSL for continuous controls and gRPC
-for discrete controls, with read-backs over LSL.
+The Virtual Hand Interface (VHI) is a separate Godot-based 3-D hand visualization
+application shipped alongside MyoGestic.
+It is MyoGestic's [remote target](drive-a-remote-target.md), using LSL for
+continuous controls and read-backs, and gRPC for discrete controls.
 
-So this page is only what is true of *this* target: where it is installed, how it is
-launched, what it calls its controls, and how to drive its control hand while recording. How
-the two planes work at all is [Drive a remote target](drive-a-remote-target.md); what a control map is
-and how you declare what you drive is [Concepts › Controls](../concepts/controls.md), with
-the full rules in [the control standard](../api/controls.md).
+See [Drive a remote target](drive-a-remote-target.md) for the transport contract,
+[Concepts › Controls](../concepts/controls.md) for control maps and
+[the control standard](../api/controls.md) for the full rules.
 
-If VHI isn't installed yet, see **[Install the Virtual Hand](install-vhi.md)**.
+If VHI isn't installed yet, see [Install the Virtual Hand](install-vhi.md).
 
 ![VHI dual-plane integration](../images/vhi-integration.svg){ align=center }
+
+`RemoteTarget` publishes continuous controls over LSL and queues discrete `SetControl`
+commands through `RemoteClient`. That client queries `GetControlManifest` for control
+capabilities. A separate `RecordingClient` calls `SetRecordingSession` to gate recording
+and `GetRecordingSessionState` to read session state and the current movement. The
+`VHI_Control` and `VHI_Predict` LSL streams return the two hands' poses.
 
 ## The one-liner that wires it up
 
@@ -30,11 +34,11 @@ recording = vhi.recording_client()  # recording session gate + trajectory playba
 an existing install in the writable checkout, then the per-user install root. It reads `$VHI_GRPC_HOST` / `$VHI_GRPC_PORT` for the control endpoint
 (defaults `127.0.0.1:50051`).
 
-Those three lines are the whole VHI-shaped part of pointing MyoGestic at it. The returned
-[`InterfaceSpec`][myogestic.remote.InterfaceSpec] knows *where* VHI is and nothing about what
-VHI drives. Which controls exist is a running VHI's answer, and each one's stream is named for
-its own address, so there is no table on this side to go stale. Handing that spec and its
-client to a [`RemoteTarget`][myogestic.remote.RemoteTarget] is what asks:
+The returned [`InterfaceSpec`][myogestic.remote.InterfaceSpec] locates VHI.
+It contains no control vocabulary. The running VHI supplies that vocabulary,
+so no local table can go stale.
+[`RemoteTarget`][myogestic.remote.RemoteTarget] queries the running VHI for its
+controls and names each stream by its address:
 
 ```python
 from myogestic.controls import ControlLink
@@ -43,12 +47,12 @@ from myogestic.remote import RemoteTarget
 link = ControlLink(CONTROL_MAP, [RemoteTarget(client=vhi_control, interface=vhi)], hz=32)
 ```
 
-One target drives the whole map, both hands included; no stream is named and none is counted.
+One target drives the whole map, including both hands. You do not name
+or count streams yourself.
 See [Negotiating with the target](../api/controls.md#negotiating-with-the-target) for what that
 resolves and what it refuses, and [Binding retries while the target is
 unavailable](../concepts/controls.md#binding-retries-while-the-target-is-unavailable) for why this is a
-`ControlLink` and not a bus: an application that launches VHI from its own button necessarily
-binds before VHI exists.
+`ControlLink`. An application with a VHI launch button can bind before VHI starts.
 
 ## Launching the VHI process
 
@@ -104,9 +108,8 @@ except FileNotFoundError as e:
 
 ### Connect, or launch
 
-An app that binds controls to VHI wants one button that does both: bind to a VHI
-that is already running, and launch one only if none answers. `TargetPanel` is that
-button, next to any other target the app drives:
+`TargetPanel` binds to a running VHI or launches it if none answers.
+Place it beside the app's other targets:
 
 ```python
 from myogestic.controls import ControlLinkConnector
@@ -126,20 +129,19 @@ Prediction keeps reading `link.bus`, which is `None` until VHI answers. When VHI
 cannot be launched here, the row says so and its tooltip carries the same
 install message `launcher()` raises.
 
-## What VHI calls its controls
+## VHI control names
 
-A running VHI's manifest is the authority
-(`uv run --extra grpc python tools/inspect_control_map.py examples/controls/hand.toml`
-resolves a map against it without driving the hand), but the shape of the
-vocabulary is worth knowing before you write a map, because **the address picks the hand**:
+The running VHI's manifest is the authority on its controls.
+`uv run --extra grpc python tools/inspect_control_map.py examples/controls/hand.toml`
+resolves a map without driving the hand. The address selects the hand:
 
 | address | drives |
 |---|---|
-| `vhi.prediction.thumb.flexion`, `vhi.prediction.thumb.abduction` | the **predicted hand**'s thumb, two axes |
+| `vhi.prediction.thumb.flexion`, `vhi.prediction.thumb.abduction` | the predicted hand's thumb, two axes |
 | `vhi.prediction.index`, `.middle`, `.ring`, `.little` | the predicted hand's other four digits, one axis each |
 | `vhi.prediction.wrist.flexion`, `.abduction`, `.rotation` | the predicted hand's wrist |
-| `vhi.control.pose.*` | the same digits on the **control hand**, the one the operator poses and a recording captures |
-| `vhi.control.gesture` | the control hand's movement presets, as a **discrete** control |
+| `vhi.control.pose.*` | the same digits on the control hand, the one the operator poses and a recording captures |
+| `vhi.control.gesture` | the control hand's movement presets, as a discrete control |
 
 `vhi.control.gesture`'s states are whole-hand poses: `Fist`, `ThumbExtension` and the rest of
 what that VHI build ships. A preset is a held state and not a number because it commands a
@@ -148,19 +150,18 @@ one of *those*; what you write yourself is `debounce_s`, a property of your cont
 not of the hand.
 
 Sliders can pose the operator's hand while a model drives the predicted one, and a map naming
-both is still one `RemoteTarget` and one bus. The two hands are simply more addresses.
+both is still one `RemoteTarget` and one bus. Each hand has its own addresses.
 
 [`examples/start_here/myocontrol.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/start_here/myocontrol.py)
-is this table as a complete protocol: a model fanning out to the predicted digits while
-`vhi.control.gesture` cues the subject on the other hand, over one map and one bus.
+uses one map and one bus to drive predicted digits from the model
+and cue the participant through `vhi.control.gesture` on the control hand.
 
 ### The nine channels of a recorded pose
 
-VHI publishes two **read-backs**, `VHI_Predict` and `VHI_Control`, so a client can see what
+VHI publishes two read-backs, `VHI_Predict` and `VHI_Control`, so a client can see what
 actually moved. Both are nine positional float32 channels, whatever the inbound shape. A
-recorded session carries that same layout, so the table below matters even though nothing
-writes it any more. It was read out of VHI's own consumer (`PredictedHandSkeleton`) and
-confirmed against recorded sessions; `myogestic.vhi.pose` is the layout in code:
+recorded session uses this layout, defined by `PredictedHandSkeleton` and
+`myogestic.vhi.pose` and verified against recorded sessions:
 
 | Index | Joint            | Notes                                    |
 |-------|------------------|------------------------------------------|
@@ -172,19 +173,20 @@ confirmed against recorded sessions; `myogestic.vhi.pose` is the layout in code:
 | 5     | Little flexion   |                                          |
 | 6-8   | Wrist flexion, abduction, rotation | bone 0, which parents every digit |
 
-Two things about that table are easy to get wrong, and both were settled by measurement, not by
-reading. Channel 0 is thumb **flexion** and channel 1 thumb **abduction**, not the other way
-round: a recorded fist has channel 1 at exactly `-1.0`, because the thumb comes *across* the
-fingers. And channels 6-8 **do** drive the wrist. They read `0` in archived sessions because
-the recorder hardcoded them, not because VHI ignores them.
+Measurements established the thumb channel order and wrist behavior.
+Channel 0 is thumb flexion; channel 1 is thumb abduction. A recorded fist
+has channel 1 at `-1.0` because the thumb crosses the fingers. Channels 6-8
+drive the wrist. Archived sessions with these channels hardcoded to `0`
+do not contain recorded wrist movement. Those zeros came from the recorder;
+VHI does respond to wrist channels.
 
 ## A ready-made movement palette
 
 `VhiMovementPanel` packages "fetch control-hand state in the background, render the movement
-chips, dispatch clicks" into one widget. The **Hand movements** header has a refresh action and
+chips, dispatch clicks" into one widget. The Hand movements header has a refresh action and
 a reachability dot; the chips wrap with the available width and mark the current movement.
 A mono count appears below them. When the hand is not running, launch instructions and a
-**Refresh** action replace the list. It reads the recording aid for state and takes the
+Refresh action replace the list. It reads the recording aid for state and takes the
 click handler explicitly. Wire that handler to a control-standard DOF (one [degree of
 freedom](../reference/glossary.md#dof)), because dispatching straight at the target would
 bypass the debounce:
@@ -213,15 +215,15 @@ def _on_movement_click(name: str) -> None:
     bus.select("gesture", name)  # deliver + rebase the debounce
 ```
 
-[`bus.select`](../concepts/controls.md#continuous-and-discrete-are-different-things) is the
-important part: it delivers the state immediately *and* rebases the DOF's stability gate, so
-the next predict ticks do not re-fire what the button just did.
+[`bus.select`](../concepts/controls.md#continuous-and-discrete-are-different-things)
+delivers the state immediately and rebases the DOF's stability gate to prevent
+predict ticks from repeating the button action.
 
 ## Driving the control hand as ground truth
 
 Some workflows want the control hand to move on its own so the recorded kinematics sweep a
 range. Continuous regression is one, where the control hand is the *regression target* the
-model learns. The **recording aid** is for that:
+model learns. The recording aid is for that:
 
 ```python
 recording.start_trajectory("Fist", frequency_hz=0.7)  # cycles, producing a trajectory
@@ -244,8 +246,10 @@ def _on_record() -> None:
         app.ctx.log("no VHI recording gate — the keyboard is not blocked")
 ```
 
-It returns `False` and does not raise when the aid is unavailable, because whether an ungated
-recording is acceptable is a judgement about experiment integrity and not the client's to make.
+The call returns `False` without raising when the aid is unavailable.
+Decide whether an ungated recording is acceptable for your experiment.
+This is an experiment-integrity decision for the caller, so the client does
+not make it by raising.
 
 ## Testing without VHI
 
@@ -264,23 +268,22 @@ going out, `VHI_Predict` for all nine coming back. For the gRPC plane, the stand
 works against the local server when VHI is running. The proto is at
 `myogestic/remote/_proto/remote_control.proto`.
 
-`tools/inspect_control.py` needs no Virtual Hand at all: it walks declaration, resolution and
-the wire frame with nothing launched, and then shows what a target does when the far side is
-absent.
+`tools/inspect_control.py` checks declaration, resolution and wire frames
+without launching the Virtual Hand. It also shows target behaviour when VHI is absent.
 
 ## Common mistakes
 
-See the full **[Troubleshooting](../troubleshooting.md)** index for
-symptom-organised debugging, and
+See the full [Troubleshooting](../troubleshooting.md) index for
+symptom-organized debugging, and
 [Controls › Common mistakes](../concepts/controls.md#common-mistakes) for the ones that are
-about the control standard rather than about VHI.
+about the control standard.
 
-* **Forgetting `set_recording_session(False)` on session end.** VHI keeps ignoring its
+* Forgetting `set_recording_session(False)` on session end. VHI keeps ignoring its
   own keyboard until you toggle it back.
-* **Leaving a recording trajectory running.** It keeps the control hand moving and
+* Leaving a recording trajectory running. It keeps the control hand moving and
   refuses discrete DOFs. `stop_trajectory()` is idempotent, so call it in teardown
   regardless.
-* **Forgetting `pose_filter.reset()` on retrain.** The first few smoothed
+* Forgetting `pose_filter.reset()` on retrain. The first few smoothed
   frames blend the new model's first prediction with the old model's
   last; looks like a brief pose drift on every train cycle. See
   [Post-process predictions](post-process-output.md).

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -11,6 +12,54 @@ import zarr.storage
 
 from myogestic.session._core import LabelEvent, Session
 from myogestic.stream import ChannelGrid, StreamInfo
+
+
+def recover_session(path: str | Path) -> Path:
+    """Pack a crashed take's folder with the normal, verified archive path.
+
+    Stop the recording process before calling this. Requires the ``meta.json``
+    checkpoint written by current recorders; older crashed folders without one
+    cannot be recovered this way. The original folder is removed only after
+    packing succeeds. An unfinished take stays marked ``finished=False``.
+
+    Only data already written to disk can be recovered. Buffered event rows,
+    labels and extras changed since the last checkpoint, and finalize-hook
+    outputs may be missing. Recovery does not resume acquisition or run hooks.
+
+    Parameters
+    ----------
+    path
+        The unpacked take folder, not its parent or an existing archive.
+
+    Returns
+    -------
+    pathlib.Path
+        The packed ``.mg.zip`` path, readable by `open_session_store` and
+        `myogestic.widgets.SessionManager`.
+
+    Examples
+    --------
+    >>> from myogestic.session import recover_session
+    >>> archive = recover_session("data/P-001/recordings/P-001_20261107-0930")
+    """
+    folder = Path(path)
+    if not folder.is_dir():
+        raise ValueError(f"Recovery requires an unpacked session folder: {folder}")
+    meta = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+    with open_session_store(folder) as session:
+        # open_session_store deliberately skips the constructor: recovery must use
+        # this folder, never create another take or reopen its arrays for writing.
+        session._stem = folder.name
+        session._started = time.strptime(meta["created"], "%Y-%m-%dT%H:%M:%S")
+        session.save_meta(
+            meta.get("app_name", ""),
+            class_names=meta.get("class_names"),
+            class_codes=meta.get("class_codes"),
+            control_space=meta.get("control_space"),
+            control_spaces=meta.get("control_spaces"),
+            finished=meta.get("finished", True),
+        )
+        return session.pack_to_zip()
 
 
 def open_session_store(path: str | Path) -> Session:
@@ -65,6 +114,7 @@ def open_session_store(path: str | Path) -> Session:
     session._streams_info = {}
     session.class_names = list(meta.get("class_names") or [])
     session.extras = dict(meta.get("extras") or {})
+    session._pose_convention = meta.get("pose_convention")
     # `Session.__new__` skips `__init__`, so every attribute a caller can read has to
     # be set here or it raises AttributeError instead of coming back empty. `name` is
     # written to meta.json precisely so it survives this trip.
@@ -76,7 +126,7 @@ def open_session_store(path: str | Path) -> Session:
     session._zip_store = zip_store
     # A loaded session is read-only: frozen, with no buffers, so freeze() is a no-op and
     # append_event drops instead of raising AttributeError on the attributes __init__ set.
-    session._event_lock = threading.Lock()
+    session._event_lock = threading.RLock()
     session._event_buffers = {}
     session._event_streams = list(meta.get("event_streams") or [])
     session._finalising = True

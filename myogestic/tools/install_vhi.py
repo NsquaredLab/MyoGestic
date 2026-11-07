@@ -1,6 +1,6 @@
 """Install the Virtual Hand Interface release binary for this platform.
 
-VHI ships pre-built artifacts on every release at
+VHI ships pre-built artefacts on every release at
 https://github.com/NsquaredLab/MyoGestic-VHI/releases. This CLI picks the
 right asset for the host OS/arch, downloads it, unpacks it into the location
 ``virtual_hand()`` looks at, and drops a ``vhi-version.txt`` marker so a
@@ -8,7 +8,7 @@ later install knows what's already there.
 
 MyoGestic drives VHI over its control service, asking it what it exports. A
 release older than `MIN_VHI_TAG` has no control manifest to answer with, so this refuses
-to install one rather than leave it to fail at every launch.
+to install one because it would fail at every launch.
 
 Usage:
     python -m myogestic.tools.install_vhi                # latest, default dest
@@ -19,8 +19,8 @@ Usage:
 Or after ``pip install myogestic``:
     myogestic-install-vhi
 
-Pin ``--tag`` in production: ``latest`` is not reproducible, so a later rebuild
-may pick up a different VHI version.
+Pin ``--tag`` in production for reproducible installs. ``latest`` may resolve
+to a different VHI version on a later rebuild.
 """
 
 from __future__ import annotations
@@ -133,8 +133,8 @@ def _resolve_latest_tag() -> str | None:
 def _check_supported(tag: str) -> str:
     """Refuse a release this MyoGestic cannot drive. Returns the resolved tag.
 
-    Checked *before* the download: an old binary installs happily and is then refused
-    by every `RemoteTarget` at bind time, far from the command that put it there.
+    Checks before downloading to prevent installing a binary that
+    `RemoteTarget` would refuse at bind time.
     """
     resolved = _resolve_latest_tag() if tag == "latest" else tag
     if resolved is None:
@@ -216,8 +216,7 @@ def _sha256(path: Path) -> str:
 def _verify(archive: Path, expected: str | None) -> None:
     """Compare the on-disk archive's SHA-256 against the expected digest.
 
-    Aborts the install on mismatch — a tampered or corrupted artifact must
-    never reach the unpack step. ``expected=None`` (digest unavailable from
+    Aborts on mismatch before unpacking a tampered or corrupted artefact. ``expected=None`` (digest unavailable from
     the API) warns instead of aborting.
     """
     if expected is None:
@@ -289,7 +288,7 @@ def _validate(target: Path) -> None:
 
 
 def _restore_exec_bits(target: Path) -> None:
-    """ZIPs lose Unix +x — restore it on the launched binary."""
+    """Restore Unix +x permissions lost when the binary is packaged in ZIP."""
     for rel in EXEC_PATHS.get(platform.system(), []):
         path = target / rel
         if path.exists():
@@ -300,8 +299,7 @@ def _restore_exec_bits(target: Path) -> None:
 def _strip_quarantine(target: Path) -> None:
     """Remove macOS Gatekeeper's `com.apple.quarantine` xattr so the .app launches.
 
-    Printed rather than done silently: this is security-sensitive, since it
-    means trusting the GitHub-hosted artifact.
+    Prints the change because removing quarantine trusts the GitHub artefact.
     """
     if platform.system() != "Darwin":
         return
@@ -411,13 +409,23 @@ def _install(
 
     # Fetch the expected digest before download so a missing-tag-on-API error
     # surfaces immediately, not after a 150 MB download.
-    expected_digest = None if no_verify else _fetch_release_digest(resolved, asset)
+    if no_verify:
+        print(
+            "  WARNING: --no-verify skips SHA-256 verification — "
+            "downloaded archive will NOT be integrity-checked.",
+            file=sys.stderr,
+        )
+        expected_digest = None
+    else:
+        expected_digest = _fetch_release_digest(resolved, asset)
 
-    # Atomic install: stage in a temp dir, validate, then swap with dest.
-    # A failed download or malformed archive never leaves a half-installed
-    # dest behind.
-    with tempfile.TemporaryDirectory(prefix="myogestic-vhi-") as tmp:
-        tmp_path = Path(tmp)
+    # Prepare everything on the destination filesystem. Only renames touch the
+    # install path, so a failed replacement cannot expose a partly copied tree.
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = Path(tempfile.mkdtemp(prefix=".myogestic-vhi-", dir=dest.parent))
+    previous = tmp_path / "previous"
+    installed = False
+    try:
         archive = tmp_path / asset
         _download(url, archive)
         if not no_verify:
@@ -429,16 +437,35 @@ def _install(
         # ``latest`` is only a moving download selector. Persist the concrete tag
         # resolved above so the launch-time version gate can actually compare it.
         _write_marker(staging, resolved, asset)
+        _strip_quarantine(staging)
 
-        if dest.exists():
-            shutil.rmtree(dest)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        # `shutil.move` falls back to copy+rmtree across filesystems where
-        # plain rename() fails with EXDEV — temp dirs are often on a
-        # different mount than the install target.
-        shutil.move(str(staging), str(dest))
+        try:
+            if dest.exists() or dest.is_symlink():
+                dest.rename(previous)
+            staging.rename(dest)
+        except BaseException:
+            # Include interrupted installs: the old directory must be put back
+            # before propagating any failure from the replacement rename.
+            if previous.exists() or previous.is_symlink():
+                previous.rename(dest)
+            raise
+        installed = True
+    finally:
+        if not installed and (previous.exists() or previous.is_symlink()):
+            # Rollback itself can fail (e.g. permissions changed). Never let
+            # temporary-directory cleanup delete the only surviving old install.
+            print(
+                f"  WARNING: could not restore the previous VHI install; "
+                f"it is preserved at {previous}.",
+                file=sys.stderr,
+            )
+        else:
+            try:
+                shutil.rmtree(tmp_path)
+            except OSError as exc:
+                # Once the swap succeeds, housekeeping cannot invalidate it.
+                print(f"  WARNING: could not remove staging directory {tmp_path}: {exc}", file=sys.stderr)
 
-    _strip_quarantine(dest)
     print(f"✓ VHI {resolved} installed at {dest}")
     _macos_gatekeeper_note(dest)
 

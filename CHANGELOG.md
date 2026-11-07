@@ -10,41 +10,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `SyntheticSource(waveform="emg")` adds an opt-in stochastic EMG texture fitted to 8-channel forearm bracelet recordings; the browser playground uses it, and the default sine signal stays unchanged.
-- A prediction take names what trained its model. When the running model was trained in the app, `meta.json`'s `extras.pipeline.trained_on` lists the takes it learnt from and `model_file` names its autosaved file in `models/`. A model loaded from disk or set by hand records neither, so neither is ever wrong.
-- `TargetPanel(targets, connectors=)`: one card for the processes an app drives, a row each. A target with a `ControlLinkConnector` gets **Connect**, which binds to one already running and launches only when none answers; one without gets **Launch**. **Stop** appears only for what the card started, a launched target that exits drops its bus, and a target that cannot be launched says why on hover.
+- Prediction takes record training provenance. For models trained in the app, `meta.json`'s `extras.pipeline.trained_on` lists the training takes and `model_file` names the autosaved file in `models/`. These fields are omitted for models loaded from disk or set by hand, avoiding incorrect
+  training provenance.
+- `TargetPanel(targets, connectors=)` shows one card with one row per process the app drives. A target with a `ControlLinkConnector` gets Connect, which binds to one already running and launches only when none answers; one without gets Launch. Stop appears only for what the card started, a launched target that exits drops its bus, and a target that cannot be launched says why on hover.
 - `ControlLinkConnector.disconnect()` tears down every link and keeps the connector usable, so the next attempt binds whatever answers then.
 - `mono_text(width=)` ellipsizes in the mono face.
 - Independent control links can record named streams with `record_as`, with their maps saved in optional `meta.control_spaces`; duplicate map names are rejected and single-link metadata stays unchanged.
 - `ControlLinkConnector(*links)` binds several links with one retry worker and stops every link, including partial and late binds.
 - `FollowRun(operator=, aliases=, poses=, rest=)` drives pose vectors directly, validates their shapes at construction, rests after joining on every run exit, and offers `hold()` for manual poses. Myocontrol uses this API and one connector for both hands, fixing concurrent binds and premature connection announcements.
 
-- `Sinusoid`, `score_tracking`, `blend_pose`, and the reusable `FollowRun` card record and score smooth control-hand following runs; Myocontrol Drive offers **Follow**, and saved Follow takes remain unticked for training. A hardware-free panel demo is included.
+- `Sinusoid`, `score_tracking`, `blend_pose`, and the reusable `FollowRun` card record and score smooth control-hand following runs; Myocontrol Drive offers Follow, and saved Follow takes remain unticked for training. A hardware-free panel demo is included.
 
-- Myocontrol's Guided drive runs cue shuffled gesture repetitions, save prediction takes, and score match and cue reach from the saved take; Takes marks them **Guided** and leaves them unticked for training.
-- Myocontrol records the hand’s LSL feedback with the EMG and offers **Record this run** in Drive. Stopping prediction saves an open run first; Drive takes carry the running model and stay unticked for training unless selected.
+- Myocontrol's Guided drive runs cue shuffled gesture repetitions, save prediction takes, and score match and cue reach from the saved take; Takes marks them Guided and leaves them unticked for training.
+- Myocontrol records the hand’s LSL feedback with the EMG and offers Record this run in Drive. Stopping prediction saves an open run first; Drive takes carry the running model and stay unticked for training unless selected.
 - `Pipeline(input_streams=...)` selects model inputs and their tick clock independently of recording-only feedback; `SignalViewer(exclude=...)` keeps those streams out of the EMG viewer.
-- **Record while predicting.** `App.start_recording` works from any state in
-  `myogestic.core.RECORDABLE_STATES` — core registers `idle`, `myogestic.ml` registers
-  `predicting` — and `ctx.recording` says whether a take is open, independent of
+- Record while predicting. `App.start_recording` works from any state in
+  `myogestic.core.RECORDABLE_STATES`. Core registers `idle`; `myogestic.ml` registers
+  `predicting`. `ctx.recording` says whether a take is open, independent of
   `ctx.state`. A take from `idle` still shows the `recording` state; a take under
   `predicting` leaves the state alone and adds a `REC` pill beside it.
-- **Event streams.** `Session.append_event(name, values, timestamp, channel_names=, fs=, dtype=)`
+- Event streams. `Session.append_event(name, values, timestamp, channel_names=, fs=, dtype=)`
   declares a per-tick zarr stream on first use and appends one float32 row, buffered and
-  written 1024 rows or one second at a time (a single-row zarr append rewrites its chunk:
-  1.46 ms each on zarr 3.2.1, 0.04 ms per row batched). `Session.freeze()` flushes and
+  written 1024 rows or one second at a time. A single-row zarr append rewrites its chunk,
+  taking 1.46 ms each on zarr 3.2.1, compared with 0.04 ms per row batched. `Session.freeze()` flushes and
   closes the session; `meta.json` lists the names under `event_streams`.
-- **The pipeline records its tick.** With a take open, `Pipeline` appends what `extract`
+- The pipeline records its tick. With a take open, `Pipeline` appends what `extract`
   returned as `features` / `features.<key>` and what `predict` returned as
   `prediction.<key>`, stamped with the newest sample the tick consumed, plus `pipeline.tick`
   with the decision clock. Text, nested mappings and 2-D arrays are skipped once, with a log
   line and an entry under `extras.pipeline.skipped`.
-- **The control bus records the frame it delivered** as `controls`, DOF names as channels,
-  when built with a `ctx` (`connect_controls` and `ControlLink` pass theirs).
-- **The model rides along.** `App.finalize_hooks` run on the finalize thread before
+- The control bus records the frame it delivered as `controls`, DOF names as channels,
+  when built with a `ctx`. `connect_controls` and `ControlLink` pass theirs.
+- Model capture. `App.finalize_hooks` run on the finalize thread before
   `meta.json` is written; the pipeline's hook saves the running model as `model.joblib`
   beside the arrays when `pipeline.save_model` is set, and writes `extras.pipeline`.
-- `App.stop_recording(wait=True)` finalises inline; `App` uses it to save an open take at
-  exit instead of leaving a folder without `meta.json`.
+- `App.stop_recording(wait=True)` finalizes inline; `App` uses it to save an open take at
+  exit with `meta.json` written.
 
 - `AppHeader` shares the line logo, title, state pill, workflow steps and optional participant chip across apps.
 - `StatusBar` shows acquisition details, participant, session folder and an optional fitted or saved model readout.
@@ -54,36 +55,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `my_session_app.py`, a copyable session app with a NumPy nearest-centroid model and no hardware requirement.
 - Pong offers a dummy synthetic wrist for recording and training without hardware, with arrow-key control during play.
 - Myocontrol's Connect → Record → Train → Drive workflow combines a slim header, participant-labelled recording and model saves, recorded gesture-time bars, visible action guidance, and a one-line status bar.
-- Bare grid areas, step completion connectors, and a calmer participant dialog with an `open()` request and ID-only session log.
+- Bare grid areas, step completion connectors, and a participant dialog with an `open()` request and ID-only session log.
 - Recorded time per gesture and public `recorded_time` summaries, participant session lists that fill automatically with duration chips, and full-width recording controls with responsive gesture buttons.
 - `force_ramps` and `pong` require a participant ID before recording and keep their session lists scoped to that participant.
 - Public `status_pill` helper for consistent state badges in application headers and recording controls.
 - Optional participant-labelled model auto-save, training completion and failure notifications, and a session picker that clears its selection when the participant changes.
-- `ParticipantPanel` selects a safe participant ID, previews labelled files, and recognises returning names through a separate local pseudonymisation key file.
+- `ParticipantPanel` selects a safe participant ID, previews labelled files, and recognizes returning names through a separate local pseudonymization key file.
 - `StepBar` workflow navigation, `primary_button` for forward actions, and more readable muted text on the light theme.
 - `ctx.notify(...)` mirrors events to the log and an automatic corner toast overlay, including recording save and pack-failure feedback.
 - Participant-labelled session folders and metadata, a shared `labelled_path` helper, and an opt-in `App(require_participant=True)` Record gate.
-- **Automatic UI scale.** With no `App(ui_scale=...)` the scale is now the OS display scale
-  times how big the window is compared with 1280 × 800 (nudged by ×0.85–×1.3), recomputed
-  every frame — resizing the window or dragging it to another monitor rescales fonts,
-  padding and spacing live. `App(ui_scale=...)` and `$MYOGESTIC_UI_SCALE` still fix it.
-- **`Grid.areas(...)` and `Layout`.** Draw an arrangement as text with named panels
-  (`a | b` shares one cell as tabs) and give `Layout` a wide and a narrow one plus a
-  breakpoint: the window width picks the arrangement each frame. Panels are keyed by name,
+- Automatic UI scale. With no `App(ui_scale=...)`, the scale is the OS display scale
+  times the window size relative to 1280 × 800, with a window factor of ×0.85–×1.3. It is
+  recomputed every frame, rescaling fonts, padding and spacing on resize or monitor change. `App(ui_scale=...)` and `$MYOGESTIC_UI_SCALE` still fix it.
+- `Grid.areas(...)` and `Layout`. Draw an arrangement as text with named panels
+  using `a | b` for tabs sharing one cell. Give `Layout` wide and narrow arrangements
+  and a breakpoint; window width selects the arrangement each frame. Panels are keyed by name,
   so one with a cell of its own in both arrangements keeps its scroll position across the
   switch, and a hidden tab's body still runs so its return value stays current. `control_map_studio` and `emg_32ch_multi_model` use it.
 - `ui_px(n)` in `widgets/common.py` for sizes a widget fixes itself.
-- The control manifest carries a `target_version` — the serving build's own release
-  version — and `InterfaceSpec` grew `min_target_version`, enforced at every
-  capabilities fetch. This is the runtime half of the version gate: the install-time
-  marker check never sees a build launched by double-click, unpacked by hand, or run
-  from source, but the manifest is the one channel every launch path answers on. A
-  build reporting an older version is refused on the same path as a vocabulary
-  mismatch; one reporting nothing (every build before VHI v2.1.0) is warned about
-  once and driven anyway. Motivated by a hand that froze mid-session: VHI v1.0.0
-  speaks the current vocabulary, so every existing gate passed, but its `SetMovement`
-  falls behind under bursty gesture edges and drops them — a frozen hand with a
-  perfectly healthy protocol.
+- The control manifest carries the serving build's release version in `target_version`.
+  `InterfaceSpec.min_target_version` checks it on every capabilities fetch, including
+  builds launched by double-click, unpacked manually or run from source. The install-time
+  marker check cannot see those launch paths. The manifest provides a runtime check that
+  every launch path answers. Older versions
+  are refused like vocabulary mismatches. Builds reporting no version, including those
+  before VHI v2.1.0, receive one warning and can be driven. VHI v1.0.0 speaks the supported
+  vocabulary but can fall behind on bursty `SetMovement` commands and drop them, leaving
+  the hand stationary. This happened mid-session while every existing gate passed and
+  the protocol remained healthy.
 - `tools/muovi_probe_sim.py`, a fake Muovi / Muovi+ probe that dials into
   `MuoviSource` at the real device cadence, so any unmodified example runs without
   hardware. `--self-check` verifies its own pacing; `--rate-scale` simulates crystal
@@ -91,82 +90,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The documentation site is rebuilt with Astro: the new brand, the app's visual language, a live signal field on the homepage, and Getting Started for 2.x.
+- The documentation site was rebuilt with Astro and a new brand. It uses the app's visual language, a live signal field on the homepage, and Getting Started for 2.x.
 
-- **Takes are `.mg.zip`.** A stopped recording packs to `<name>.mg.zip` instead of
-  `<name>.session.zip`. Readers take any `.zip` holding a `meta.json`, so older
-  `.session.zip` takes still open, list in `SessionManager` and replay; nothing on disk is
-  renamed. The suffix lives in `myogestic.session._core.ARCHIVE_SUFFIX`.
+- Takes are `.mg.zip`. A stopped recording packs to `<name>.mg.zip`; the previous suffix was
+  `<name>.session.zip`. Readers accept
+  any `.zip` holding a `meta.json`, including `<name>.session.zip`. These takes open, list
+  in `SessionManager` and replay. Files on disk keep their names. The suffix lives in `myogestic.session._core.ARCHIVE_SUFFIX`.
 
-- **One file-name standard.** Takes are `<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip` and models
+- One file-name standard. Takes are `<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip` and models
   `<ID>_<YYYYMMDD-HHMM>_<model>.joblib`, in local time to the minute. `<what>` is the
   recorded gestures as short codes joined by `+` (`R+F`, `Re+T+I+M+Ri+L`; past 40
   characters the first three and a count), or, for a take in `predictions/`, `free`,
   `free-F`, `guided` or `follow-F`. `FollowRun` names its take for the gesture it followed,
-  and Myocontrol names guided runs. New `class_codes(class_names, pinned)` works the codes
-  out: the first letter, more only where two would match (`Rest`/`Ring` → `Re`/`Ri`), the
+  and Myocontrol names guided runs. `class_codes(class_names, pinned)` uses the first
+  letter, extending it where two codes would match (`Rest`/`Ring` → `Re`/`Ri`), the
   first letter of each word for a longer name (`Tfp`). Apps pin codes with
   `ctx.class_codes`; each take saves the whole map as `meta.json`'s `class_codes`. Models
   are named by `Pipeline.model_name` or the model's class, and `model_path()` gives the
   same name to apps that save their own. A name already taken gets `-2`; nothing is
-  overwritten, even when two takes pack at once. `meta.json`'s `created` is now when the
-  take started, the same minute as its name, instead of when it was saved, so the take
-  list shows the start. Older files keep their names and still
-  open. Code that finds models by `*_model.joblib` should match `*.joblib`. See
+  overwritten, even when two takes pack at once. `meta.json`'s `created` stores the take
+  start time, matching the minute in its name. Previously it stored the save time. The take
+  list now shows the start time.
+  Files on disk keep their names and remain readable. Code that finds models by `*_model.joblib` should match `*.joblib`. See
   [File names](https://nsquaredlab.github.io/MyoGestic/concepts/file-names/).
 
-- **Smaller, cheaper signal recordings.** Signal streams and their timestamps are stored
+- Smaller, cheaper signal recordings. Signal streams and their timestamps are stored
   with Blosc LZ4 and byte shuffle instead of zarr's default zstd. On a 320-channel
-  2048 Hz take: 7% smaller, 14% less time per append, timestamps 2-4x smaller. Event
-  streams keep zstd, which suits them better. Older takes read as before; each array
-  records its own codec.
+  2048 Hz take, arrays are 7% smaller, appends take 14% less time, and timestamps are 2-4x smaller. Event
+  streams keep zstd, which suits them better. Each array records its codec, so existing takes remain readable.
 
-- **One folder per participant.** Data now goes under `data/<ID>/`, split by kind:
+- One folder per participant. Data goes under `data/<ID>/`, split by kind.
   `recordings/` for takes started from idle, `predictions/` for takes started while a model
-  is predicting (chosen from `ctx.state`), and `models/` for `Pipeline.autosave_dir`. Takes
+  is predicting, selected from `ctx.state`, and `models/` for `Pipeline.autosave_dir`. Takes
   with no participant go to `data/recordings/` and `data/predictions/`. The default root of
   `App.start_recording`, `Session`, `SessionManager`, `ParticipantPanel` and `StatusBar` is
   `"data"`, no longer `"sessions"`. `SessionManager` lists both recordings and predictions
-  for a participant, and drive runs stay unticked as before. New
+  for a participant, with drive runs unticked. Use
   `myogestic.session.participant_dir(root, participant, kind)`; `labelled_path` and
   `Session` take `kind=`. Takes already in `sessions/<ID>/` are not moved or listed, but they
   still open with `open_session_store` or the Takes file picker.
 
 - The signal viewers' empty state is a carousel with one Connect. The stream on its card
-  is the one Connect attaches, and the button says so (**Connect TestEMG32**), starting
+  is the one Connect attaches, and the button names it as Connect TestEMG32, starting
   on the app's own stream; ‹ › step through the other streams of its kind, and stepping
-  past the last one is what looks for more (nothing scans on its own). This replaces a
-  Connect beside an unexplained Scan whose results came with a second Connect that did
-  something else. A failure reads **Couldn't connect** over the error's first sentence,
+  past the last one scans for more streams. Nothing scans on its own. This replaces a
+  Connect beside an unexplained Scan, whose results had a second Connect with a different
+  action. A failure reads Couldn't connect over the error's first sentence,
   the full text on hover. `SignalViewer(stream_type=…)` and
   `RawSignalViewer(stream_type=…)` choose the LSL type offered; by default it is the type
   of the app's own stream, and with no type known, MyoGestic's control outlets and
   marker streams are left out. `LSLSource.discover()` results gain a ``type`` key, and
   their ``info`` reads ``32 ch · 2048 Hz · EMG``.
-- Stop sits where Record was: in `RecordingControls` and `RecordButton` the whole
-  recording row is the Stop button (and, during a warm-up, Cancel), in Record's exact
-  rectangle, instead of a small default-grey button at its right edge. A timed take's row
-  leads with the whole seconds left, in the same face as the warm-up count (no longer the
-  serif display face); the saved row reads like the others — **Saved · gesture** over the
-  time in mono, early stops first. The lock caption moved below the row so starting a take
-  no longer pushes Stop down. Record and the Stop label use `RECORD_FILL`,
-  simpetru-figstyle's bright red #d80032 (white text 5.3:1; `DANGER` gave 3.4:1). On the
+- In `RecordingControls` and `RecordButton`, the whole recording row is Stop, or Cancel
+  during warm-up, in the same rectangle as Record. It replaces the small default-grey
+  button at the right edge. A timed take leads with whole seconds remaining in the same
+  face as the warm-up count. It no longer uses the serif display face. The saved row shows Saved · gesture
+  over mono time, with early stops first. The lock caption sits below the row, keeping Stop
+  in place when a take starts. Record and the Stop label use `RECORD_FILL`,
+  simpetru-figstyle's bright red #d80032 with white text at 5.3:1, compared with 3.4:1 for `DANGER`. On the
   light theme the countdown takes figstyle's darker shades, red #d80032 (3.9:1) and orange
-  #d06708 (2.9:1), where the status tones read 2.5:1 and 1.6:1 on their own tints. New
+  #d06708 (2.9:1), where the status tones read 2.5:1 and 1.6:1 on their own tints. Use
   `action_row` and `solid_fill` helpers in `widgets/common.py`.
 - `RecordingControls` and `RecordButton` offer Record while predicting and Stop under any
   state with a take open; `RecordButton` freezes the session at the Stop click, so rows
   produced over the naming dialog are not part of the take. The ML Predict button starts
   from `recording` as well as `idle`.
 - `Pipeline.stop_predicting` returns to `recording` when a take is open, `idle` otherwise.
-- `save_meta` runs on the finalize thread rather than on the Stop click; a caller that read
+- `save_meta` runs on the finalize thread. It no longer runs on the Stop click. A caller that read
   `meta.json` synchronously after `stop_recording()` should pass `wait=True`.
 
 - The 2.0 widget kit uses one header per card, state rows, selectable chips, captioned fields and settings popovers across device, stream, recording, process, training and hand controls.
 - `force_ramps`, `pong`, the synthetic EMG examples and `sessantaquattro_app` use the shared session shell with workflow steps, persistent signals and participant sessions.
 - Panel and viewer demos, `control_map_studio` and `vhi_control_hand` use the shared application header.
-- `emg_classification` includes the optional LSL pose and gRPC movement outputs previously shown in `emg_classification_grpc`.
-- `emg_32ch_multi_model` includes the detachable cards and floating training log previously shown in `emg_popout_layout`.
+- `emg_classification` includes the optional LSL pose and gRPC movement outputs from `emg_classification_grpc`.
+- `emg_32ch_multi_model` includes the detachable cards and floating training log from `emg_popout_layout`.
 - `electrode_grids` replaces `multi_panel_grids` and `channel_grid_demo` with four electrode-array viewers, independent channel selections and a shared amplitude range.
 - Pong 2.0 puts Serve inside the court, adds serif scores, command and effort meters, a cursor history trail and first-to-11 games, and uses a slower ball and larger player paddle in the session example.
 - `ControlMapEditor` uses control cards and one Save action for form and TOML edits, with TOML beside the cards when space permits.
@@ -177,12 +174,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SignalViewer` uses a one-row toolbar with Channels and Display popups, and a compact sample-rate and frame-rate footer.
 - `Px(n)` and the grid gutter are pixels at UI scale 1.0 and follow the scale, so fixed
   side panels keep their proportion to the text in them.
-- Examples no longer hardcode `ui_scale=0.85`; the automatic scale replaces it.
+- Examples use automatic scaling in place of fixed `ui_scale=0.85`.
 - Fonts load at their base size and are scaled through `style.font_scale_main`, so ImGui
-  1.92 re-rasterises them at the drawn size instead of the app reloading them.
+  1.92 re-rasterizes them at the drawn size. The app no longer reloads the fonts.
 
 ### Fixed
 
+- The controls guide limits orphan-alias validation to targets that all report `claims`; a target without `claims` intentionally accepts every alias.
+- `StatusBar` shows the real participant folder using the same safe ID as recording saves, including IDs with spaces, separators or more than 40 characters.
+- The SessionManager screenshot fixture loads and selects its three mock participant takes before capture, with Rest / Fist durations.
+- The CatBoost regression example uses the same 200 ms EMG window for training and live prediction, keeping their feature layouts compatible.
+- The CatBoost and RaulNet regression examples refuse training when every class is unticked, with a clear reason in the training status and log.
+- VHI upgrades prepare the replacement on the destination filesystem and swap directories with rollback, preserving the previous install if replacement fails.
+- `install_vhi --no-verify` prints an explicit checksum warning before downloading.
+- Crashed recording takes retain readable metadata from start and stream declaration; `recover_session(folder)` packs the saved samples into a verified `.mg.zip` while keeping the take marked unfinished.
 - Follow runs stopped by another panel save their actual target end before metadata is written, so saved-take scoring uses the interrupted interval and later takes remain unaffected.
 - `FollowRun(drive=..., hz=32)` drives the operator hand on its own clock, independent of EMG, the GUI and `predict`; Stop joins the driver before restoring rest. Myocontrol uses separate prediction and operator links so `controls` records predictions only.
 - App shutdown waits for pending recording saves, including takes stopped by cleanup hooks, before stopping streams; unfinished saves are logged after a 30-second timeout.
@@ -192,8 +197,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Virtual Hand lookup finds an existing per-user installation from another checkout and reports when the hand is not installed.
 - Headers, recording timing fields, signal toolbars and session guidance fit narrow cards and larger UI scales.
 - The macOS Dock icon uses Apple's tile size and transparent padding.
-- A stream counts as connected as soon as `Stream.reconnect` succeeds, not at its first chunk. Pong's first **Follow the cursor** block reconnects its cursor stream and records at once; `RecordingControls` read the wait for that chunk as a lost stream and saved an empty take.
-- Clicking **Serve** in `PongTask` serves; the court underneath took the click, so only Space did.
+- A stream counts as connected when `Stream.reconnect` succeeds, before its first chunk. Pong's first Follow the cursor block can reconnect its cursor stream and record before the first chunk arrives. Previously, `RecordingControls` treated that wait as a lost stream and saved an empty take.
+- Clicking Serve in `PongTask` starts a rally, as does Space. Previously the court underneath
+  intercepted the click, so only Space worked.
 
 ## [2.6.2] - 2026-08-10
 

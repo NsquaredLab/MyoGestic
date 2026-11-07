@@ -9,6 +9,8 @@ Three window iterators, differing only in what each window is paired with. `iter
 
 ::: myogestic.session.open_session_store
 
+::: myogestic.session.recover_session
+
 ::: myogestic.session.iter_labeled_windows
 
 ::: myogestic.session.iter_target_windows

@@ -58,11 +58,10 @@ def _active_display_count() -> int:
 def _collapse_glfw_monitor_spam():
     """Show that GLFW error once, count the rest, and pass everything else through.
 
-    Works at the file-descriptor level: GLFW writes to fd 2 from C, where a Python-level
-    `sys.stderr` wrapper never sees it.
+    Captures GLFW's C writes to fd 2, which bypass Python's `sys.stderr`.
 
-    A no-op in the browser. Pyodide has no threads, so the pump below cannot start, and the
-    warning this collapses is a macOS multi-monitor artefact that cannot arise there anyway.
+    Skipped in the browser, where Pyodide has no threads and this macOS
+    multi-monitor warning cannot occur.
     """
     from myogestic._browser import IS_BROWSER
 
@@ -120,7 +119,7 @@ _FINALIZE_TIMEOUT_S = 30.0
 
 
 class AppState(StrEnum):
-    """Core app-state values. Extensions (e.g. myogestic.ml.PipelineState) add more.
+    """Core app-state values. myogestic.ml.PipelineState adds ML states.
 
     `Context.state` is a bare `str` so extensions can introduce their own states
     without subclassing. Each module validates transitions within its own
@@ -164,8 +163,8 @@ _active_app: App | None = None
 def can_transition(current: str, target: str) -> bool:
     """Core-level transition check (idle ↔ recording).
 
-    Extensions validate their own transitions independently - this function
-    returns False for non-core states rather than raising.
+    Extensions validate their own transitions. This function returns False
+    for non-core states without raising.
     """
     return target in TRANSITIONS.get(current, set())
 
@@ -180,25 +179,23 @@ class Context:
     Attributes
     ----------
     streams
-        Every registered `Stream`, by name. What a widget looks its own stream
-        up in.
+        Registered `Stream` instances keyed by name for widget lookup.
     bridges
-        Registered remote-target bridges, by name. Unlike ``streams`` these are
-        not started for you — see `App.bridges`.
+        Registered remote-target bridges keyed by name. Start them explicitly;
+        see `App.bridges`.
     state
         The recording state machine: ``"idle"`` or ``"recording"``. Extensions
-        add their own states (``myogestic.ml`` adds ``"training"``). Whether a
-        take is open is `recording`, not this.
+        add states such as ``myogestic.ml``'s ``"training"``.
+        Check `recording` to determine whether a take is open.
     session
         The `Session` of the current or most recent take. Set by `App.start_recording`
         and kept after `stop_recording` so the signal viewer can go on drawing that
-        take's label markers; `discard_recording` clears it. Whether a take is *open*
-        is `recording`, not this.
+        take's label markers; `discard_recording` clears it.
+        Check `recording` to determine whether a take is open.
     recording
-        ``True`` while a `Session` is open and the streams append to it. Independent of
-        `state`: a take can run under ``"predicting"``. This is what to check to know
-        whether a recording is on; ``session`` stays set after a stop so the viewer can
-        keep drawing the last take's markers.
+        ``True`` while a `Session` is open and streams append to it, including
+        under ``"predicting"``. Independent of `state` and the retained
+        ``session`` reference.
     pending_saves
         Source folders still being finalized. Nonempty until every pending
         pack has registered its saved take or reported failure.
@@ -206,7 +203,7 @@ class Context:
         The owning `App.finalize_hooks` list, also available to widgets that
         receive only a context. Hooks run after freeze and before metadata is saved.
     participant
-        Pseudonymised ID used to label new recordings; empty when none is set.
+        Pseudonymized ID used to label new recordings; empty when none is set.
     require_participant
         Refuse recording until a participant ID is set. Recording widgets
         mirror this opt-in gate with a disabled Record button.
@@ -293,9 +290,10 @@ class Context:
     def log(self, message: str, max_lines: int = 500) -> None:
         """Append a one-line app event for the `log_panel` widget.
 
-        Bounded to `max_lines` (oldest dropped). Use for high-level events -
-        recording saved, training start/done, model load - not per-frame
-        chatter. Safe to call from any thread (list.append/pop are GIL-atomic).
+        Bounded to `max_lines`, dropping the oldest entry. Use for lifecycle
+        events such as recording saves, training start/done and model loads. Do not
+        log per-frame messages. Safe from any thread because list.append/pop
+        are GIL-atomic.
         """
         from time import strftime
 
@@ -314,12 +312,13 @@ class App:
     Construct one per process. Register streams via `app.streams(...)`,
     register your UI via `@app.ui`, then call `app.run()`. Optional
     extensions like `Pipeline(app)` register themselves via
-    `app.before_run_hooks` / `app.cleanup_hooks` - user code rarely
-    needs to touch those lists directly.
+    `app.before_run_hooks` / `app.cleanup_hooks`. User code rarely needs to
+    modify those lists directly.
 
-    On desktop, ImGui **multi-viewport** is on by default: floating windows (e.g. the
-    signal viewer's channel-grid ``Edit…`` window) open as their own native OS windows,
-    square-cornered and opaque. Skipped in the browser (no backend for extra OS windows).
+    On desktop, ImGui multi-viewport is on by default. Floating windows, including
+    the signal viewer's channel-grid ``Edit…`` window, use native OS windows with
+    square corners and opaque backgrounds. Browser mode skips multi-viewport
+    because it has no backend for extra OS windows.
 
     Parameters
     ----------
@@ -330,14 +329,14 @@ class App:
         Apply MyoGestic's built-in ImGui theme. Set ``False`` to
         keep the Dear ImGui defaults.
     docking
-        Experimental - enable ImGui docking (a full-screen dockspace) so panels
+        Enable experimental ImGui docking in a full-screen dockspace so panels
         registered via ``app.popout(...)`` become tearable DockableWindows. macOS
         Retina viewport sizing of detached windows can be wrong on the first draw.
     ui_scale
-        Fixed UI zoom factor - scales the font, imgui's style metrics (padding,
-        spacing, rounding) and every `Px` track. ``None`` (the default) scales
-        automatically: the OS display scale times how big the window is, updated
-        live as the window is resized or moved to another monitor.
+        Fixed UI zoom factor for fonts, imgui style metrics including padding,
+        spacing and rounding, and every `Px` track.
+        The default ``None`` multiplies OS display scale by a window-size
+        factor, updating as the window is resized or moved between monitors.
         ``$MYOGESTIC_UI_SCALE`` overrides both. Clamped to ``[0.5, 2.0]``. No
         effect when ``theme=False``.
     require_participant
@@ -401,11 +400,10 @@ class App:
     def add_stream(self, stream: Stream) -> bool:
         """Register a stream, and start it if the app is already running.
 
-        The counterpart to [`remove_stream`][myogestic.App.remove_stream], for an
-        app that lets the operator add a device rather than declaring its streams
-        up front. Before `run`, this is `streams` with a return value; after it,
-        it also does the `Stream.start` that `run` would have done — nothing else
-        will, because `run` starts each stream exactly once on the way in.
+        Pairs with [`remove_stream`][myogestic.App.remove_stream] for runtime
+        device changes. Before `run`, behaves like `streams` with a return value.
+        While running, also calls `Stream.start`; `run` starts registered streams
+        once during startup.
 
         Refused while recording, and refused for a name already taken. A session
         sizes one Zarr array per stream at `start_recording`, so a stream that
@@ -435,12 +433,12 @@ class App:
         """Stop a stream and unregister it.
 
         Stops the acquire thread and disconnects the source, then drops the name
-        from ``ctx.streams``. Widgets bound to it by name report it missing
-        rather than failing — that is why they look it up every frame.
+        from ``ctx.streams``. Widgets look it up by name each frame and report
+        it missing without failing.
 
         Refused while recording: `stop_recording` walks ``ctx.streams`` to detach
         the session, so a stream removed mid-take would keep the session
-        attached and never be finalised.
+        attached and never be finalized.
 
         Returns
         -------
@@ -460,13 +458,14 @@ class App:
     def bridges(self, *bridges: Any) -> None:
         """Register one or more Bridge subprocesses with the app.
 
-        Bridges run in their own process (webcam, ultrasound, depth camera, …) and
-        publish an LSL clock stream the main app subscribes to. Registering does not
-        start them — call ``bridge.start()`` yourself, unlike [`streams`][]. Each
-        bridge goes into ``ctx.bridges`` under its ``.name``; the same name overwrites.
+        Bridges run webcam, ultrasound or depth-camera acquisition in separate
+        processes and publish LSL clock streams that the app subscribes to.
+        Registration does not start them. Call ``bridge.start()`` yourself,
+        unlike [`streams`][]. Each bridge is stored in
+        ``ctx.bridges`` by ``.name``; the same name overwrites.
 
-        Nothing renders a bridge for you: ``bridge.status`` and ``bridge.alive`` are
-        there if you want to show them.
+        Bridges have no automatic UI. Use ``bridge.status`` and ``bridge.alive``
+        to display their state.
 
         Parameters
         ----------
@@ -499,8 +498,9 @@ class App:
     ) -> None:
         """Register a dockable window before `run()`.
 
-        Preferred over calling `popout_panel(...)` inside `@app.ui`: Hello ImGui gets
-        the complete DockableWindow list before launch rather than on the first frame.
+        Prefer this over `popout_panel(...)` inside `@app.ui`. It gives Hello
+        ImGui the complete DockableWindow list before launch.
+        Calls to `popout_panel(...)` inside `@app.ui` register on the first frame.
         """
         self._popout_specs = [spec for spec in self._popout_specs if spec[0] != title]
         self._popout_specs.append((title, gui_fn, default_open, can_be_closed, remember_is_visible))
@@ -512,7 +512,7 @@ class App:
 
         Creates ``base_path/<ID>/recordings/<ID>_<timestamp>/``, or
         ``.../predictions/...`` when the take starts while a model is
-        predicting, and starts appending each
+        predicting, writes initial metadata marked ``finished=False``, and starts appending each
         stream's data + timestamps to per-stream Zarr arrays. Streams
         whose ``info`` is still ``None`` (disconnected) are skipped -
         they won't be retroactively captured if they connect later in
@@ -546,6 +546,18 @@ class App:
         if self.ctx.state == AppState.IDLE:
             self.ctx.state = AppState.RECORDING
         self.ctx.session = Session(base_path=base_path, participant=self.ctx.participant, kind=kind)
+        controls = self.ctx.control_space
+        self.ctx.session.save_meta(
+            self.name,
+            class_names=list(self.ctx.class_names) or None,
+            class_codes=dict(self.ctx.class_codes),
+            control_space=controls.as_control_space() if controls is not None else None,
+            control_spaces={
+                name: control_map.as_control_space()
+                for name, control_map in self.ctx.control_spaces.items()
+            },
+            finished=False,
+        )
         n_ready = 0
         for name, stream in self.ctx.streams.items():
             if stream.info is None:
@@ -561,6 +573,7 @@ class App:
             if stream.notch_hz:
                 conditioning = self.ctx.session.extras.setdefault("conditioning", {})
                 conditioning[name] = {"notch_hz": int(stream.notch_hz)}
+        self.ctx.session._checkpoint_meta()
         if n_ready == 0:
             self.ctx.status_message = "No connected streams to record"
             self.ctx.log("Recording: no connected streams")
@@ -572,11 +585,12 @@ class App:
         """Stop the active recording and pack the session to a ``.mg.zip``.
 
         Detaches every stream and freezes the session on the calling thread, then on a
-        daemon thread runs `finalize_hooks`, writes ``meta.json`` and ``labels.json``,
+        daemon thread runs `finalize_hooks`, updates ``meta.json`` with ``finished=True``
+        and writes ``labels.json``,
         packs the folder into ``<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip`` (the folder is kept
-        until the pack succeeds) and registers the archive with the session browser. ``wait=True``
-        does that work inline instead — for tests, and for shutdown, where a daemon would
-        die with the archive half written. Refuses if no recording is open.
+        until the pack succeeds) and registers the archive with the session browser.
+        ``wait=True`` runs this inline for tests or shutdown, where a daemon could
+        exit before packing finishes. Refuses if no recording is open.
         """
         self.ctx._recording_stop_revision += 1
         if not self.ctx.recording:
@@ -666,11 +680,11 @@ class App:
         """Stop the active recording and delete it, unsaved and unpacked.
 
         The counterpart to [`stop_recording`][myogestic.App.stop_recording] for a
-        take the operator threw away — a false start, a bad trial. Detaches every
+        take the operator discards, such as a false start or bad trial. Detaches every
         stream, removes the session folder, and returns the state to ``"idle"`` when
         the take was started from idle (a take under ``"predicting"`` leaves the state
-        alone). Nothing is written to ``meta.json`` and no archive is produced, so a
-        discarded recording leaves no trace to clean up later.
+        alone). Removes the take's arrays and initial metadata without producing an
+        archive, so a discarded recording leaves no trace to clean up later.
 
         Refuses if no recording is open.
         """

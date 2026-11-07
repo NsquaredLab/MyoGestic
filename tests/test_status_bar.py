@@ -8,6 +8,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic import Context, Fr, Grid, Px, _scale, _theme
+from myogestic.session import participant_dir
 from myogestic.widgets import StatusBar
 from myogestic.widgets.common import IDLE, SUCCESS, muted, ui_px
 from myogestic.widgets.panels import status_bar
@@ -101,6 +102,29 @@ def test_stream_participant_and_folder_text(probe, connection, participant):
 
 
 @pytest.mark.parametrize(
+    "participant,folder_name",
+    [
+        ("P 001", "P-001"),
+        ("../P/001", "P-001"),
+        ("/P-001", "P-001"),
+        ("P" * 60, "P" * 40),
+        ("___", ""),
+        ("測定", ""),
+        ("", ""),
+    ],
+)
+def test_storage_folder_matches_recording_participant_slug(probe, participant, folder_name):
+    probe.ctx.participant = participant
+    root = Path("captures")
+
+    view = probe.render(StatusBar(sessions_dir=root))
+
+    folder = root / folder_name
+    assert folder == participant_dir(root, participant, kind="")
+    assert view.tooltips == [f"emg · disconnected · {participant or 'No participant'} · {folder}"]
+
+
+@pytest.mark.parametrize(
     "model,saved,expected",
     [
         (None, "old.pkl", "Model: none"),
@@ -144,7 +168,8 @@ def test_bare_footer_fits_in_light_theme(probe, width, scale, with_pipeline, lon
         right = view.bounds[1][0] - imgui.get_style().window_padding.x
         assert abs(view.items[-1].hi[0] - right) <= 1
     if long:
-        detail = f"emg · disconnected · {participant} · {Path('data') / participant}"
+        folder = participant_dir("data", participant, kind="")
+        detail = f"emg · disconnected · {participant} · {folder}"
         assert view.items[1].label.endswith("…")
         assert view.tooltips[0] == detail
         if with_pipeline:

@@ -1,69 +1,61 @@
 ---
 title: "Record for proportional control"
 ---
-A decoder is *proportional* when it answers **how hard** as well as **which way**: half a
-contraction moves the paddle half as fast. Getting that is a recording problem before it
-is a modelling one, and the short statement of it is this — a block that only ever cues
-Down, Rest and Up asks for **three distinct target values**, so the fit is a three-class
-problem however you label it. What that *costs* depends on the estimator, and the
-[warning below](#the-active-ingredient-is-the-number-of-distinct-levels) is where the
-exception lives: it is expensive for the tree ensembles this project ships and free for
-a linear model.
+A proportional decoder estimates effort and direction. Half a contraction moves
+the paddle half as fast. Cued Down, Rest and Up provide three distinct target
+values. Recording only those cues leaves a three-class target problem
+regardless of the estimator's name. Establish level coverage in the recording
+before choosing a model. Tree ensembles benefit from more levels; a linear model can interpolate
+between three. See [the measurement below](#the-active-ingredient-is-the-number-of-distinct-levels).
 
 This page is the graded counterpart to [Record good training data](record-good-training-data.md),
 which covers the cued protocol for classification.
 [`examples/start_here/pong.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/start_here/pong.py)
-is the whole thing as a running application: its **Follow the cursor** button records the
-block described here, and its Proportional mode fits it.
+records this block through its Follow the cursor button and fits it in Proportional mode.
 
-## What three levels cost you
+## Error with three levels
 
-Measured on three 8-channel bracelet recordings of cued Down/Rest/Up, fitting a CatBoost
-*regressor* on the class values, it is **dead below about 30 % effort** — everything under
-that reads as rest.
+On three 8-channel bracelet recordings of cued Down/Rest/Up, a CatBoost regressor
+fitted to class values predicts rest below about 30 % effort.
 
 A tree ensemble's output is an average of training targets, so it *cannot* emit a level
-the block never asked for. Simulating the same protocol reproduces the pathology exactly:
-at a true +0.50, the three-class fit emits **-0.34**. Fitting the same estimator on
-densely covered levels instead cuts the error at intermediate efforts 14x — CatBoost MAE
-**0.402 → 0.029**.
+the block never asked for. A simulation of the same protocol reproduces this error:
+at a true +0.50, the three-class fit emits -0.34. Fitting the same estimator on
+densely covered levels cuts intermediate-effort error 14x, with CatBoost MAE
+0.402 → 0.029.
 
-!!! warning "One famous symptom this protocol does *not* fix"
-    The same recordings also made CatBoost **non-monotonic in effort**: scaling every
+!!! warning "Check monotonicity in effort"
+    The same recordings also made CatBoost non-monotonic in effort: scaling every
     channel by 1.0 → 1.3 → 1.6 walked its Up prediction 1.000 → 0.882 → 0.723, so
-    contracting harder drove the paddle the wrong way. That one is the *estimator*, not
-    the level count, and dense levels do not touch it — refit the same CatBoost on a full
+    contracting harder drove the paddle the wrong way. This is an estimator
+    failure; adding dense target levels does not fix it. Refit the same CatBoost on a full
     `Pursuit` block (411 distinct levels, the protocol below) and the same sweep still
     reads 0.811 → 0.905 → 0.849, still non-monotone, with or without the "Down was
     recorded harder" asymmetry that caused it. `directional_decoder` on the identical
-    block reads 0.792 → 1.0 → 1.0. See [Fit it](#fit-it) for why: one regressor over raw
-    features conflates *how much* with *which way*, and no recording protocol can
-    separate them for it.
+    block reads 0.792 → 1.0 → 1.0. One regressor over raw features conflates effort
+    and direction. No recording protocol can separate those quantities for it;
+    the estimator must do so. See [Fit it](#fit-it).
 
 ## The active ingredient is the number of distinct levels
 
-!!! warning "What the measurement does and does not say"
-    The thing that was measured is the **number of distinct target levels** — not pursuit,
-    and not continuity. A cued **staircase of eleven holds beat the pursuit block** on the
-    same metric, **0.0367 against 0.0548 MAE, on 4 of 4 seed pairs**.
+!!! warning "Distinct target levels"
+    The measured factor is the number of distinct target levels. It does not
+    establish a benefit from pursuit or continuity. A cued staircase of eleven holds beat the pursuit block on the
+    same metric, 0.0367 against 0.0548 MAE, on 4 of 4 seed pairs.
 
-    The win is also specific to the tree ensembles this project ships. **A linear model
-    gains nothing at all**, because least squares already draws a straight line through
-    three levels.
+    The gain applies to the tree ensembles this project ships. A linear model
+    gains nothing because least squares interpolates between three levels.
 
-    So do not pick a followed cursor because it is more accurate than a staircase. It is
-    not.
+Do not choose a followed cursor on the claim that it is more accurate than
+a staircase. The reason to prefer it is human feedback.
+A cursor gives participants continuous visual error feedback to reach intermediate
+levels. A staircase cue such as "go to 0.6" requires them to judge what 0.6 feels like.
 
-The reason to prefer a cursor is **human**, not statistical. Told "go to 0.6", a subject
-has no idea what 0.6 feels like — a staircase asks for levels they cannot aim at. A cursor
-gives continuous visual error feedback, so they see the miss while they are missing it,
-which is what makes the intermediate levels reachable at all.
+Choose the protocol for your estimator:
 
-Two corollaries worth acting on:
-
-- If your estimator is **linear**, this protocol buys you nothing. Record whatever is
+- If your estimator is linear, this protocol buys you nothing. Record whatever is
   convenient.
-- If you would rather **cue a staircase**, cue one. Eleven holds is enough; three is not.
+- A cued staircase can use eleven holds to cover intermediate levels; three holds leave sparse coverage.
 
 ## Record the block
 
@@ -72,10 +64,10 @@ smooth aperiodic wander over signed `[-1, +1]`, then rest again. It is determini
 arithmetic on the hop index, so two sessions record the identical path and an offline
 script can assert an exact value.
 
-[`TargetSource`][myogestic.sources.TargetSource] streams it, which is the part that makes
-it trainable — the cursor lands in the session as a recorded signal on the EMG's own
-clock, aligned by construction, rather than as a start time plus a copy of the parameters
-you hope nobody edited.
+[`TargetSource`][myogestic.sources.TargetSource] records the cursor as a stream
+on the EMG's clock, providing aligned targets for training. Reconstructing
+from a start time and saved parameters would require trusting that the clocks
+agree and that nobody edited the parameters between the note and the take.
 
 ```python
 from myogestic import Stream
@@ -87,36 +79,35 @@ cursor = TargetSource(Pursuit())
 target_stream = Stream("target", source=cursor, window_ms=200)
 ```
 
-Four things about the wiring, each of which is a way to end up with an unusable session:
+Follow these four wiring steps:
 
-- **`target_stream.reconnect()` is not optional.** It is software, so nothing plugs in and
-  nothing else attaches it; `start_recording` silently skips a stream whose `info is None`.
-- **Press Record first, then start the block.** `cursor.start()` restarts task time from
+- Call `target_stream.reconnect()`. A software source has nothing physical to
+  attach it automatically. `start_recording` silently skips a stream whose `info is None`.
+- Press Record first, then start the block. `cursor.start()` restarts task time from
   zero; the stream runs from `reconnect()` to `disconnect()` either way.
-- **Keep the target out of the device picker** — `DevicePicker("emg", exclude=("target",))`.
+- Exclude the target with `DevicePicker("emg", exclude=("target",))`.
   One stray Connect replaces the `TargetSource` with an amplifier and the recording holds
   EMG under the name `target`.
-- **Draw the cursor from `cursor.elapsed`**, not from a fresh clock reading. It is the task
+- Draw the cursor from `cursor.elapsed`, not from a fresh clock reading. It is the task
   time of the newest sample actually *emitted*, so the ghost cannot sit a frame off the
   ground truth the model is later fitted against.
 
-The knobs on `Pursuit` are `hop_s` (seconds per waypoint-to-waypoint segment — the
-difficulty knob; halving it doubles every rate without changing the levels visited),
-`hops` (fewer than about 16 and the level coverage starts to clump) and `reps`. Raise
-`hops` rather than `reps` to lengthen a block: repetitions are identical by design, so
-every one after the first is learnable.
+`Pursuit` accepts `hop_s`, `hops` and `reps`. `hop_s` sets seconds per waypoint
+segment; halving it doubles every rate while preserving levels. Fewer than about
+16 `hops` can leave clustered coverage. Increase `hops` to lengthen a block;
+repetitions are identical and can be learned after the first.
 
 ## Fit it
 
 [`iter_target_windows`][myogestic.session.iter_target_windows] pairs each EMG window with
-the recorded cursor value **at the window's end**. That is deliberate and it is the causal
-choice: the model sees a trailing window and must emit the command for *now*. Taking the
-centre would train it to predict the past by half a window; taking the mean would train it
-to lag every ramp.
+the recorded cursor value at the window's end. This trains the model to estimate
+the current command from a trailing window. This is the causal target choice. A centre target is half a window
+behind; a window mean introduces ramp lag.
 
-By default it yields only windows ending in a phase where the subject was actually
-following — every code in `PHASE_CODES` except `idle` (no block running) and `done` (block
-finished), both of which sit at target `0` while the subject does whatever they like.
+By default it includes windows ending in followed phases. It excludes `PHASE_CODES`
+`idle` and `done`, which hold target `0` before and after a block. Those
+phases have no following task, and the participant may move freely, so their
+zero targets do not describe the participant's effort.
 
 The block below fabricates a rehearsal recording so the page is self-checking; with a real
 session you replace the path and keep everything from `features` down.
@@ -192,16 +183,16 @@ model = directional_decoder().fit(np.stack(X), np.array(y))
 ```
 
 [`directional_decoder`][myogestic.recipes.estimators.directional_decoder] is the model this
-protocol was built for: it estimates *how much* (the row total, rescaled so rest reads 0
-and a full contraction 1) and *which way* (the amplitude-normalised row on a Fisher axis)
-apart, then multiplies them. A regressor over raw features conflates the two and learns
-whichever cue happened to be louder — which is where the non-monotonic CatBoost above came
-from. It requires only NumPy. `catboost_regressor` also works on this data and is the
+protocol uses. It estimates effort from the row total, rescaled to 0 at rest
+and 1 at full contraction. It estimates direction by projecting the
+amplitude-normalized row onto a Fisher axis, then multiplies effort and direction.
+A regressor over raw features can conflate the two and learn the louder cue,
+causing the non-monotonic CatBoost behaviour above. It requires only NumPy. `catboost_regressor` also works on this data and is the
 comparison worth running; it is the estimator the 14x number above was measured on.
 
-## Check before the subject does
+## Check before the participant does
 
-The property the protocol buys is monotonicity in effort, so assert it:
+Assert that the decoder is monotonic in effort:
 
 <!--docs:run-->
 ```python
@@ -214,21 +205,20 @@ assert np.all(np.diff(commands) > 0.0), "the fit is not monotonic in effort"
 
 On real data the same check is a held-out probe at a few levels, plus a global gain sweep:
 multiply every channel by 1.0 / 1.3 / 1.6 and the command must not *fall*. That is the
-sweep the shipped CatBoost regressor failed, and — as the warning at the top of this page
-says — still fails on a densely covered block. Run it against whichever estimator you
+sweep CatBoost fails even on a densely covered block. Run it against whichever estimator you
 actually ship; it is a property of the model, not of the recording.
 
 !!! note "Gain invariance has a condition"
     `directional_decoder` divides each row by its own sum, so an electrode gain cancels
-    only if **every** feature column answers it the same way. RMS, MAV and WL all scale by
+    only if every feature column answers it the same way. RMS, MAV and WL all scale by
     `g`; VAR scales by `g²` and ZC not at all. Mix two of those groups and the
-    cancellation goes — ticking VAR beside RMS+MAV walked the mean Up command
+    cancellation fails. Selecting VAR with RMS+MAV changed the mean Up command
     0.913 → 0.837 over a 1.3 → 3.0 gain sweep where RMS+MAV held flat. `pong.py` refuses a
-    mixed set in Proportional mode rather than training on it.
+    mixed set in Proportional mode.
 
-## What the decoder needs from the block
+## Decoder requirements
 
-The effort scale is fitted **per window** and pooled by median, over the windows whose
+The effort scale is fitted per window and pooled by median, over the windows whose
 target reaches `abs(y) >= 0.5`:
 
 ```text
@@ -237,48 +227,46 @@ span_ = median((total - rest_) / abs(y))    over abs(y) >= 0.5,  at least 3 wind
 
 Two consequences for how you record:
 
-- **The block must ask for at least half deflection, at least three times.** Below that
-  `fit` **raises**, naming the count and the largest `abs(y)` in the block, rather than
-  quietly fitting a span on two windows. A default `Pursuit()` block clears the bar 55
-  times over — 165 qualifying windows against a floor of 3.
-- **The target must be in signed `[-1, +1]`.** `fit` raises on any `abs(y) > 1`, because
+- Record at least three windows at half deflection or above. Below this count,
+  `fit` raises with the count and largest `abs(y)` instead of fitting two windows.
+  A default `Pursuit()` block provides 165 qualifying windows, 55 times the floor of 3.
+- The target must be in signed `[-1, +1]`. `fit` raises on any `abs(y) > 1`, because
   nothing else in it can see a unit error: a percent-of-MVC column divides through the
   span at up to 100 instead of 1, `activation` saturates, and the graded command becomes
   a three-step staircase with no complaint. See
   [Mixing cued and cursor sessions](#mixing-cued-and-cursor-sessions).
-- **A cued block is unaffected, exactly.** There every non-rest window has `abs(y) == 1`,
-  so the threshold selects the same windows as `y != 0`, dividing by 1 is a no-op, and a
-  median is translation-equivariant. On the three cued recordings both the old and the new
-  rule return the identical float. (Bit-for-bit needs an odd number of qualifying windows;
-  on an even count `numpy.median` averages the two middle elements and the two rules part
-  company in the last bit — measured at 1.8e-15 worst case.)
+- Cued blocks retain the same scale. Every non-rest window has `abs(y) == 1`,
+  so the threshold selects the same windows as `y != 0`. Dividing by 1 is a no-op
+  and the median is translation-equivariant. The scaled-target and cued-only
+  rules return identical floats on the three cued recordings with odd window counts.
+  With even counts, `numpy.median` averages the two middle values; the measured
+  worst-case difference is 1.8e-15.
 
 The threshold trades bias for count. Dividing by `abs(y)` multiplies a window's noise by
 `1 / abs(y)`, and an EMG baseline adds to the row total without scaling with effort, so
 low-target windows read *high*:
 
-| `abs(y)` threshold | 0.25 | **0.50** | 0.75 | 0.90 |
+| `abs(y)` threshold | 0.25 | 0.50 | 0.75 | 0.90 |
 |---|---:|---:|---:|---:|
-| fitted span (reference 4.23) | 4.40 | **4.29** | 4.24 | 4.22 |
-| windows used | 301 | **165** | 68 | 25 |
+| fitted span (reference 4.23) | 4.40 | 4.29 | 4.24 | 4.22 |
+| windows used | 301 | 165 | 68 | 25 |
 
 0.5 caps the noise gain at 2x, lands 1.3 % high and keeps a third of the block. Getting
 that to 0.1 % costs four fifths of the windows, which is the wrong side of the trade on a
 short recording.
 
-The **direction** estimate uses every non-rest window, including the quiet ones. That was
-measured rather than assumed: restricting it to the same strong windows moved mean MAE
+The direction estimate uses every non-rest window, including quiet ones.
+This choice was measured. Restricting it to the same strong windows changed mean MAE
 0.0820 → 0.0812 over five seed pairs, a 1 % difference that swaps sign across levels, for
 two thirds fewer rows in the covariance.
 
 ## Mixing cued and cursor sessions
 
-They train together. Both protocols produce the same signed `[-1, +1]` column — a class is
-a constant target, so `Down / Rest / Up` are just the levels `-1 / 0 / +1` — which is the
-whole reason for having a signed standard.
+Both protocols produce a signed `[-1, +1]` target column and can train together.
+Cued `Down / Rest / Up` correspond to constant levels `-1 / 0 / +1`.
+This compatibility is the reason for the signed target standard.
 [`split_sessions_by_stream`][myogestic.session.split_sessions_by_stream] routes each
-session by whether it carries the target stream, so recordings made before the cursor
-existed still contribute:
+session by target-stream presence, allowing cued recordings to contribute:
 
 ```python
 from myogestic.session import iter_labeled_windows, iter_target_windows, split_sessions_by_stream
@@ -294,31 +282,32 @@ for path in split.without_stream:  # cued blocks: the class as a level
         ...
 ```
 
-Just do not expect three cued sessions plus one cursor session to behave like four cursor
-sessions. The count that matters is distinct levels, and three of them dominate a fit that
-is mostly made of them.
+Do not expect three cued sessions plus one cursor session to behave like
+four cursor sessions. Distinct target levels matter, and a fit dominated
+by cued data still sees mostly three levels.
 
-!!! danger "`split.with_stream` answers presence, not units, and not content"
-    Two traps, both of which produce a worse model and neither of which raises on its own.
+!!! danger "Check target units and followed phases"
+    `split.with_stream` checks stream presence only. It does not validate units
+    or content. Both traps below can worsen a model without an error from
+    the split itself. Check them before fitting.
 
-    **A force-ramp session is not a cursor session.** The other recorded-target protocol,
+    A force-ramp session is not a cursor session. The other recorded-target protocol,
     [Track a force target](track-a-force-target.md), writes its `Trapezoid` through the
     same `TargetSource`, onto a stream also called `target`, with the identical channel
-    names — in **percent of MVC**, `0..100`. A `StreamInfo` carries no unit, so nothing
+    names, in percent of MVC, `0..100`. A `StreamInfo` carries no unit, so nothing
     in the recording distinguishes the two, and the same `recordings/` folder holds both.
     Concatenated with a cursor block, one such session collapsed
     `directional_decoder`'s `span_` from 4.17 to 0.046 and turned a graded transfer curve
-    into a hard three-step staircase. `fit` now refuses any `abs(y) > 1`, and
-    `pong.py`'s `train` refuses it per session and names the file — but if you assemble
-    the column yourself, range-check it.
+    into a hard three-step staircase. `fit` refuses any `abs(y) > 1`, and
+    `pong.py`'s `train` names and refuses each such session. Range-check any target
+    column you assemble yourself.
 
-    **A cued session can carry an idle target stream.** `TargetSource` keeps emitting
+    A cued session can carry an idle target stream. `TargetSource` keeps emitting
     baseline with phase `idle` after the block ends, by design, and the stream stays
-    attached — so every cued take recorded after a pursuit block has a `target` stream in
-    it. `split_sessions_by_stream` puts it in `with_stream`; `iter_target_windows` then
+    attached. Cued takes after a pursuit block therefore carry a `target` stream. `split_sessions_by_stream` puts it in `with_stream`; `iter_target_windows` then
     correctly drops all of it, because `idle` is not a followed phase; and its label track
     is never read. Treat the target path as the *preferred* reading and the label track as
-    the fallback, not as an either/or: if the target path yields no windows for a session,
+    the fallback. If the target path yields no windows for a session,
     send that session to `iter_labeled_windows` before concluding it holds nothing.
 
 ## See also

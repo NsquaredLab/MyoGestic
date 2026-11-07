@@ -1,9 +1,7 @@
 ---
 title: "Feature-extraction cookbook"
 ---
-The framework deliberately ships nothing inside [`@pipeline.extract`][myogestic.ml.Pipeline.extract] - DSP and feature engineering belong to user code. Bringing your own scipy / MyoVerse / numpy is the design intent.
-
-That said, almost every EMG project starts with the same five or six features. This page is a copy-paste cookbook so you can drop them in and iterate.
+The framework supplies no implementation inside [`@pipeline.extract`][myogestic.ml.Pipeline.extract]. DSP and feature engineering belong to user code. Implement them with scipy, MyoVerse or numpy. The recipes below cover five or six common starting features.
 
 Each recipe slots into `@pipeline.extract` (section 1 also shows the `FeatureSelector` that feeds it). Drop one into your script, swap it for another, and re-train.
 
@@ -15,17 +13,17 @@ Each recipe slots into `@pipeline.extract` (section 1 also shows the `FeatureSel
 --8 < --"examples/synthetic/emg_classification.py:features"
 ```
 
-`extract` just calls it — the active features are stacked into one flat vector, identical for training and live predict:
+`extract` calls the selector to stack active features into one flat vector for training and prediction:
 
 ```python
 --8 < --"examples/synthetic/emg_classification.py:extract"
 ```
 
-The reference `rms`/`mav`/`wl`/`var`/`zc` live in [`myogestic.recipes.features`][myogestic.recipes.features] — plain numpy, channels-first `(n_channels, n_samples)` in, one scalar per channel out. Mix your own callables into the same dict; feature engineering is user code.
+The reference `rms`/`mav`/`wl`/`var`/`zc` in [`myogestic.recipes.features`][myogestic.recipes.features] use numpy. They take channels-first `(n_channels, n_samples)` arrays and return one scalar per channel. Mix your own callables into the same dict; feature engineering is user code.
 
-### …or bring your own (MyoVerse)
+### Use MyoVerse transforms
 
-Prefer a library's windowed transforms? Swap the dict for them — `@pipeline.extract` can return any feature vector:
+Use a library's windowed transforms in `@pipeline.extract`, which can return any feature vector:
 
 ```python
 import numpy as np
@@ -103,7 +101,7 @@ Median frequency is a fatigue signature; mean frequency tracks motor-unit recrui
 
 ## 4. Sliding RMS (stride tricks)
 
-When you want every per-window RMS estimate, not just one. Useful for time-frequency analysis or feeding a sequence model.
+Compute every per-window RMS estimate for time-frequency analysis or a sequence model. This retains a sequence rather than reducing the input to one RMS estimate.
 
 ```python
 import numpy as np
@@ -134,7 +132,7 @@ Output shape is `n_ch * n_win`. With `WIN=64, HOP=16` and a 0.2 s @ 2 kHz window
 
 ## 5. Simple onset detection
 
-A cheap "is the user trying" gate - use it to bypass prediction during quiet periods.
+Use an onset gate to bypass prediction during quiet periods.
 
 ```python
 import numpy as np
@@ -185,6 +183,6 @@ The `windows` dict is keyed by stream name. Add a second `app.streams(Stream("im
 | Cheap on/off gate before prediction | Onset detection (#5) |
 | Sensor fusion | Multi-stream (#6) |
 
-The pipeline calls `extract()` on each predict tick with available input. Your `train()` callback must apply the same feature code to recorded windows; it is not called automatically during training. Whichever feature set you pick, **the return shape must be stable** - same dimensionality every call - or your model will see a shape mismatch live.
+The pipeline calls `extract()` on each predict tick with available input. Your `train()` callback must apply the same feature code to recorded windows; it is not called automatically during training. Keep the returned dimensionality fixed to avoid shape mismatches during prediction.
 
 See also: [Add a custom model](add-a-model.md), [Pipeline concept page](../concepts/pipeline.md), [EMG classification tutorial](../tutorials/emg-classification.md).

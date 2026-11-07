@@ -93,6 +93,8 @@ h1.mg-page-title { margin-top: 14px; font: 400 64px/1.02 var(--mg-font-display);
 .mg-callout > :nth-child(2) { margin-top: 4px; }
 .mg-callout summary { cursor: pointer; }
 .mg-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 10px; margin-top: 32px; }
+/* Markdown's sibling spacing would push every card after the first down the grid. */
+.mg-cards > .mg-card { margin-top: 0; }
 .mg-card { min-width: 0; padding: 16px; border: 1px solid var(--mg-border); border-radius: 8px; background: var(--mg-card); }
 .mg-card:hover { border-color: var(--mg-selected-line); }
 .mg-card > :first-child { margin-top: 0; }

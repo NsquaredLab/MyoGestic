@@ -259,26 +259,41 @@ def render_recording_controls(out: Path) -> None:
 
 
 def render_session_manager(out: Path) -> None:
+    import json
+
     from myogestic import App
     from myogestic.widgets import SessionManager
 
-    # Fake sessions folder with a couple of placeholder folders
+    # Use the participant scan path, then select the fixtures before the first frame.
     tmp = Path(tempfile.mkdtemp(prefix="widget_screenshot_sessions_"))
-    for name in ("2026-05-01_10-00-00", "2026-05-01_10-15-00", "2026-05-02_09-30-00"):
-        d = tmp / name
-        d.mkdir()
-        (d / "meta.json").write_text('{"class_names": ["Rest", "Fist"]}')
-        # Mock a minimal zarr-like layout so it shows as a session
+    participant = "P-014"
+    for minute in ("00", "15", "30"):
+        d = tmp / participant / "recordings" / f"P-014_20260502-10{minute}_R+F"
+        d.mkdir(parents=True)
+        (d / "meta.json").write_text(json.dumps({
+            "participant": participant,
+            "created": f"2026-05-02T10:{minute}:00",
+            "class_names": ["Rest", "Fist"],
+            "duration_s": 10.0,
+            "class_seconds": {"Rest": 5.0, "Fist": 5.0},
+            "streams": {"emg": {"n_channels": 8, "fs": 2048.0}},
+        }))
+        (d / "labels.json").write_text(json.dumps([
+            {"class_index": 0, "timestamp": 0.0},
+            {"class_index": 1, "timestamp": 5.0},
+        ]))
+        # Placeholder arrays: the picker reads only metadata and labels.
         (d / "emg.zarr").mkdir()
         (d / "emg_timestamps.zarr").mkdir()
 
     app = App("session_manager")
 
     manager = SessionManager(str(tmp), class_names=["Rest", "Fist"])
+    manager.select_all(participant)
 
     @app.ui
     def ui(ctx):
-        manager.ui()
+        manager.ui(participant=participant)
 
     _self_capture_after(3.0, out)
     app.run(window_size=SIZES["session_manager"])

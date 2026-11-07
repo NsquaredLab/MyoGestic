@@ -1,9 +1,9 @@
 ---
 title: "Anatomy of a MyoGestic app"
 ---
-Read this first. The deep-dive concept pages (Streams, Pipeline, Recording, Widgets) explain *each part* of the framework in detail; this page explains *how the parts fit together* in the order you write them.
-
-By the end, the script below will read like prose. Open it in your editor and read alongside.
+Read this page first to see how the parts fit together in the order you write them.
+Open the script in your editor and read it alongside the descriptions below. The concept
+pages cover Streams, Pipeline, Recording and Widgets in detail.
 
 ```python
 from myogestic import App, Stream, TrainingData
@@ -63,7 +63,7 @@ app.run()
 
 ## The shape
 
-A MyoGestic app is **one [`App`][myogestic.App] object**, with **[streams][myogestic.Stream]** flowing through it, optionally **a [`Pipeline`][myogestic.ml.Pipeline]** that adds ML lifecycle, and a **`@app.ui` callback** that draws widgets every frame. `app.run()` boots threads and blocks on the GUI loop. That is the whole skeleton; everything else is variation.
+A MyoGestic app has one [`App`][myogestic.App] object, [streams][myogestic.Stream], an optional [`Pipeline`][myogestic.ml.Pipeline] for ML, and a `@app.ui` callback that draws widgets every frame. `app.run()` starts threads and blocks on the GUI loop.
 
 ```mermaid
 flowchart LR
@@ -98,9 +98,9 @@ from sklearn.linear_model import LogisticRegression  # YOUR ML library
 
 Three layers, from framework-owned to user-owned:
 
-1. **Framework primitives** (`App`, `Stream`, `Pipeline`, `TrainingData`) - what you compose.
-2. **Built-in capabilities** (`sources`, `widgets`, `ml`, `session`) - what you wire in.
-3. **Your domain code** (sklearn, MyoVerse, scipy, PyTorch, ...) - what you bring.
+1. Compose framework primitives from `App`, `Stream`, `Pipeline` and `TrainingData`. The framework owns these.
+2. Add built-in capabilities from `sources`, `widgets`, `ml` and `session`.
+3. Bring your own domain code with sklearn, MyoVerse, scipy or PyTorch. You own this layer.
 
 DSP, ML models and feature extraction are user concerns. `myogestic.recipes` supplies optional feature functions and estimator constructors as starting points. See [Design principles](concepts/design-principles.md).
 
@@ -110,9 +110,9 @@ DSP, ML models and feature extraction are user concerns. `myogestic.recipes` sup
 app = App("EMG Demo")
 ```
 
-One per process. [`App`][myogestic.App] owns the GUI loop, the shared [`Context`][myogestic.Context], the run-loop lifecycle hooks, and the recording state machine. Construct it, then attach things (streams, widgets, optional pipeline), then call `app.run()`.
+One per process. [`App`][myogestic.App] owns the GUI loop, the shared [`Context`][myogestic.Context], the run-loop lifecycle hooks, and the recording state machine. Construct it, attach streams and widgets with an optional pipeline, then call `app.run()`.
 
-`App` is **not** a base class to subclass. There is no `class MyApp(App):`. You compose by *attaching*, not *inheriting*.
+Do not subclass `App` or define `class MyApp(App):`. Compose an `App` by attaching objects.
 
 → Deep dive: [Architecture](concepts/architecture.md), [Design principles](concepts/design-principles.md).
 
@@ -122,16 +122,16 @@ One per process. [`App`][myogestic.App] owns the GUI loop, the shared [`Context`
 app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=200))
 ```
 
-A [`Stream`][myogestic.Stream] wraps a [`Source`](concepts/streams.md) plus a fixed-memory ring buffer. Each stream owns one daemon acquisition thread that polls the source, appends to the buffer, and (when `app.start_recording()` is active) writes to a Zarr array. Plotting and prediction copy only their requested recent tail, so acquisition work does not grow as the history fills.
+A [`Stream`][myogestic.Stream] wraps a [`Source`](concepts/streams.md) plus a fixed-memory ring buffer. Each stream owns one daemon acquisition thread that polls the source, appends to the buffer, and writes to a Zarr array while `app.start_recording()` is active. Plotting and prediction copy only their requested recent tail, so acquisition work does not grow as the history fills.
 
 Two reads come out the other side:
 
-- `stream.get_window()` returns `(data, timestamps)`, with the most recent `window_ms` of data **channels-first** `(n_channels, n_samples)`. This is what feature extractors and ML models consume.
+- `stream.get_window()` returns `(data, timestamps)`, with the most recent `window_ms` of data channels-first `(n_channels, n_samples)`. This is what feature extractors and ML models consume.
 - `stream.get_raw_snapshot_stable(duration_s)` returns a stable recent tail for rendering. [`SignalViewer`][myogestic.widgets.SignalViewer] requests only its visible duration and decimates it to the live plot width.
 
-[`app.streams(*streams)`][myogestic.App.streams] registers one or more. Each registered `Stream` wraps any `Source` implementation, so swapping [`LSLSource`][myogestic.sources.LSLSource] for [`ReplaySource`][myogestic.sources.ReplaySource] (offline replay) or your own custom source changes one line.
+[`app.streams(*streams)`][myogestic.App.streams] registers one or more. Each registered `Stream` wraps any `Source` implementation, so swapping [`LSLSource`][myogestic.sources.LSLSource] for offline replay with [`ReplaySource`][myogestic.sources.ReplaySource] or your own custom source changes one line.
 
-The stream starts detached. Start the upstream outlet and press **Connect** in the viewer, or call `stream.reconnect()` before headless acquisition.
+The stream starts detached. Start the upstream outlet and press Connect in the viewer, or call `stream.reconnect()` before headless acquisition.
 
 → Deep dive: [Streams](concepts/streams.md).
 
@@ -146,10 +146,10 @@ pipeline.load_model = load_pickle
 [`Pipeline(app)`][myogestic.ml.Pipeline] adds:
 
 - A predict thread that fires every `1/predict_hz` seconds.
-- Two new states (`training`, `predicting`). A take may also stay open while predicting, tracked separately by `ctx.recording`.
+- Two states, `training` and `predicting`. A take may also stay open while predicting, tracked separately by `ctx.recording`.
 - Three function-decorator slots (`extract`, `train`, `predict`) for your code.
 
-If your app is *just* recording and visualisation, skip the `Pipeline`. If it does ML, attach one.
+Attach a `Pipeline` for ML. Recording and visualization work without it.
 
 `save_model` / `load_model` are plain attribute slots. They enable the separate `SaveModelButton` / `LoadModelButton` widgets when those are added to the UI. `PipelinePanel` itself contains Train and Predict controls. The default [`save_pickle`][myogestic.ml.save_pickle] / [`load_pickle`][myogestic.ml.load_pickle] round-trip anything pickleable.
 
@@ -163,9 +163,9 @@ def extract(windows):
     return windows["emg"].mean(axis=1)
 ```
 
-Receives a dict keyed by stream name. Each value is **channels-first** `(n_channels, n_samples)`. Return whatever your model wants to consume - a feature vector, a tuple, the raw window. Whatever you return becomes the `features` argument to `predict()`.
+Receives a dict keyed by stream name. Each value is channels-first `(n_channels, n_samples)`. Return the input your model needs, such as a feature vector, tuple or raw window. It becomes the `features` argument to `predict()`.
 
-The same function runs from inside `train()` over recorded windows, and on the predict thread over live windows. **Same code, two call sites.**
+The same function runs from inside `train()` over recorded windows, and on the predict thread over live windows.
 
 ## `@pipeline.train` - training
 
@@ -179,9 +179,9 @@ def train(data: TrainingData):
     return LogisticRegression().fit(np.array(X), np.array(y))
 ```
 
-Runs on a one-shot training thread when the user clicks **Train**. Receives [`TrainingData`][myogestic.TrainingData] (with `paths`, `class_names`, `classes`) populated by [`SessionManager`][myogestic.widgets.SessionManager]. Return any object - it lands on `pipeline.model` and stays there.
+Runs on a one-shot training thread when the user clicks Train. Receives [`TrainingData`][myogestic.TrainingData] with `paths`, `class_names` and `classes` populated by [`SessionManager`][myogestic.widgets.SessionManager]. Return any object to store on `pipeline.model`. It remains there for later prediction calls.
 
-[`iter_labeled_windows`][myogestic.session.iter_labeled_windows] does the heavy lifting of opening sessions (folder or `.mg.zip`), walking the label track, and slicing trials into overlapping windows. You only write the feature extraction.
+[`iter_labeled_windows`][myogestic.session.iter_labeled_windows] opens session folders or `.mg.zip` archives, reads the label track, and slices trials into overlapping windows. Write your feature extraction for these windows.
 
 → Deep dive: [Pipeline](concepts/pipeline.md), [Recording](concepts/recording.md).
 
@@ -193,7 +193,7 @@ def predict(model, features):
     return {"class": int(model.predict(features.reshape(1, -1))[0])}
 ```
 
-Fires at `predict_hz` while the user is in **Predict** mode and at least one input stream has data. **Must return a `dict[str, Any]`**; the result lands in `pipeline.predictions` for widgets to read.
+Fires at `predict_hz` while the user is in Predict mode and at least one input stream has data. Return a `dict[str, Any]`; the result is stored in `pipeline.predictions` for widgets to read.
 
 Publish to an outlet or push a `ControlBus` from `predict()` before returning. A paced outlet sends its latest value at its own rate; a target may instead deliver commands directly.
 
@@ -216,13 +216,13 @@ def ui(ctx):
     ml_panel.ui()
 ```
 
-The `@app.ui` callback runs on the **main thread** every frame. The function body is a flat sequence of widget calls; each widget is an object whose `.ui()` method draws ImGui commands from its live inputs. Its instance or identity-keyed state persists between frames.
+The `@app.ui` callback runs on the main thread every frame. Its body is a flat sequence of widget calls. Call each widget's `.ui()` method to draw ImGui commands from its live inputs. Its instance or identity-keyed state persists between frames.
 
-Three things live here:
+Widget roles include
 
-1. **Display widgets** ([`SignalViewer`][myogestic.widgets.SignalViewer]) - render data from `ctx.streams`.
-2. **Control widgets** ([`RecordingControls`][myogestic.widgets.RecordingControls], [`PipelinePanel`][myogestic.ml.widgets.PipelinePanel]) - fire callbacks to mutate state (start recording, train, predict).
-3. **Bridge widgets** ([`SessionManager`][myogestic.widgets.SessionManager]) - return a `TrainingData` you assign to `pipeline.training_data`. This is how UI selection feeds into ML training.
+1. Display widgets such as [`SignalViewer`][myogestic.widgets.SignalViewer] render `ctx.streams` data.
+2. Control widgets such as [`RecordingControls`][myogestic.widgets.RecordingControls] and [`PipelinePanel`][myogestic.ml.widgets.PipelinePanel] call recording, training and prediction callbacks.
+3. Bridge widgets such as [`SessionManager`][myogestic.widgets.SessionManager] return `TrainingData` for `pipeline.training_data`, passing UI selection to training.
 
 For grid layouts use [`Grid`][myogestic.Grid] and `with grid[r, c]:`. For pop-out windows use `App(docking=True) + app.popout(...)`.
 
@@ -237,20 +237,20 @@ app.run()
 Last line of every script. In order:
 
 1. Starts each `Stream`'s acquisition thread.
-2. Fires `before_run_hooks` (where `Pipeline` registers its predict thread).
-3. Hands control to the GUI event loop on the main thread - **blocks here**.
+2. Fires `before_run_hooks`, including `Pipeline`'s predict-thread startup.
+3. Hands control to the blocking GUI event loop on the main thread.
 4. On window close, runs `cleanup_hooks`, saves any open take inline, waits up to 30 seconds for pending saves, then stops streams, bridges and adopted subprocesses.
 
-`app.run(mode="gui")` is the default; `mode="headless"` skips the GUI and runs the threads only (useful for unattended recording).
+`app.run(mode="gui")` is the default. Use `mode="headless"` for unattended recording with threads only.
 
 → Deep dive: [Architecture](concepts/architecture.md), [Threading](concepts/threading.md).
 
 ## Driving a device
 
-This skeleton predicts a class index and moves nothing. Anything that *moves* — a prosthesis
-on a serial port, a motor controller, a cursor, the Virtual Hand — is a
-[`Target`][myogestic.controls.Target]: three methods, plus a TOML control map naming which
-model output drives which control.
+The skeleton above predicts a class index and moves no device.
+Drive a prosthesis on a serial port, a motor controller, a cursor or the Virtual Hand
+through a [`Target`][myogestic.controls.Target]. It has three methods and a TOML control map
+that pairs model outputs with controls.
 
 `examples/synthetic/my_device.py` is a complete one with three lines left for you, and it runs
 without hardware:
@@ -259,16 +259,15 @@ without hardware:
 uv run python examples/synthetic/my_device.py
 ```
 
-→ [Drive your own device](how-to/add-a-target.md). To *publish* predictions for another
-program to read rather than to move something, an [`LSLOutlet`][myogestic.outputs.LSLOutlet]
-pushed from `predict()` is the whole of it — see
+→ [Drive your own device](how-to/add-a-target.md). To publish predictions for another
+program, push an [`LSLOutlet`][myogestic.outputs.LSLOutlet] from `predict()`. This publishes data without driving a device. See
 [Publish a data stream](how-to/add-an-output.md).
 
 ## Extending the skeleton
 
-- **Recording lifecycle.** The controls above start and stop takes. Streams *flow* whether you record or not. Recording starts when [`app.start_recording()`][myogestic.App.start_recording] is called (typically from the [`RecordingControls`][myogestic.widgets.RecordingControls] widget's **Record** button). See [Recording](concepts/recording.md).
-- **Multi-stream.** A second `Stream("imu", ...)` and your `extract()` sees `windows["imu"]` too. Match the [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] pattern in `train()` for paired primary/target streams. See [Recording](concepts/recording.md).
-- **Bridges.** Heavy-data sources (webcam, ultrasound) run as subprocesses via [`app.bridges(...)`][myogestic.App.bridges]. See [Threading](concepts/threading.md).
+- Recording lifecycle. The controls above start and stop takes. Streams *flow* whether you record or not. Recording starts when [`app.start_recording()`][myogestic.App.start_recording] is called, typically by the [`RecordingControls`][myogestic.widgets.RecordingControls] widget's Record button. See [Recording](concepts/recording.md).
+- Multi-stream. A second `Stream("imu", ...)` and your `extract()` sees `windows["imu"]` too. Match the [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] pattern in `train()` for paired primary/target streams. See [Recording](concepts/recording.md).
+- Bridges. Heavy-data sources such as webcams and ultrasound run as subprocesses via [`app.bridges(...)`][myogestic.App.bridges]. See [Threading](concepts/threading.md).
 
 ## Where to read next
 
@@ -278,7 +277,7 @@ The concept pages describe each component in more detail:
 - [Pipeline](concepts/pipeline.md) - state machine, decorator semantics, stale-tick guards.
 - [Recording](concepts/recording.md) - sessions, label tracks, the `.mg.zip` archive.
 - [Widgets](concepts/widgets.md) - the construct-once `.ui()` pattern, `Grid` layout, pop-out windows.
-- [Architecture](concepts/architecture.md) - the runtime architecture (which thread runs what, the data flow diagram).
+- [Architecture](concepts/architecture.md) - thread roles and the data flow diagram.
 - [Threading](concepts/threading.md) - GIL release, GPU contention rule, bridge subprocesses.
 - [Design principles](concepts/design-principles.md) - the eight rules the framework keeps to.
 

@@ -53,13 +53,14 @@ if (hero) {
     });
 }
 
-function copyButton(button: HTMLButtonElement | null, status: HTMLElement | null, value: string) {
+function copyButton(button: HTMLButtonElement | null, status: HTMLElement | null, value: string, showOnButton = false) {
     button?.addEventListener('click', async () => {
         if (!status) return;
         status.textContent = '';
         try {
             await navigator.clipboard.writeText(value);
             status.textContent = 'Copied';
+            if (showOnButton) button.textContent = 'Copied';
         } catch {
             status.textContent = 'Copy failed. Please copy the text manually.';
         }
@@ -69,3 +70,7 @@ function copyButton(button: HTMLButtonElement | null, status: HTMLElement | null
 copyButton(document.querySelector('[data-copy-install]'), document.querySelector('[data-install-status]'), 'pip install myogestic');
 const bibtex = document.querySelector<HTMLButtonElement>('[data-copy-bibtex]');
 copyButton(bibtex, document.querySelector('[data-cite-status]'), bibtex?.dataset.bibtex ?? '');
+for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy-command]')) {
+    const status = button.closest('article')?.querySelector<HTMLElement>('[data-command-status]') ?? null;
+    copyButton(button, status, button.dataset.command ?? '', true);
+}

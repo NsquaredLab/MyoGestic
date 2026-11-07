@@ -41,7 +41,7 @@
     --mg-brand-violet: #B184D9;
     --mg-brand-amber: #E89848;
     --mg-font-display: 'Instrument Serif', Georgia, serif;
-    --mg-font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mg-font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --mg-font-mono: 'IBM Plex Mono', monospace;
     --sl-font: var(--mg-font-body);
     --sl-font-mono: var(--mg-font-mono);

@@ -1,8 +1,8 @@
 ---
 title: "Use the recipe feature set"
 ---
-`myogestic.recipes.features` ships five classic time-domain EMG features
-that every starter example used to copy-paste:
+`myogestic.recipes.features` provides five classic time-domain EMG features.
+Starter examples previously copied these implementations into each script.
 
 | Name  | Function                | What it captures                                       |
 |-------|-------------------------|--------------------------------------------------------|
@@ -12,14 +12,14 @@ that every starter example used to copy-paste:
 | `var` | Variance                | Energy around the per-window mean.                     |
 | `zc`  | Zero-crossing count     | Per-channel oscillation rate.                          |
 
-These are **baselines** - they get a new project running in five
-minutes. They are deliberately not the framework's recommended feature
-set; for anything beyond a smoke test, mix them with your own.
+Use these baselines for a five-minute setup check. They are not the
+framework's recommended feature set. For work beyond a smoke test, mix them
+with features suited to your experiment.
 
 ## The shape contract
 
-Every function takes one argument - an EMG window of shape
-`(n_channels, n_samples)` - and returns one per-channel scalar vector of
+Every function takes one argument, an EMG window of shape `(n_channels, n_samples)`
+and returns a per-channel scalar vector of
 shape `(n_channels,)` with dtype `float32`.
 
 ```python
@@ -32,8 +32,7 @@ rms(emg).dtype  # dtype('float32')
 ```
 
 The shape and dtype are part of the contract. Stick to them when writing
-your own feature so it plugs into `FeatureSelector` (and the typed
-pipeline) without surprises.
+your own feature for `FeatureSelector` and the typed pipeline.
 
 ## Wiring into a pipeline
 
@@ -62,18 +61,16 @@ def ui(ctx):
         feats.ui()
 ```
 
-`feats(window)` evaluates every selected feature on `window` and
-concatenates the results. **The output dimensionality changes** when
-the user toggles a feature, but `FeatureSelector` does NOT invalidate
-the trained model - it just mutates its own active-feature set. If you
-predict against a feature shape the model wasn't trained on, the
-predict call will throw (sklearn / CatBoost both raise a clear
-shape-mismatch error). Two reasonable patterns:
+`feats(window)` concatenates the selected features. Toggling a feature changes
+output dimensionality without invalidating the trained model. `FeatureSelector`
+only mutates its active-feature set. Sklearn and
+CatBoost raise shape-mismatch errors if prediction uses a different shape.
+Choose one of these patterns:
 
-- **Lock the selector after training** - render the feature toggles
+- Lock the selector after training - render the feature toggles
   greyed out once `pipeline.app.ctx.state == "predicting"` so the user can't
   silently break the live loop.
-- **Treat a toggle as "retrain me"** - keep your own snapshot of
+- Treat a toggle as "retrain me" - keep your own snapshot of
   `feats.active_names` between frames and, when it changes, prompt the
   user to retrain (or kick off training automatically).
 
@@ -82,7 +79,7 @@ when feature selection is part of the user's iteration loop.
 
 ## Mixing in your own
 
-A "feature" is just a `Callable[[np.ndarray], np.ndarray]` matching the
+A feature is a `Callable[[np.ndarray], np.ndarray]` matching the
 shape contract. Drop yours in next to the recipe ones:
 
 ```python
@@ -103,12 +100,11 @@ feats = FeatureSelector(
 )
 ```
 
-## When to replace, not extend
+## Choose a feature pipeline
 
-These five features assume **time-domain windowed sEMG**. If your
-pipeline already extracts richer representations - spectral features,
-learned embeddings from a frozen network, MyoVerse decomposition output
- - `myogestic.recipes.features` is the wrong toolbox.
+These five features operate on time-domain sEMG windows. Use a dedicated
+pipeline for spectral features, frozen-network embeddings or MyoVerse
+decomposition output.
 
 Use it for:
 
@@ -127,7 +123,7 @@ Replace it for:
 ## See also
 
 * [Feature extraction cookbook](feature-extraction-cookbook.md) - recipes
-  for windowing, normalisation, and spectral features.
+  for windowing, normalization, and spectral features.
 * [`myogestic.recipes.features`](../api/core.md) - full module reference.
 * [`myogestic.widgets.FeatureSelector`](../api/widgets.md) - the
   GUI-toggleable feature dispatcher.

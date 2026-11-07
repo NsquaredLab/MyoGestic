@@ -3,21 +3,21 @@ title: "Publish a data stream"
 ---
 !!! warning "If something moves, you want a target"
     An `Outlet` has no aliases, no declared range, no clamp and no rest on shutdown. A hand, a
-    motor, a haptic or a cursor is a **[target](add-a-target.md)**.
+    motor, a haptic or a cursor is a [target](add-a-target.md).
     [`RemoteTarget`][myogestic.remote.RemoteTarget] builds one
     [`LSLOutlet`][myogestic.outputs.LSLOutlet] per control *inside* the target, which is where
     an output belongs when a device is on the other end.
 
-This page is for the other case: publishing numbers for something else to read.
+Use an outlet to publish numbers for another application to read.
 
-Outputs are user-owned and **not** registered with the app: construct one in `main()`, hold a
-reference, call `.push(data)` from `@pipeline.predict`. [`Outlet`][myogestic.outputs.Outlet]
+Construct an output in `main()`, keep a reference and call `.push(data)`
+from `@pipeline.predict`. Outputs are user-owned and are not registered with the app. [`Outlet`][myogestic.outputs.Outlet]
 runs a daemon thread at your `hz` that sends whatever was last pushed.
 
 ## Writing one
 
 1. Subclass [`Outlet`][myogestic.outputs.Outlet].
-2. Open your socket, file or channel **first**, then call `super().__init__(hz=...)` **last**.
+2. Open your socket, file or channel first, then call `super().__init__(hz=...)` last.
    The send thread starts inside that call, so a resource opened after it can be read before
    it exists.
 3. Implement `_send(self, data) -> None`, the actual transport call. Treat `data` as
@@ -72,18 +72,18 @@ latency never reaches the predict loop.
 
 ## Choosing `hz`
 
-Match the consumer's input rate, not the predict rate: a dashboard redrawing at 20 Hz gains
-nothing from 200. Push faster than you send and the latest wins; slower and you re-send the
-same value, which costs bandwidth and nothing else.
+Match `hz` to the consumer's input rate rather than the predict rate. A dashboard redrawing at 20 Hz gains
+nothing from 200. If you push faster than `hz`, only the latest value is sent;
+if you push slower, the same value is sent again. This latest-wins policy
+spends bandwidth on repeats without changing their value.
 
 ## Common mistakes
 
-See also: the full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom.
+See [Troubleshooting](../troubleshooting.md) for errors by symptom.
 
-- **Driving a device with one.** No clamp, no aliases, and the transport closes while the
+- Driving a device with one. No clamp, no aliases, and the transport closes while the
   device still holds the last thing it was told. That is a [target](add-a-target.md).
-- **Heavy work inside `_send`.** It runs at `hz`; longer than `1/hz` and the thread falls
+- Heavy work inside `_send`. It runs at `hz`; longer than `1/hz` and the thread falls
   behind. Keep it non-blocking, or lower `hz`.
-- **Calling `_send` from `predict()`.** Blocks predict on transport latency. Go through `push`.
-- **Assuming `push(...)` delivers everything.** Fire-and-forget *latest-value*: push twice
-  between ticks and only the second is sent. **Wrong for events** - use a queue instead.
+- Calling `_send` from `predict()`. Blocks predict on transport latency. Go through `push`.
+- Assuming `push(...)` delivers everything. Delivery is fire-and-forget through a latest-value slot. Push twice between ticks and only the second value is sent. Do not use it for events; use a queue.
