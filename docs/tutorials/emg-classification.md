@@ -20,9 +20,7 @@ VHI is optional: recording, training and prediction all work without it or the `
 
 ## What you should see
 
-![Earlier EMG classification layout](../images/gui-overview.png){ loading=lazy }
-
-This screenshot shows the earlier layout. The current app uses the steps described below.
+![EMG classification predicting from the connected synthetic stream](../images/gui-overview.png){ loading=lazy }
 
 The header carries **Connect → Record → Train → Predict**, the participant and session state. The signal and **Simulated EMG** controls stay visible beside the active step, with participant sessions and an activity log below. At narrow widths the same cards stack vertically.
 

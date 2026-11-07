@@ -16,6 +16,12 @@ If VHI isn't installed yet, see **[Install the Virtual Hand](install-vhi.md)**.
 
 ![VHI dual-plane integration](../images/vhi-integration.svg){ align=center }
 
+`RemoteTarget` publishes continuous controls over LSL and queues discrete `SetControl`
+commands through `RemoteClient`. That client queries `GetControlManifest` for control
+capabilities. A separate `RecordingClient` calls `SetRecordingSession` to gate recording
+and `GetRecordingSessionState` to read session state and the current movement. The
+`VHI_Control` and `VHI_Predict` LSL streams return the two hands' poses.
+
 ## The one-liner that wires it up
 
 ```python
