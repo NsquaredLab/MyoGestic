@@ -6,8 +6,8 @@ loader does ``pyodide.runPython(await fetch('app.py').text())`` after
 all deps and shims are in place.
 """
 
+import json
 import time
-from collections import deque
 
 import numpy as np
 
@@ -120,7 +120,9 @@ app = App(
 # Nothing attaches a stream on its own — see `Stream.reconnect`. This source is
 # synthetic and in-process, so there is no other producer to pick up by mistake,
 # and no operator to press the button: the page attaches its own.
-stream = Stream("emg", source=BrowserSource(), window_ms=1000, buffer_ms=10000)
+# A short RMS window leaves room for smoothing within a ~1 s gesture response.
+# The viewer keeps its independent 10 s buffer.
+stream = Stream("emg", source=BrowserSource(), window_ms=250, buffer_ms=10000)
 stream.reconnect()
 app.streams(stream)
 
@@ -147,7 +149,7 @@ def extract(windows):
 
 
 # In-memory recording substitute for zarr (which needs threads).
-# While ctx.state == "recording", the sampler step grabs one feature
+# While ctx.recording is true, the sampler step grabs one feature
 # vector per tick and tags it with the currently selected gesture.
 # When the user clicks Stop, the buffer is frozen into a Session entry
 # and a fresh buffer takes over for the next cycle.
@@ -164,7 +166,7 @@ def _recording_sampler() -> float:
     need that throughput because the trainer only needs ~30-60 windows
     per class to fit a clean LDA on this synthetic dataset.
     """
-    if app.ctx.state != "recording":
+    if not app.ctx.recording:
         return 0.05  # poll the state cheaply when idle
     try:
         stream = app.ctx.streams["emg"]
@@ -288,14 +290,16 @@ def _on_record():
     # zarr v3's sync API starts an iothread - which Pyodide forbids.
     # The playground records to in-memory lists instead via the
     # _recording_sampler step registered with the browser scheduler.
-    # Setting ctx.state directly flips the recording_controls widget
-    # (Record button -> Stop button) without needing a Session object.
+    # Match App.start_recording's take flag as well as its lifecycle state:
+    # RecordingControls observes ctx.recording to keep its Stop action active.
     recorded_X.clear()
     recorded_y.clear()
+    app.ctx.recording = True
     app.ctx.state = "recording"
 
 
 def _on_stop():
+    app.ctx.recording = False
     app.ctx.state = "idle"
     # Freeze the current buffer into a session entry so subsequent
     # records don't overwrite it. Sessions are time-stamped by their
@@ -391,8 +395,42 @@ ml_panel = PipelinePanel(pipeline)
 pred_label = PredictionLabel(pipeline, CLASSES, show_probability=True)
 
 
+_published_state = None
+
+
+def _publish_state():
+    """Expose lifecycle changes for browser checks without per-frame DOM writes."""
+    global _published_state
+    predicted = pipeline.predictions.get("class")
+    snapshot = (
+        app.ctx.state, app.ctx.recording, rec_controls.take.phase,
+        current_class, predicted, pipeline.model is not None,
+        tuple((s["name"], len(s["X"]), s["use"]) for s in sessions),
+    )
+    if snapshot == _published_state:
+        return
+    saved = [{
+        "name": s["name"],
+        "windows": len(s["X"]),
+        "classes": {name: s["y"].count(i) for i, name in enumerate(CLASSES)},
+        "use": s["use"],
+    } for s in sessions]
+    state = {
+        "state": str(app.ctx.state),
+        "recording": app.ctx.recording,
+        "take": rec_controls.take.phase,
+        "gesture": CLASSES[current_class],
+        "prediction": CLASSES[predicted] if predicted is not None else None,
+        "trained": pipeline.model is not None,
+        "sessions": saved,
+    }
+    js.document.body.setAttribute("data-mg-state", json.dumps(state))
+    _published_state = snapshot
+
+
 @app.ui
 def ui(ctx):
+    _publish_state()
     _apply_touch_style()
     if _IS_PHONE:
         # Outer scrollable child fills the viewport. Inner panels are
