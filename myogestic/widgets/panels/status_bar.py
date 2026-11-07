@@ -9,6 +9,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.core import Context
+from myogestic.session import participant_dir
 from myogestic.widgets.common import IDLE, SUCCESS, edge_rule, fit_text, muted
 
 if TYPE_CHECKING:
@@ -73,7 +74,7 @@ class StatusBar:
             source = f"{stream.name} · {info.n_channels} ch / {info.fs:g} Hz"
         else:
             source = f"{self.stream} · disconnected"
-        folder = self.sessions_dir / ctx.participant
+        folder = participant_dir(self.sessions_dir, ctx.participant, kind="")
         text = f"{source} · {ctx.participant or 'No participant'} · {folder}"
         model = ""
         if self.pipeline is not None:

@@ -185,8 +185,12 @@ assert controls.dofs["twist"].lo == -1.0  # signed, because that capability is
 Binding the addresses it recognised and quietly dropping the typo would be worse than
 failing, because **a silently dropped control is indistinguishable from one holding still**. You
 would move, see nothing happen, and go looking at the model. The same rule runs one level down:
-[`ControlBus`][myogestic.controls.ControlBus] checks that *some* target claims every alias, and
-refuses a control nothing drives.
+when every target reports `claims`, [`ControlBus`][myogestic.controls.ControlBus] checks that
+*some* target claims every alias, and refuses a control nothing drives. Leaving `claims` off
+means the target accepts every alias, as a recorder or test double might. Such a target
+covers the whole frame, so the bus cannot detect an undriven alias. An empty `claims` set
+means the target drives nothing; it does not bypass the check. With no targets, the bus
+can still sanitise and return a frame without a coverage check.
 
 ## Everything that moves is a target
 

@@ -26,6 +26,9 @@ stays in the name, so a file copied out of `data/` still says whose it is.
 take of the same minute with the same `<what>`, gets `-2`, `-3`, … at the end. Nothing is
 ever overwritten.
 
+`StatusBar` shows the participant folder using the same safe ID, before the kind subfolder:
+`P 001` becomes `data/P-001`. If no usable ID remains, it shows the data root.
+
 ## `<what>`
 
 | Take | `<what>` | Example |

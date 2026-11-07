@@ -29,12 +29,12 @@ The current registry covers:
 |--------------------------------------------|-------------------------------------|
 | `widgets/hello_emg.png`                    | signal + recording controls (use `--out` above for the homepage) |
 | `widgets/AppHeader.png`                    | Connect / Record / Train / Predict, Record selected |
-| `widgets/StatusBar.png`                    | stream and participant status       |
+| `widgets/StatusBar.png`                    | stream, participant and `data/P-014` folder |
 | `widgets/SimulatorControls.png`            | persistent Rest / Fist preview       |
 | `widgets/FollowRun.png`                    | guided recording controls            |
 | `widgets/signal_viewer.png`                | 4-channel synthetic signal          |
 | `widgets/recording_controls.png`           | 4-class button strip                |
-| `widgets/session_manager.png`              | 3 mock sessions                     |
+| `widgets/session_manager.png`              | 3 selected mock takes for `P-014`, with Rest / Fist durations |
 | `widgets/FilterControl.png`                | one-euro defaults                   |
 | `widgets/process_launcher.png`             | 2 dummy `sleep 60` processes        |
 | `widgets/TargetPanel.png`                  | connected, running and idle targets |
@@ -43,6 +43,10 @@ The current registry covers:
 | `widgets/app_logo.png`                     | shipped wordmark, centred           |
 | `widgets/prediction_label.png`             | "Fist" @ 82%                        |
 | `widgets/VhiMovementPanel.png`             | 12 movements, "Fist" highlighted    |
+
+The session fixture creates three takes in `P-014/recordings/`, calls
+`SessionManager.select_all("P-014")`, then renders that participant. No Rescan click is
+needed, and the newest day opens with all three takes visible.
 
 ## Examples - fullscreen, manual
 

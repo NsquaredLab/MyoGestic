@@ -55,7 +55,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![StatusBar](images/widgets/StatusBar.png){ .widget-thumb loading=lazy }
 
-    Acquisition details, participant and session folder, with an optional fitted or saved model readout. Long values ellipsize and show their full text on hover. Place it in a bare `Px(26)` bottom row.
+    Acquisition details, participant and participant folder, with an optional fitted or saved model readout. The folder uses the same filename-safe ID as recordings: `P 001` displays `data/P-001` with the default data root. Long values ellipsize and show their full text on hover. Place it in a bare `Px(26)` bottom row.
 
 </div>
 

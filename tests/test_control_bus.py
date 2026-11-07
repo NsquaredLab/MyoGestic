@@ -79,6 +79,41 @@ def test_targets_are_bound_at_construction():
     assert rec.bound is MIXED
 
 
+@pytest.mark.parametrize("catch_all_first", [False, True])
+def test_claims_less_target_covers_aliases_missing_from_explicit_claims(catch_all_first):
+    partial = Recorder()
+    partial.claims = frozenset({"a"})
+    catch_all = Recorder()
+    targets = [catch_all, partial] if catch_all_first else [partial, catch_all]
+    bus = ControlBus(MIXED, targets=targets)
+
+    delivered = bus.push({"a": 0.2, "g": 0.4, "hand.grasp": "fist"})
+
+    assert catch_all.bound is MIXED
+    assert catch_all.frames[-1][0] == delivered
+    assert set(delivered) == set(MIXED.dofs)
+
+
+def test_explicit_claims_refuse_uncovered_aliases():
+    partial = Recorder()
+    partial.claims = frozenset({"a"})
+    empty = Recorder()
+    empty.claims = frozenset()
+
+    with pytest.raises(ValueError, match="no target drives.*g.*hand.grasp"):
+        ControlBus(MIXED, targets=[partial, empty])
+
+
+def test_explicit_claims_can_cover_aliases_across_targets():
+    first, second = Recorder(), Recorder()
+    first.claims = frozenset({"a"})
+    second.claims = frozenset({"g", "hand.grasp"})
+
+    bus = ControlBus(MIXED, targets=[first, second])
+
+    assert bus.push({"g": 0.5})["g"] == 0.5
+
+
 def test_bind_may_raise_at_construction():
     class Picky:
         def bind(self, controls):
