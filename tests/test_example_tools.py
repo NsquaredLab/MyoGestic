@@ -1,6 +1,5 @@
 """Tool headers and their original controls stay readable in the real layouts."""
 
-import platform
 import runpy
 from contextlib import contextmanager
 from pathlib import Path
@@ -22,9 +21,7 @@ def light_ui(imgui_frame, monkeypatch):
     monkeypatch.setattr(_scale, "_current", 2.0)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()
-    font_path = Path(_theme._SYS_FONTS.get(platform.system(), ""))
-    if not font_path.is_file():
-        font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
+    font_path = ROOT / "myogestic/assets/fonts/IBMPlexSans-Regular.ttf"
     io = imgui.get_io()
     io.font_default = io.fonts.add_font_from_file_ttf(str(font_path), 14)
     for attr, filename, size in (

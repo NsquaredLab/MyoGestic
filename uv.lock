@@ -1480,6 +1480,7 @@ brainflow = [
 ]
 dev = [
     { name = "catboost" },
+    { name = "fonttools" },
     { name = "myoverse" },
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
     { name = "pytest" },
@@ -1519,6 +1520,7 @@ requires-dist = [
     { name = "catboost", marker = "extra == 'dev'", specifier = ">=1.2.10" },
     { name = "catboost", marker = "extra == 'examples'", specifier = ">=1.2.10" },
     { name = "dvg-ringbuffer", specifier = ">=1.1.0" },
+    { name = "fonttools", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "griffe", marker = "extra == 'docs'", specifier = ">=2.0,<3" },
     { name = "grpcio", marker = "extra == 'grpc'", specifier = ">=1.60" },
     { name = "grpcio-tools", marker = "extra == 'grpc'", specifier = ">=1.60" },

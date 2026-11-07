@@ -30,10 +30,9 @@ def test_the_bands_read_in_the_unit_the_operator_thinks_in():
 def test_the_readout_is_pixel_stable_in_the_mono_face():
     """The real assertion. Fixed *character count* alone does not do it.
 
-    The UI face is proportional and its digits are not tabular — SF Pro draws
-    ``1`` at 6 px and ``9`` at 9 px — so ``last 111 ms`` and ``last 999 ms``
-    differ in width however they are padded. Only the mono face holds them
-    identical, which is why `mono_text` exists.
+    Equal character counts need not have equal widths in proportional UI
+    faces. The mono face keeps ``last 111 ms`` and ``last 999 ms`` identical
+    in width, which is why `mono_text` exists.
     """
     imgui.create_context()
     try:

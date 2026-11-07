@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import platform
 import runpy
 from pathlib import Path
 from types import SimpleNamespace
@@ -113,7 +112,7 @@ def test_sessantaquattro_shell_fits_light_theme(
 ):
     """Render every step at scale two and measure cards, text and actions."""
     import numpy as np
-    from imgui_bundle import hello_imgui, imgui
+    from imgui_bundle import imgui
 
     from myogestic import StreamInfo, _scale, _theme
     from myogestic.grid import _AreaCell
@@ -142,9 +141,7 @@ def test_sessantaquattro_shell_fits_light_theme(
     monkeypatch.setattr(_scale, "_current", 2.0)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()
-    font_path = Path(_theme._SYS_FONTS.get(platform.system(), ""))
-    if not font_path.is_file():
-        font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
+    font_path = Path(__file__).resolve().parents[1] / "myogestic/assets/fonts/IBMPlexSans-Regular.ttf"
     imgui.get_io().font_default = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14)
     for attr, filename, size in (
         ("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),

@@ -1,0 +1,14 @@
+IBM Plex Sans Regular, static TrueType, font version 3.005.
+Unmodified complete font from IBM's official @ibm/plex-sans@1.1.0 release:
+https://github.com/IBM/plex/releases/tag/%40ibm/plex-sans%401.1.0
+https://github.com/IBM/plex/releases/download/%40ibm/plex-sans%401.1.0/ibm-plex-sans.zip
+
+Archive paths:
+ibm-plex-sans/fonts/complete/ttf/IBMPlexSans-Regular.ttf
+ibm-plex-sans/LICENSE.txt (shipped as IBMPlexSans-OFL.txt)
+
+The complete face includes Latin, Greek, Cyrillic, arrows and scientific symbols.
+Only Regular is used by the app; icons are merged from Font Awesome 6.
+
+The accompanying licence text is unchanged; line endings and trailing whitespace
+are normalized for this repository.

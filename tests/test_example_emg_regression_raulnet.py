@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import platform
 import runpy
 from pathlib import Path
 from types import SimpleNamespace
@@ -131,7 +130,7 @@ def test_shell_fits_and_keeps_each_steps_controls_visible(
     state,
 ):
     """Measure real cards at scale two in light theme, including a long-running fit."""
-    from imgui_bundle import hello_imgui, imgui
+    from imgui_bundle import imgui
 
     from myogestic import _scale, _theme
     from myogestic.ml import widgets as ml_widgets
@@ -155,9 +154,7 @@ def test_shell_fits_and_keeps_each_steps_controls_visible(
     monkeypatch.setattr(_scale, "_current", 2.0)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()
-    font_path = Path(_theme._SYS_FONTS.get(platform.system(), ""))
-    if not font_path.is_file():
-        font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
+    font_path = ROOT / "myogestic/assets/fonts/IBMPlexSans-Regular.ttf"
     imgui.get_io().font_default = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14)
     for attr, filename, size in (
         ("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
