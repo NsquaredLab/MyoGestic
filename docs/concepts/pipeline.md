@@ -35,7 +35,7 @@ That's the whole protocol.
 
 ### `@pipeline.extract`
 
-Runs on the predict thread, every `1/predict_hz` seconds. Receives a `dict[str, np.ndarray]` keyed by stream name - each value is **channels-first** `(n_channels, n_samples)`. Return whatever your model wants to consume: a feature vector, a tuple, the raw window, anything pickleable-or-not.
+Runs on the predict thread at `predict_hz` while predicting, when at least one selected input stream has data. Receives a `dict[str, np.ndarray]` keyed by stream name - each value is **channels-first** `(n_channels, n_samples)`. Return whatever your model wants to consume: a feature vector, a tuple, the raw window, anything pickleable-or-not.
 
 The same callable runs during training, but it's invoked by *user code* inside `train()`, not by the framework. (See the worked examples in `examples/synthetic/emg_classification.py`.)
 
@@ -61,7 +61,7 @@ with grid[2, 0]:
     pipeline.training_data = sessions.ui()
 ```
 
-This separation lets the `Train` button stay disabled until at least one session is ticked.
+This separation lets the `Train` button stay disabled until at least one session is ticked. It also waits for pending saves and requires an idle app and a training callback.
 
 ### `@pipeline.predict`
 
@@ -146,7 +146,7 @@ A stateful model can use exactly this - its `step()` returns the previous predic
 
 ## Lifecycle hooks
 
-`Pipeline` registers itself via `app.before_run_hooks` and `app.cleanup_hooks`. The predict thread starts at `app.run()` and runs for the lifetime of the app, but it only does work while `ctx.state == "predicting"` - when the user clicks Predict, the state flips and the thread starts calling `extract` / `predict`; clicking Predict again or closing the window flips it back to idle and the loop short-circuits. Cleanup signals via a `threading.Event` and joins with a short timeout. You don't manage threads yourself.
+`Pipeline` registers itself via `app.before_run_hooks` and `app.cleanup_hooks`. The predict thread starts at `app.run()` and runs for the lifetime of the app, but it only does work while `ctx.state == "predicting"` - when the user clicks Predict, the state flips and the thread starts calling `extract` / `predict`; clicking Predict again returns to `recording` if a take is open, otherwise `idle`. Closing the window signals the thread to stop. Cleanup signals via a `threading.Event` and joins with a short timeout. You don't manage threads yourself.
 
 ## Common mistakes
 
@@ -155,4 +155,4 @@ See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by 
 - **Returning a non-dict from `predict()`.** Silently dropped. Always return `{"key": value}`.
 - **Mutating `pipeline.training_data` outside `@app.ui`.** It can be set anywhere, but most experiments let `SessionManager` write it from the UI.
 - **Heavy work inside `extract()` or `predict()`.** They run on the predict thread at `predict_hz`. Keep CPU work bounded; offload long jobs to the training thread.
-- **Forgetting `pipeline.save_model = save_pickle`.** The save/load buttons render but do nothing without it.
+- **Forgetting `pipeline.save_model = save_pickle`.** The separate save/load buttons stay disabled until their respective callbacks are set; Save also needs a model.

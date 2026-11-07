@@ -1,7 +1,7 @@
 ---
 title: "File names"
 ---
-Every file MyoGestic saves for a participant follows one pattern, short enough to read in
+Generated take names and model autosaves for a participant follow one pattern, short enough to read in
 Finder and Explorer and complete enough to tell takes apart without opening them:
 
 ```text
@@ -17,7 +17,7 @@ stays in the name, so a file copied out of `data/` still says whose it is.
 
 | Part | Example | Rule |
 | --- | --- | --- |
-| `<ID>` | `P-023` | The participant ID as typed, reduced to letters, digits, `-` and `_`. Left out when no participant is set. |
+| `<ID>` | `P-023` | ASCII letters, digits, `-` and `_`; other characters become dashes, repeated dashes collapse, and the result is trimmed to 40 characters with edge dashes/underscores removed. Left out when no usable ID remains. |
 | `<YYYYMMDD-HHMM>` | `20261105-1533` | Local time the take started, to the minute. `meta.json`'s `created` keeps it to the second. |
 | `<what>` | `F`, `R+F`, `follow-F` | What happened in the take, see below. |
 | `<model>` | `spar-mlp` | The model's type, lowercase. |
@@ -39,7 +39,8 @@ ever overwritten.
 | Named on Stop | the codes, then the name | `…_R+F_practice.mg.zip` |
 
 A take in `recordings/` names the gestures it holds: the classes with recorded time, in the
-app's class order. A take in `predictions/` is a `free` run unless its `Session.name` says
+app's class order. An unnamed calibration take with no recorded class time omits the
+`_<what>` suffix. A take in `predictions/` is a `free` run unless its `Session.name` says
 otherwise: `FollowRun` names its take `follow-<code>` itself, and an app sets `guided` for a
 guided run.
 
@@ -86,5 +87,5 @@ that saves models itself gets the same name from
 ## Older files
 
 Takes saved before this standard keep their names (`P-023_2026-11-05_15-33-30_Fist.session.zip`):
-nothing on disk is renamed, and every reader takes any `.zip` holding a `meta.json`. Code that
+nothing on disk is renamed, and `open_session_store` accepts any `.zip` with `meta.json` and the stream arrays that metadata declares. Code that
 looks for takes should match `*.zip`, and for models `*.joblib`, never a fixed suffix.

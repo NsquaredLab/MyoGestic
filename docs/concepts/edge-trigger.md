@@ -7,8 +7,8 @@ an audio cue - the side-effect re-fires every tick. That's wasteful at best,
 and at worst it cancels animations or floods a downstream service.
 
 `EdgeTrigger` is the one-liner that gates this: call it every tick with the
-latest value, and the callback runs **only on the rising edge** - the first
-tick where the value differs from the previous one.
+latest value, and the callback runs **only on a change** from the last fired value,
+after the configured number of stable ticks.
 
 !!! tip "For a Virtual Hand, prefer a discrete DOF"
     `EdgeTrigger` is the primitive; you rarely need it directly. Declaring a
@@ -116,9 +116,8 @@ not here.
 
 * The downstream effect is genuinely per-tick continuous - e.g. streaming
   a pose vector. Use a normal call, not an edge trigger.
-* You need *tick-based* debouncing (ignore flicker shorter than N ticks) -
-  that's built in now via `n_stable_ticks` (above), including a seconds-derived
-  window. For true *wall-clock* hysteresis independent of the tick rate, add a
+* You need *wall-clock* hysteresis independent of the tick rate.
+  `n_stable_ticks` counts calls, even when its count was derived from seconds; add a
   `time.monotonic()` gate inside your callback.
 
 ## See also

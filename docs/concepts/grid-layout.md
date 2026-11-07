@@ -7,7 +7,7 @@ thing on both axes:
 
 | Unit       | Meaning                                                                 |
 |------------|-------------------------------------------------------------------------|
-| `Px(n)`    | Exactly `n` pixels (fixed-size track).                                  |
+| `Px(n)`    | Exactly `n` pixels at UI scale 1.0 (fixed-size track).                                  |
 | `Fr(n)`    | `n` shares of the space remaining after Px tracks are subtracted.       |
 
 Bare numbers are **deliberately rejected** so a reader can never confuse
@@ -65,7 +65,7 @@ the gutter are pixels **at UI scale 1.0** and are multiplied by the live scale
 (see [UI scale](#ui-scale)); the examples below are at scale 1.0:
 
 * `[Fr(1), Fr(2)]` over 600 px of remaining space → `200, 400`.
-* `[Px(300), Fr(1), Fr(1)]` over 900 px total → `300, 300, 300`.
+* `[Px(300), Fr(1), Fr(1)]` over 900 px total → `300, 288, 288` after the two 12 px gutters.
 * `[Px(600), Fr(1)]` over 500 px total → `600, 0` (Px overflow is
   preserved; the Fr track collapses to zero rather than clipping the Px).
 
@@ -80,7 +80,7 @@ laptop and on a 4K monitor.
 One number scales the fonts, imgui's padding and spacing, and every `Px`
 track. By default it is automatic: the display scale picked in the OS (1.5 for
 Windows at 150 %) times how big the window is compared with 1280 × 800, nudged
-by at most ×0.85–×1.3 and recomputed every frame — so it follows the window when
+by at most ×0.85–×1.3, rounded in 0.05 steps and clamped to 0.5–2.0, and recomputed every frame — so it follows the window when
 it is resized or dragged to another monitor. Two overrides fix it instead:
 `App(ui_scale=1.1)` from code, and `MYOGESTIC_UI_SCALE=1.1` from the shell,
 which wins.
@@ -160,7 +160,7 @@ construction, naming the ones that differ. A plain `Grid` indexed by
 ### Bare areas
 
 Pass area names in `bare` for a header or status strip without a border or
-background. Each area remains a child window with the same padding and clipping,
+background. Each area remains a clipped child window; short standalone bare rows reduce vertical padding to fit a control,
 and `Layout` preserves each arrangement's bare areas. Unknown names raise a
 `ValueError` when the grid is constructed.
 
