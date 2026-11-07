@@ -180,7 +180,7 @@ describe('Canvas 2D fallback', () => {
     expect(ctx.stroke).toHaveBeenCalledTimes(4);
     expect(colors).toHaveBeenCalledTimes(2);
     expect(ctx.fillStyle).toBe('rgb(15, 16, 18)');
-    expect(ctx.strokeStyle).toBe('rgba(177,132,217,0.28125)');
+    expect(ctx.strokeStyle).toBe('rgba(177,132,217,0.21875)');
     expect(ctx.globalCompositeOperation).toBe('source-over');
     renderer.resize(390, 422, 4);
     renderer.draw(s);

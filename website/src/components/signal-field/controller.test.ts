@@ -115,7 +115,7 @@ describe('signal field lifecycle', () => {
     expect(gl.draw.mock.calls.at(-1)![0].gesture).toBe('Pinch');
     expect(env.pending.size).toBe(0);
     env.visibility(false);
-    field.hold('Open');
+    field.hold('Index');
     expect(gl.draw).toHaveBeenCalledTimes(draws + 1);
     env.visibility(true);
     expect(gl.draw).toHaveBeenCalledTimes(draws + 2);
@@ -170,7 +170,7 @@ describe('signal field lifecycle', () => {
     env.idleCallback();
     expect(onGesture).toHaveBeenLastCalledWith('Pinch', true);
     env.run(2900);
-    expect(onGesture).toHaveBeenLastCalledWith('Rest', true);
+    expect(onGesture).toHaveBeenLastCalledWith('Index', true);
     field.destroy();
   });
 
@@ -232,7 +232,7 @@ describe('signal field lifecycle', () => {
     const s = gl.draw.mock.calls[0][0];
     expect(s.gesture).toBe('Fist');
     expect(s.head).toBe(120);
-    expect(s.act[21]).toBeCloseTo(0.789);
+    expect(s.act[21]).toBeCloseTo(s.target[21]);
     expect(env.pending.size).toBe(0);
     onGesture.mockClear();
     env.run(10000);
@@ -252,11 +252,13 @@ describe('signal field lifecycle', () => {
     field.auto();
     expect(onGesture).toHaveBeenLastCalledWith('Pinch', true);
     env.run(2900);
+    expect(onGesture).toHaveBeenLastCalledWith('Index', true);
+    env.run(2900);
     expect(onGesture).toHaveBeenLastCalledWith('Rest', true);
     env.run(2900);
     expect(onGesture).toHaveBeenLastCalledWith('Fist', true);
     env.run(2900);
-    expect(onGesture).toHaveBeenLastCalledWith('Open', true);
+    expect(onGesture).toHaveBeenLastCalledWith('Pinch', true);
     field.destroy();
   });
 
@@ -270,7 +272,7 @@ describe('signal field lifecycle', () => {
     env.advance();
     expect(onGesture).toHaveBeenLastCalledWith('Fist', true);
     env.run(900);
-    expect(onGesture).toHaveBeenLastCalledWith('Open', true);
+    expect(onGesture).toHaveBeenLastCalledWith('Pinch', true);
     field.destroy();
   });
 
@@ -279,13 +281,13 @@ describe('signal field lifecycle', () => {
     const onGesture = vi.fn();
     const field = mountSignalField(canvas, { env, autoCycleMs: 64, onGesture });
     env.run(96);
-    expect(onGesture).toHaveBeenLastCalledWith('Open', true);
+    expect(onGesture).toHaveBeenLastCalledWith('Pinch', true);
     field.destroy();
   });
 
   it('stops immediately if an automatic gesture callback destroys the field', () => {
     const field = mountSignalField(canvas, { env, onGesture(g) {
-      if (g === 'Open') field.destroy();
+      if (g === 'Pinch') field.destroy();
     } });
     env.run(2900);
     const draws = gl.draw.mock.calls.length;

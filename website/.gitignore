@@ -25,3 +25,6 @@ pnpm-debug.log*
 .DS_Store
 test-results/
 playwright-report/
+
+# Local fit and browser evidence (never recording data)
+.field-work/

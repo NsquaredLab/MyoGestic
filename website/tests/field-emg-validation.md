@@ -1,130 +1,120 @@
 # Signal-field EMG validation
 
-The private session is opened with `myogestic.session.open_session_store`. No
-recording arrays or excerpts are checked in or served by the website. The optional
-reference bridge binds only to loopback and holds its comparison windows in memory.
-Its session argument must be supplied locally.
+The fit uses **8-channel forearm bracelet recordings** sampled at 1000 Hz. The previous fit is superseded: its narrowband common-mode signal was simulated and did not establish a muscle-activity reference. Only rounded RMS maps and scalar aggregates are committed. Recording arrays remain private; the optional comparison bridge holds excerpts in memory on loopback and is never used by the deployed website.
 
-## Reference and display choice
+## Selection and filtering
 
-The recording has 320 channels, 2048 Hz, and 190464 samples. Select the contiguous
-64-channel block with the greatest mean squared amplitude across **all labelled
-Fist samples**: zero-based channels **45–108**. Use only stationary labelled
-intervals, excluding the first 650 ms after each label, for distribution/RMS maps.
-Centre each channel by its median; apply no filter or interpolation. Round each
-Rest/Fist RMS map to three decimals relative to maximum Fist channel RMS.
+Six complete recording sets were compared, with each set normalized by its own maximum Fist-channel RMS. One set was selected because it maximized the minimum pairwise RMS difference between the four normalized eight-electrode maps. Keeping a single electrode placement preserves spatial selectivity that pooling differently oriented bracelets would blur. The six minimum distances were 0.0973, 0.0640, 0.0343, 0.2076, 0.1307, 0.0786. The selected distance is 0.2076. This is a visual reference selection, not a population estimate or classifier validation.
 
-Compare 480 point samples spanning four seconds, paired min/max extrema of each
-17–18-sample bin, and 480 consecutive native samples (234 ms, about 17× slow motion).
-Point sampling at 120 columns/s preserves the original four-second crossing time
-and is readable. Min/max fills too much of each lane; the native view is much
-smoother and slower. `field-three-mappings.png` records the three real-data views.
-The table below uses the selected point-sample view; p99 and p99.9 use each
-channel's stationary RMS as their normalizer and pool absolute amplitudes.
+Each take has a single gesture label near its start. Index means index flexion. A fourth-order Butterworth 20–450 Hz band-pass is applied forward and backward, followed by forward/backward Q=30 notches at 50, 100, …, 450 Hz. The first 650 ms after the later of the label and first sample, and the final 100 ms, are excluded. There is one selected take per gesture, with 9.19–9.26 stationary seconds each. There is no rest-to-contraction cue or offset segment in these takes; onset and offset are not estimable. Both generator envelope constants remain **18 ms**.
 
-| Statistic | Real | Synthetic (seed 314159) |
-| --- | ---: | ---: |
-| Fist/rest RMS | 7.4948 | 7.8880 |
-| Rest signed neighbour correlation | -0.2581 | -0.2315 |
-| Fist signed neighbour correlation | 0.1577 | 0.1590 |
-| Rest p99 / channel RMS | 1.5871 | 1.5322 |
-| Fist p99 / channel RMS | 1.8759 | 1.8484 |
-| Rest p99.9 / channel RMS | 13.0889 | 13.9533 |
-| Fist p99.9 / channel RMS | 2.0522 | 1.9531 |
-| Rest lag-1 correlation | -0.2521 | -0.3112 |
-| Fist lag-1 correlation | -0.3130 | -0.3147 |
-| Onset envelope tau | 18.0 ms | 18.0 ms (generator constant) |
-| Offset envelope tau | 18.0 ms | 18.0 ms (generator constant) |
+Per-channel RMS is measured at 1000 Hz after filtering. These eight-number maps, normalized to maximum Fist RMS, are interpolated around a closed bracelet. Lane c uses position 8c/N and wraps electrode 7 back to electrode 0; 64 lanes are display interpolation, not 64 independent electrodes.
 
-Envelope measurements use 50 ms RMS, 10–90% width divided by ln(9), then the
-median over three Fist transitions. Recorded Fist activation precedes its label
-by approximately 531 ms; the side-by-side screenshot aligns the observed onset.
-The synthetic noise combines reflected phase jitter (bounded active amplitudes),
-spatially correlated background, and sparse alternating-polarity low-effort
-potentials. It matches the stated aggregate statistics. Open and Pinch use synthetic smooth spatial envelopes on the Fist RMS profile. `FIELD_GAIN =
-0.26` keeps the maximum-channel active p99 estimate at 0.473 lane while retaining
-visible resting texture and sparse spikes.
+| Gesture | Eight-electrode RMS map |
+| --- | --- |
+| Rest | 0.0166, 0.0247, 0.0258, 0.0187, 0.0237, 0.0444, 0.0259, 0.0229 |
+| Fist | 0.6122, 1.0000, 0.7758, 0.3918, 0.6676, 0.5276, 0.3552, 0.6188 |
+| Pinch | 0.0851, 0.1671, 0.7326, 0.4169, 0.5279, 0.4671, 0.1561, 0.0877 |
+| Index | 0.2221, 0.1321, 0.4732, 0.3591, 0.1783, 0.1133, 0.0770, 0.0653 |
 
-## Thickness and rendering
+All six pairwise map distances remain at least **0.18** after spreading to 64 lanes; the seeded test enforces this margin. Rest is low-amplitude texture, Fist has broad recruitment, Pinch emphasizes the middle bracelet sector, and Index has a narrower flexion profile. The four measured maps are used directly.
 
-DPR 1 was compared on Apple M5 Pro / ANGLE Metal at 1440×900 against geometry.
-It thickens a 2× canvas but leaves a 1× canvas unchanged. Keep the existing DPR
-policy and draw each segment as a two-device-pixel quad perpendicular to its
-slope, including steep MUAP reversals. Composite colour against the background
-once in the shader with blending disabled, so overlapping joins cannot glare.
-Canvas 2D doubles `lineWidth` from one to two CSS pixels and uses source-over.
-Both full (64×480) and reduced (32×240) tiers are covered at DPR 1 and 2.
-Software WebGL uses the existing Canvas fallback to avoid its synchronous shader
-compilation cost. Adaptive tier density, cadence, thresholds, sample speed, reduced
-motion and offscreen scheduling are unchanged. The still-frame browser test waits for load/idle drawing and font
-layout before checking pixel equality.
+## Real versus synthetic at the displayed rate
 
-Screenshots are local, uncommitted artifacts in `.superpowers/screens/`:
-`field-real-vs-synthetic.png`, `field-three-mappings.png`,
-`field-thickness-1x.png`, `field-thickness-2x.png`,
-`field-hero-dpr1.png`, and `field-hero-geometry.png`.
+Point sampling uses floor(j × 1000/120), with the clock reset for each take. No additional anti-alias filter is applied during point sampling: 480 columns represent four seconds at the existing full-tier cadence. Both real and synthetic signed signals are circularly interpolated from eight carriers. The synthetic interpolation normalizes variance so each lane follows its interpolated RMS map. This explains its slightly higher absolute RMS and adjacent-lane correlation.
 
-## Reproduction
+The table reports the selected recordings and generator seed 314159 after 2400 settling columns and 24000 stationary columns per gesture. Tails are pooled absolute amplitudes divided by each channel's own RMS. Electrode neighbours include 7→0; lane neighbours include 63→0. Negative displayed lag-1 is a point-sampling effect; native recorded lag-1 is positive (0.59–0.77).
 
-From the repository root, start the private bridge (stop it after capture):
+| Gesture | Statistic | Real | Synthetic |
+| --- | --- | ---: | ---: |
+| Rest | Native active/rest RMS | 1.0000 | n/a |
+| Rest | Displayed electrode active/rest RMS | 1.0000 | 1.0000 |
+| Rest | Displayed lane active/rest RMS | 1.0000 | 1.0000 |
+| Rest | Electrode neighbour correlation | 0.1051 | 0.1114 |
+| Rest | Lane neighbour correlation | 0.9820 | 0.9829 |
+| Rest | Lane lag-1 correlation | -0.1618 | -0.1504 |
+| Rest | Lane p99 / RMS | 2.6214 | 2.5505 |
+| Rest | Lane p99.9 / RMS | 3.6242 | 3.3664 |
+| Rest | Lane kurtosis | 3.1675 | 3.0187 |
+| Fist | Native active/rest RMS | 24.4451 | n/a |
+| Fist | Displayed electrode active/rest RMS | 25.0618 | 24.3978 |
+| Fist | Displayed lane active/rest RMS | 26.1249 | 24.3857 |
+| Fist | Electrode neighbour correlation | 0.4088 | 0.4078 |
+| Fist | Lane neighbour correlation | 0.9870 | 0.9896 |
+| Fist | Lane lag-1 correlation | -0.1412 | -0.1522 |
+| Fist | Lane p99 / RMS | 3.0616 | 3.0426 |
+| Fist | Lane p99.9 / RMS | 4.6701 | 4.8700 |
+| Fist | Lane kurtosis | 5.0896 | 4.9975 |
+| Pinch | Native active/rest RMS | 15.0487 | n/a |
+| Pinch | Displayed electrode active/rest RMS | 14.7577 | 15.0706 |
+| Pinch | Displayed lane active/rest RMS | 15.8912 | 14.7407 |
+| Pinch | Electrode neighbour correlation | 0.3540 | 0.3566 |
+| Pinch | Lane neighbour correlation | 0.9828 | 0.9885 |
+| Pinch | Lane lag-1 correlation | -0.2157 | -0.2171 |
+| Pinch | Lane p99 / RMS | 3.0687 | 2.9537 |
+| Pinch | Lane p99.9 / RMS | 4.1582 | 4.6919 |
+| Pinch | Lane kurtosis | 4.4205 | 4.6015 |
+| Index | Native active/rest RMS | 9.1803 | n/a |
+| Index | Displayed electrode active/rest RMS | 9.0407 | 9.1880 |
+| Index | Displayed lane active/rest RMS | 9.5577 | 8.9860 |
+| Index | Electrode neighbour correlation | 0.3667 | 0.3711 |
+| Index | Lane neighbour correlation | 0.9845 | 0.9888 |
+| Index | Lane lag-1 correlation | -0.1253 | -0.1256 |
+| Index | Lane p99 / RMS | 3.0989 | 3.0504 |
+| Index | Lane p99.9 / RMS | 4.5391 | 4.8906 |
+| Index | Lane kurtosis | 5.0658 | 5.0313 |
+
+The generator uses eight correlated carriers with a common component fitted to circular electrode correlation, a per-gesture negative AR(1) term at the displayed rate, and occasional broad innovations for the measured tails. Six summed uniforms approximate Gaussian innovations without frame-path allocations. It is an aggregate visual fit, not a reconstruction of motor-unit physiology or native-frequency spectra. Tests require active/rest RMS ratios within ±20%, both neighbour correlations within ±0.1, lag-1 within ±0.1, p99 within ±10%, p99.9 within ±15%, and kurtosis within ±25%.
+
+The real raw stationary spectra are broad; the line notches intentionally reduce spectral flatness, so raw and filtered flatness must not be conflated:
+
+| Gesture | Raw peak (Hz) | Raw flatness, 20–450 Hz | Filtered peak (Hz) | Filtered flatness, 20–450 Hz |
+| --- | ---: | ---: | ---: | ---: |
+| Rest | 20.51 | 0.6818 | 28.32 | 0.4022 |
+| Fist | 72.27 | 0.3154 | 72.27 | 0.1632 |
+| Pinch | 49.80 | 0.2659 | 59.57 | 0.1375 |
+| Index | 107.42 | 0.3822 | 84.96 | 0.2016 |
+
+## Rendering and reproduction
+
+The two-device-pixel quads, Canvas 2D software-renderer fallback, renderer tiers, sample cadence, gain, reduced-motion handling and offscreen scheduling are unchanged. All per-frame storage is preallocated. The 64-lane texture budget remains 123136 bytes.
+
+Define local take-path arrays, then run the reference script with repeated `--group` arguments, one group of local take arguments per recording set. It automatically selects the complete group with the largest minimum map distance. Standard output contains only aggregates; no path, identity or recording excerpt is printed. Add `--serve 4381` only for local comparison capture, then stop the bridge. From the website directory, with a built-site preview running:
 
 ```sh
-uv run python website/tests/field-reference.py "$SESSION" --serve 4381
-```
-
-With a built-site preview running, from `website/`:
-
-```sh
-node tests/field-visual-check.mjs http://127.0.0.1:4381 ../.superpowers/screens http://localhost:4339/MyoGestic/
+uv run python tests/field-reference.py --group "${TAKES_A[@]}" --group "${TAKES_B[@]}" --serve 4381
+# In a separate terminal, after the bridge and built-site preview are ready:
+node tests/field-visual-check.mjs "$BRIDGE_URL" "$SCREENSHOT_DIRECTORY" "$SITE_URL"
 npm run ci
 ```
 
-The screenshot harness also reads the original line renderer from commit
-`0c1afc6` for the DPR 1 comparison. The source tree contains only synthetic code,
-rounded RMS maps and derived statistics. Measurement and Lighthouse results follow below.
+The comparison is 1440×900: one second each of Rest → Fist → Pinch → Index, at the same 120 Hz point-sampling scale on both sides. Each real segment comes from the selected take after settling; each side uses the same circular signal interpolation. Four hero screenshots show each held gesture. Images contain private visual excerpts and remain local, uncommitted evidence.
 
+## Final verification
 
-## Final checks (2026-11-07)
-
-`npm run ci` passed under Node 22.23.4, with `CI=1 PLAYWRIGHT_PORT=4340`
-for an isolated preview: 19 unit-test files / 79 tests passed; 40 browser tests
-passed and one skipped. The existing context-loss browser test skips when
-software rendering selects Canvas instead of WebGL; controller unit coverage
-still exercises context loss, replacement and lifecycle behaviour.
-
-The island is **5356 bytes gzipped**, measured by the existing esbuild/gzip budget
-test and an independent final bundle. GPU textures remain **123136 bytes**.
-
-The supplied `ref/measure-field.mjs` ran for one minute on the final built page
-with Apple M5 Pro / ANGLE Metal. At 1440×900, 600 timed callbacks: **0.056 ms mean,
-0.100 ms p95, 0.300 ms maximum**. Offscreen: zero callbacks and zero script/task
-CPU. Clean-page heap after forced GC: **0.846, 0.863, 0.863 MiB** at 0/30/60 s.
-The small startup increase settles; no sustained heap growth was observed.
-
-Lighthouse 12 mobile, `--chrome-flags="--headless=new"`:
-
-| Page | Performance | Accessibility | Best practices | SEO | TBT | LCP |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/MyoGestic/` | 98 | 100 | 100 | 100 | 0 ms | 2029 ms |
-| `/MyoGestic/getting-started/` | 98 | 100 | 100 | 100 | 0 ms | 2181 ms |
-
-The homepage trace records long tasks of 205 ms (field startup) and 62 ms (page);
-the docs trace records a 77 ms page task. All produce zero reported TBT. Software
-WebGL shader compilation initially scored 89 with a 1020 ms task; selecting the
-existing Canvas fallback on software renderers resolves that startup cost while
-retaining reduced-tier density, cadence and thresholds.
-
-Saved local evidence: `/tmp/field-ci.log`, `/tmp/field-statistics.log`,
-`/tmp/field-measurement.json`, `/tmp/field-lh-home.json`,
-`/tmp/field-lh-docs.json`, and `/tmp/field-reference-final.json` (derived metrics
-only). All six PNGs listed above are 1440×900 and remain uncommitted.
+The foreground `npm run ci` passed under Node 22.23.4 on 2026-11-07: 19 unit-test files / 80 tests passed; 41 browser tests passed and three skipped. Two playground browser tests skip because this website-only build omits the optional wheel; the context-loss browser test skips when software rendering chooses Canvas 2D. Controller unit tests exercise context loss and replacement, while screenshot and performance checks use hardware WebGL. The new gesture, distribution and map tests were first run against the old generator and failed before implementation. Final focused field tests (37) and the reference script's Ruff check also pass.
 
 CI tail:
 
 ```text
+All 61 legacy URLs resolve in dist/.
+Checked 5645 internal links across 63 HTML pages: no broken links.
+Resolved 808/808 legacy API symbols across 11 pages; no exemptions.
+Resolved 1325/1325 generated API references.
 Test Files  19 passed (19)
-     Tests  79 passed (79)
-Running 41 tests using 2 workers
-  1 skipped
-  40 passed (20.0s)
+     Tests  80 passed (80)
+Running 44 tests using 2 workers
+  3 skipped
+  41 passed (14.3s)
 ```
+
+The complete field island is **5323 bytes gzipped** (12269 minified bytes), below the 10240-byte limit. Textures remain **123136 bytes**. The supplied measurement script ran with one minute of clean-page heap sampling on Apple M5 Pro / ANGLE Metal at 1440×900. Across 600 timed callbacks, mean main-thread cost was **0.036 ms**, p95 **0.100 ms**, maximum **0.200 ms**. Offscreen callbacks and script/task CPU were zero. Forced-GC heap at 0/30/60 s was **0.850, 0.864, 0.863 MiB**; no sustained growth was observed.
+
+Lighthouse 12 mobile, with a fresh headless browser for each page:
+
+| Page | Performance | Accessibility | Best practices | SEO | TBT | LCP |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Homepage | 98 | 100 | 100 | 100 | 0 ms | 2031 ms |
+| Getting started | 98 | 100 | 100 | 100 | 0 ms | 2179 ms |
+
+Local, uncommitted screenshots: `field-real-vs-synthetic-v2.png`, `field-hero-rest-v2.png`, `field-hero-fist-v2.png`, `field-hero-pinch-v2.png`, and `field-hero-index-v2.png`. All five are 1440×900 and were visually inspected. The comparison shows the expected shared spatial structure and the distinct gesture amplitudes; the live hero remains legible in all four held states.

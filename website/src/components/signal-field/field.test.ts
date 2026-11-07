@@ -3,8 +3,8 @@ import { channelColor, CONFIDENCE, createFieldState, GESTURES, mulberry32, setGe
 
 describe('synthetic signal field', () => {
   it('exposes the approved gestures and confidences', () => {
-    expect(GESTURES).toEqual(['Rest', 'Fist', 'Open', 'Pinch']);
-    expect(CONFIDENCE).toEqual({ Rest: 0.97, Fist: 0.94, Open: 0.91, Pinch: 0.88 });
+    expect(GESTURES).toEqual(['Rest', 'Fist', 'Pinch', 'Index']);
+    expect(CONFIDENCE).toEqual({ Rest: 0.97, Fist: 0.94, Pinch: 0.91, Index: 0.88 });
     expect(createFieldState().data.length).toBe(30720);
   });
 
@@ -12,16 +12,16 @@ describe('synthetic signal field', () => {
     const s = createFieldState();
     const target = s.target;
     setGesture(s, 'Fist');
-    expect(s.target[0]).toBe(1);
-    expect(s.target[21]).toBeCloseTo(0.789);
-    expect(s.target[63]).toBeCloseTo(0.787);
-    setGesture(s, 'Open');
-    expect(s.target[44]).toBeGreaterThan(0.77);
+    expect(s.target[0]).toBeCloseTo(0.6122);
+    expect(s.target[8]).toBeCloseTo(1);
+    expect(s.target[63]).toBeCloseTo(0.6122 * 0.875 + 0.6188 * 0.125);
     setGesture(s, 'Pinch');
-    expect(s.target[16]).toBeGreaterThan(0.78);
+    expect(s.target[16]).toBeCloseTo(0.7326);
+    setGesture(s, 'Index');
+    expect(s.target[16]).toBeCloseTo(0.4732);
     setGesture(s, 'Rest');
-    expect(s.target[0]).toBeCloseTo(0.136);
-    expect(s.target[63]).toBeCloseTo(0.089);
+    expect(s.target[0]).toBeCloseTo(0.0166);
+    expect(s.target[63]).toBeCloseTo(0.0166 * 0.875 + 0.0229 * 0.125);
     expect(s.target).toBe(target);
     expect(s.gesture).toBe('Rest');
   });
@@ -30,7 +30,7 @@ describe('synthetic signal field', () => {
     const a = createFieldState();
     const b = createFieldState();
     const data = a.data, act = a.act, target = a.target;
-    const phase = a.phase, pulse = a.pulse, rest = a.rest;
+    const noise = a.noise, texture = a.texture, rest = a.rest;
     const randA = mulberry32(17), randB = mulberry32(17);
     setGesture(a, 'Fist');
     setGesture(b, 'Fist');
@@ -42,14 +42,14 @@ describe('synthetic signal field', () => {
     expect(a.data).toBe(data);
     expect(a.act).toBe(act);
     expect(a.target).toBe(target);
-    expect(a.phase).toBe(phase);
-    expect(a.pulse).toBe(pulse);
+    expect(a.noise).toBe(noise);
+    expect(a.texture).toBe(texture);
     expect(a.rest).toBe(rest);
     expect(a.data).toEqual(b.data);
     expect(a.act).toEqual(b.act);
   });
 
-  it('eases RMS using the measured 18 ms onset and 18 ms offset constants', () => {
+  it('eases RMS using the retained 18 ms onset and offset constants', () => {
     const s = createFieldState(1, 8);
     setGesture(s, 'Fist');
     const before = s.act[0];
