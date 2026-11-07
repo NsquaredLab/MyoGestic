@@ -5,7 +5,7 @@ const origin = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
     testDir: './tests/e2e',
-    outputDir: '../.superpowers/test-results',
+    outputDir: 'test-results',
     fullyParallel: true,
     workers: 2,
     use: {
