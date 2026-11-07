@@ -7,7 +7,7 @@ const version = readFileSync(new URL('../../../../pyproject.toml', import.meta.u
 if (!version) throw new Error('Could not read the package version from pyproject.toml');
 ---
 
-<section id="top" class="home-hero" aria-label="Live EMG field" style="position: relative; overflow: hidden; background: var(--mg-field-bg); border-bottom: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent)">
+<section id="top" class="home-hero" aria-label="Live EMG field" style="position: relative; overflow: hidden; background: var(--mg-field-bg)">
   <canvas data-signal-field aria-hidden="true" class="hero-field"></canvas>
   <div aria-hidden="true" class="hero-scrim"></div>
 
