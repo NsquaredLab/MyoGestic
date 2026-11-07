@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCanvas2DRenderer } from './canvas2d';
 import * as field from './field';
-import { createGLRenderer } from './gl';
+import { createGLRenderer, getRendererInfo } from './gl';
 
 function context2D() {
   return {
@@ -47,6 +47,29 @@ function canvas(gl: ReturnType<typeof contextGL> | null, ctx = context2D()) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('WebGL renderer', () => {
+  it('preserves reduced-motion still pixels through the probe and renderer context requests', () => {
+    const gl = contextGL();
+    gl.getExtension = vi.fn(() => null);
+    const { original } = canvas(gl);
+    getRendererInfo(original, true);
+    const renderer = createGLRenderer(original, 'rgb(15, 16, 18)', 32, 240, true)!;
+    for (const call of vi.mocked(original.getContext).mock.calls) {
+      expect(call[1]).toMatchObject({ preserveDrawingBuffer: true });
+    }
+    renderer.destroy();
+  });
+  it('reads the unmasked renderer before allocating any GPU resources', () => {
+    const gl = contextGL();
+    gl.getExtension = vi.fn(() => ({ UNMASKED_RENDERER_WEBGL: 123 }));
+    gl.getParameter = vi.fn(() => 'ANGLE (Google, Vulkan SwiftShader Device)');
+    expect(getRendererInfo(canvas(gl).original)).toContain('SwiftShader');
+    expect(gl.getExtension).toHaveBeenCalledWith('WEBGL_debug_renderer_info');
+    expect(gl.getParameter).toHaveBeenCalledWith(123);
+    expect(gl.createProgram).not.toHaveBeenCalled();
+    gl.getExtension.mockReturnValue(null);
+    expect(getRendererInfo(canvas(gl).original)).toBe('');
+    expect(getRendererInfo(canvas(null).original)).toBe('');
+  });
   it('allocates just 123136 texture bytes and draws all channels in one call', () => {
     const gl = contextGL();
     const { original } = canvas(gl);

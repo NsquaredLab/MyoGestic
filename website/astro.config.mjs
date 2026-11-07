@@ -21,6 +21,7 @@ export default defineConfig({
     integrations: [
         starlight({
             title: 'MyoGestic',
+            description: 'Real-time biosignal experiment GUI builder: a short Python script becomes a live experiment with signal viewers, recording, training and prediction.',
             logo: { src: './src/assets/brand/myogestic-horizontal.svg', replacesTitle: true },
             favicon: '/favicon.svg',
             head: [

@@ -1,4 +1,4 @@
-import { mountSignalField, CONFIDENCE, type Gesture } from '../signal-field/index';
+import { mountSignalFieldAfterLoad, CONFIDENCE, type Gesture } from '../signal-field/index';
 
 const hero = document.querySelector<HTMLElement>('.home-hero');
 if (hero) {
@@ -24,7 +24,7 @@ if (hero) {
     const auto = hero.querySelector<HTMLButtonElement>('[data-auto]')!;
     // The controller owns the surface and may replace it after context loss.
     // All subsequent UI work uses the controller or the enclosing hero.
-    const controller = mountSignalField(hero.querySelector<HTMLCanvasElement>('[data-signal-field]')!, {
+    const controller = mountSignalFieldAfterLoad(hero.querySelector<HTMLCanvasElement>('[data-signal-field]')!, {
         onGesture(gesture, automatic) {
             prediction.textContent = gesture;
             confidence.textContent = CONFIDENCE[gesture].toFixed(2);

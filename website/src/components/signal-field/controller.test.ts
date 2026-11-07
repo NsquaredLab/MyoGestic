@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FieldEnv } from './controller';
-import { mountSignalField } from './controller';
+import { mountSignalField, mountSignalFieldAfterLoad } from './controller';
 
-const mocks = vi.hoisted(() => ({ gl: vi.fn(), twoD: vi.fn() }));
-vi.mock('./gl', () => ({ createGLRenderer: mocks.gl, FIELD_BACKGROUND_FALLBACK: '#0F1012' }));
+const mocks = vi.hoisted(() => ({ gl: vi.fn(), twoD: vi.fn(), info: vi.fn() }));
+vi.mock('./gl', () => ({ createGLRenderer: mocks.gl, getRendererInfo: mocks.info, FIELD_BACKGROUND_FALLBACK: '#0F1012' }));
 vi.mock('./canvas2d', () => ({ createCanvas2DRenderer: mocks.twoD }));
 
 function renderer() {
@@ -17,6 +17,15 @@ class Environment implements FieldEnv {
   visible = true;
   inView = true;
   reduce = false;
+  clock = 0;
+  frameCost = 0;
+  now = () => this.clock;
+  loaded!: () => void;
+  idleCallback!: () => void;
+  removeLoad = vi.fn();
+  cancelIdle = vi.fn();
+  onLoad = (cb: () => void) => { this.loaded = cb; return this.removeLoad; };
+  idle = vi.fn((cb: () => void) => { this.idleCallback = cb; return 0; });
   visibility!: (value: boolean) => void;
   intersection!: (value: boolean) => void;
   resize!: (w: number, h: number) => void;
@@ -59,11 +68,109 @@ describe('signal field lifecycle', () => {
     env = new Environment();
     canvas = new EventTarget() as HTMLCanvasElement;
     gl = renderer();
+    gl.draw.mockImplementation(() => { env.clock += env.frameCost; });
     mocks.gl.mockReset().mockReturnValue(gl);
+    mocks.info.mockReset().mockReturnValue('Apple M5 Pro');
     mocks.twoD.mockReset().mockImplementation(renderer);
     vi.stubGlobal('getComputedStyle', vi.fn(() => ({ getPropertyValue: () => ' rgb(15, 16, 18) ' })));
   });
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it.each(['Google SwiftShader', 'llvmpipe (LLVM 15.0)', 'Software Rasterizer', 'Microsoft Basic Render Driver'])(
+    'starts at reduced density, half rate and DPR 1 for %s', info => {
+      mocks.info.mockReturnValue(info);
+      const field = mountSignalField(canvas, { env });
+      expect(mocks.gl).toHaveBeenCalledWith(canvas, 'rgb(15, 16, 18)', 32, 240);
+      expect(gl.resize).toHaveBeenLastCalledWith(1440, 800, 1);
+      env.advance();
+      env.advance();
+      expect(gl.draw).toHaveBeenCalledOnce();
+      expect(gl.draw.mock.calls[0][0]).toMatchObject({ channels: 32, samples: 240 });
+      field.destroy();
+    },
+  );
+
+  it('measures 30 drawn frames per tier, steps down twice and never back up', () => {
+    env.frameCost = 5;
+    const field = mountSignalField(canvas, { env });
+    expect(mocks.gl).toHaveBeenLastCalledWith(canvas, 'rgb(15, 16, 18)', 64, 480);
+    for (let i = 0; i < 29; i++) env.advance();
+    expect(mocks.gl).toHaveBeenCalledOnce();
+    env.advance();
+    expect(mocks.gl).toHaveBeenLastCalledWith(canvas, 'rgb(15, 16, 18)', 32, 240);
+    for (let i = 0; i < 59; i++) env.advance();
+    expect(env.pending.size).toBe(1);
+    env.advance();
+    expect(env.pending.size).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+    const draws = gl.draw.mock.calls.length;
+    env.frameCost = 0;
+    field.auto();
+    env.run(10000);
+    expect(gl.draw).toHaveBeenCalledTimes(draws);
+    field.hold('Pinch');
+    expect(gl.draw).toHaveBeenCalledTimes(draws + 1);
+    expect(gl.draw.mock.calls.at(-1)![0].gesture).toBe('Pinch');
+    expect(env.pending.size).toBe(0);
+    env.visibility(false);
+    field.hold('Open');
+    expect(gl.draw).toHaveBeenCalledTimes(draws + 1);
+    env.visibility(true);
+    expect(gl.draw).toHaveBeenCalledTimes(draws + 2);
+    expect(env.pending.size).toBe(0);
+    field.destroy();
+  });
+
+  it('keeps full density when the first 30 frames average at most 4 ms', () => {
+    env.frameCost = 4;
+    const field = mountSignalField(canvas, { env });
+    for (let i = 0; i < 60; i++) env.advance();
+    expect(mocks.gl).toHaveBeenCalledOnce();
+    expect(gl.draw).toHaveBeenCalledTimes(60);
+    expect(env.pending.size).toBe(1);
+    field.destroy();
+  });
+
+  it('waits for load and the injected idle callback before mounting, retaining chip clicks', () => {
+    const onGesture = vi.fn();
+    const field = mountSignalFieldAfterLoad(canvas, { env, onGesture });
+    expect(mocks.gl).not.toHaveBeenCalled();
+    expect(env.idle).not.toHaveBeenCalled();
+    field.hold('Pinch');
+    expect(onGesture).toHaveBeenLastCalledWith('Pinch', false);
+    env.loaded();
+    expect(env.idle).toHaveBeenCalledOnce();
+    expect(mocks.gl).not.toHaveBeenCalled();
+    env.idleCallback();
+    expect(mocks.gl).toHaveBeenCalledOnce();
+    expect(onGesture).toHaveBeenLastCalledWith('Pinch', false);
+    env.run(3000);
+    expect(onGesture).toHaveBeenLastCalledWith('Pinch', false);
+    field.destroy();
+  });
+
+  it('cancels deferred startup on destruction including idle handle zero', () => {
+    const field = mountSignalFieldAfterLoad(canvas, { env });
+    env.loaded();
+    field.destroy();
+    expect(env.cancelIdle).toHaveBeenCalledWith(0);
+    expect(env.removeLoad).toHaveBeenCalledOnce();
+    env.idleCallback();
+    expect(mocks.gl).not.toHaveBeenCalled();
+  });
+
+  it('keeps the selected gesture when Auto is pressed before idle startup', () => {
+    const onGesture = vi.fn();
+    const field = mountSignalFieldAfterLoad(canvas, { env, onGesture });
+    field.hold('Pinch');
+    field.auto();
+    env.loaded();
+    env.idleCallback();
+    expect(onGesture).toHaveBeenLastCalledWith('Pinch', true);
+    env.run(2900);
+    expect(onGesture).toHaveBeenLastCalledWith('Rest', true);
+    field.destroy();
+  });
 
   it('schedules nothing while hidden or outside the viewport', () => {
     env.visible = false;
@@ -117,6 +224,8 @@ describe('signal field lifecycle', () => {
     env.reduce = true;
     const onGesture = vi.fn();
     const field = mountSignalField(canvas, { env, onGesture });
+    expect(mocks.info).toHaveBeenCalledWith(canvas, true);
+    expect(mocks.gl).toHaveBeenCalledWith(canvas, 'rgb(15, 16, 18)', 64, 480, true);
     expect(gl.draw).toHaveBeenCalledOnce();
     const s = gl.draw.mock.calls[0][0];
     expect(s.gesture).toBe('Fist');

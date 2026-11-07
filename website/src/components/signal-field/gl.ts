@@ -11,13 +11,21 @@ export interface Renderer {
   destroy(): void;
 }
 
+// Probe before shader compilation so software WebGL never builds the full tier.
+export function getRendererInfo(canvas: HTMLCanvasElement, preserveDrawingBuffer = false): string {
+  const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false, preserveDrawingBuffer });
+  const info = gl?.getExtension('WEBGL_debug_renderer_info');
+  return info ? String(gl!.getParameter(info.UNMASKED_RENDERER_WEBGL)) : '';
+}
+
 export function createGLRenderer(
   canvas: HTMLCanvasElement,
   background = FIELD_BACKGROUND_FALLBACK,
   channels = 64,
   samples = 480,
+  preserveDrawingBuffer = false,
 ): Renderer | null {
-  const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false });
+  const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false, preserveDrawingBuffer });
   if (!gl) return null;
 
   const signal = gl.createTexture();

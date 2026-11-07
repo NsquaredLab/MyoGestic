@@ -1,6 +1,6 @@
 import { createCanvas2DRenderer } from './canvas2d';
 import { createFieldState, GESTURES, mulberry32, setGesture, stepField, type Gesture } from './field';
-import { createGLRenderer, FIELD_BACKGROUND_FALLBACK } from './gl';
+import { createGLRenderer, FIELD_BACKGROUND_FALLBACK, getRendererInfo } from './gl';
 
 export interface FieldEnv {
   raf(cb: FrameRequestCallback): number;
@@ -10,6 +10,10 @@ export interface FieldEnv {
   onIntersect(el: Element, cb: (inView: boolean) => void): () => void;
   onResize(el: Element, cb: (w: number, h: number) => void): () => void;
   dpr(): number;
+  now(): number;
+  onLoad(cb: () => void): () => void;
+  idle(cb: () => void): number;
+  cancelIdle(id: number): void;
 }
 
 const browserEnv: FieldEnv = {
@@ -17,6 +21,16 @@ const browserEnv: FieldEnv = {
   caf: (id) => cancelAnimationFrame(id),
   reducedMotion: () => matchMedia('(prefers-reduced-motion: reduce)').matches,
   dpr: () => Math.min(2, window.devicePixelRatio || 1),
+  now: () => performance.now(),
+  onLoad(cb) {
+    if (document.readyState === 'complete') cb();
+    else window.addEventListener('load', cb, { once: true });
+    return () => window.removeEventListener('load', cb);
+  },
+  idle: (cb) => window.requestIdleCallback
+    ? window.requestIdleCallback(cb, { timeout: 1500 })
+    : window.setTimeout(cb, 0),
+  cancelIdle: (id) => window.cancelIdleCallback ? window.cancelIdleCallback(id) : window.clearTimeout(id),
   onVisibility(cb) {
     const update = () => cb(!document.hidden);
     document.addEventListener('visibilitychange', update);
@@ -40,22 +54,77 @@ const browserEnv: FieldEnv = {
   },
 };
 
-export function mountSignalField(canvas: HTMLCanvasElement, opts: {
+interface FieldOptions {
   channels?: number;
   samplesPerFrame?: number;
   autoCycleMs?: number;
   onGesture?: (g: Gesture, auto: boolean) => void;
   env?: FieldEnv;
-} = {}): { hold(g: Gesture): void; auto(): void; destroy(): void } {
+}
+
+interface FieldController { hold(g: Gesture): void; auto(): void; destroy(): void }
+
+/** Keep controls usable while all renderer work waits for load and idle. */
+export function mountSignalFieldAfterLoad(canvas: HTMLCanvasElement, opts: FieldOptions = {}): FieldController {
   const env = opts.env ?? browserEnv;
-  const state = createFieldState(opts.channels ?? 64);
+  let controller: FieldController | null = null;
+  let pending = -1;
+  let destroyed = false;
+  let gesture: Gesture = 'Fist';
+  let held = false;
+  function start(): void {
+    pending = -1;
+    if (destroyed) return;
+    controller = mountSignalField(canvas, opts);
+    if (held || gesture !== 'Fist') {
+      controller.hold(gesture);
+      if (!held) controller.auto();
+    }
+  }
+  const removeLoad = env.onLoad(() => {
+    if (!destroyed) pending = env.idle(start);
+  });
+  return {
+    hold(g) {
+      if (destroyed) return;
+      gesture = g;
+      held = true;
+      if (controller) controller.hold(g);
+      else opts.onGesture?.(g, false);
+    },
+    auto() {
+      if (destroyed) return;
+      held = false;
+      if (controller) controller.auto();
+      else opts.onGesture?.(gesture, true);
+    },
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      removeLoad();
+      if (pending >= 0) env.cancelIdle(pending);
+      controller?.destroy();
+    },
+  };
+}
+
+export function mountSignalField(canvas: HTMLCanvasElement, opts: FieldOptions = {}): FieldController {
+  const env = opts.env ?? browserEnv;
+  const reduced = env.reducedMotion();
+  // Tiers only descend: full (0), reduced (1), still (2).
+  const info = reduced ? getRendererInfo(canvas, true) : getRendererInfo(canvas);
+  let tier = /SwiftShader|llvmpipe|Software|Microsoft Basic Render/i.test(info) ? 1 : 0;
+  let state = createFieldState(tier === 0 ? opts.channels ?? 64 : 32, tier === 0 ? 480 : 240);
   const samplesPerFrame = Math.max(1, Math.min(state.samples, Math.round(opts.samplesPerFrame ?? 4)));
   const autoCycleMs = Math.max(1, opts.autoCycleMs ?? 2800);
-  const reduced = env.reducedMotion();
   const rand = mulberry32(7);
   // Read the inherited token once, before rendering or any frame is scheduled.
   const background = getComputedStyle(canvas).getPropertyValue('--mg-field-bg').trim() || FIELD_BACKGROUND_FALLBACK;
-  let renderer = createGLRenderer(canvas, background, state.channels, state.samples);
+  // A still must retain its pixels after compositing; animated contexts keep
+  // the existing default so their GPU performance is unchanged.
+  let renderer = reduced
+    ? createGLRenderer(canvas, background, state.channels, state.samples, true)
+    : createGLRenderer(canvas, background, state.channels, state.samples);
   let usingGL = renderer !== null;
   renderer ??= createCanvas2DRenderer(canvas, background, state.channels, state.samples);
   let surface = renderer.canvas ?? canvas;
@@ -69,6 +138,9 @@ export function mountSignalField(canvas: HTMLCanvasElement, opts: {
   let held = false;
   let pending = -1;
   let inFrame = false;
+  let skip = false;
+  const costs = new Float64Array(30);
+  let measured = 0;
   let cycleTimer: ReturnType<typeof setTimeout> | null = null;
   let remaining = autoCycleMs;
   let startedAt = 0;
@@ -89,7 +161,7 @@ export function mountSignalField(canvas: HTMLCanvasElement, opts: {
     remaining = Math.max(0, remaining - (Date.now() - startedAt));
   }
   function startCycle(): void {
-    if (cycleTimer !== null || reduced || held || destroyed || !ready || !visible || !inView || width <= 0 || height <= 0) return;
+    if (cycleTimer !== null || reduced || tier === 2 || held || destroyed || !ready || !visible || !inView || width <= 0 || height <= 0) return;
     startedAt = Date.now();
     cycleTimer = setTimeout(cycle, remaining);
   }
@@ -107,7 +179,7 @@ export function mountSignalField(canvas: HTMLCanvasElement, opts: {
       stop();
       return;
     }
-    if (reduced) {
+    if (reduced || tier === 2) {
       if (dirty) {
         stepField(state, 120, rand);
         renderer!.upload(state, 0, state.samples);
@@ -127,13 +199,65 @@ export function mountSignalField(canvas: HTMLCanvasElement, opts: {
   function frame(): void {
     pending = -1;
     if (destroyed || !visible || !inView || width <= 0 || height <= 0) return;
+    // Reduced draws every other rAF. Skipped callbacks are never measured.
+    if (tier === 1) {
+      skip = !skip;
+      if (skip) {
+        pending = env.raf(frame);
+        return;
+      }
+    }
     inFrame = true;
+    if (measured < costs.length) costs[measured] = env.now();
     const from = state.head;
     stepField(state, samplesPerFrame, rand);
     renderer!.upload(state, from, samplesPerFrame);
     renderer!.draw(state);
+    if (measured < costs.length) {
+      costs[measured] = env.now() - costs[measured];
+      measured = (measured + 1) | 0;
+      if (measured === costs.length) {
+        let total = 0;
+        for (let i = 0; i < costs.length; i++) total += costs[i];
+        if (total > 4 * costs.length) stepDown();
+      }
+    }
     inFrame = false;
-    if (!destroyed && visible && inView) pending = env.raf(frame);
+    if (!destroyed && visible && inView && tier !== 2) pending = env.raf(frame);
+  }
+  // The only allocation after startup is a tier change, never a steady frame.
+  function stepDown(): void {
+    tier++;
+    if (tier === 2) {
+      dirty = false; // The frame just drawn is the current gesture's still.
+      stopCycle();
+      return;
+    }
+    measured = 0;
+    skip = false;
+    const gesture = state.gesture;
+    state = createFieldState(32, 240);
+    setGesture(state, gesture);
+    stepField(state, 120, rand);
+    renderer!.destroy();
+    renderer = usingGL ? createGLRenderer(surface, background, state.channels, state.samples) : null;
+    usingGL = renderer !== null;
+    renderer ??= createCanvas2DRenderer(surface, background, state.channels, state.samples);
+    observeSurface();
+    renderer.resize(width, height, 1);
+    renderer.upload(state, 0, state.samples);
+  }
+  function observeSurface(): void {
+    const next = renderer!.canvas ?? surface;
+    if (next === surface) return;
+    surface.removeEventListener('webglcontextlost', contextLost);
+    removeIntersection();
+    removeResize();
+    surface = next;
+    surface.addEventListener('webglcontextlost', contextLost);
+    inView = false;
+    removeIntersection = env.onIntersect(surface, intersection);
+    removeResize = env.onResize(surface, resize);
   }
   function visibility(value: boolean): void { visible = value; sync(); }
   function intersection(value: boolean): void { inView = value; sync(); }
@@ -141,7 +265,7 @@ export function mountSignalField(canvas: HTMLCanvasElement, opts: {
     if (destroyed || (width === w && height === h)) return;
     width = w;
     height = h;
-    renderer!.resize(w, h, Math.min(2, env.dpr()));
+    renderer!.resize(w, h, tier === 0 ? Math.min(2, env.dpr()) : 1);
     dirty = true;
     sync();
   }
@@ -157,7 +281,7 @@ export function mountSignalField(canvas: HTMLCanvasElement, opts: {
     renderer = createCanvas2DRenderer(surface, background, state.channels, state.samples);
     usingGL = false;
     surface = renderer.canvas ?? surface;
-    renderer.resize(width, height, Math.min(2, env.dpr()));
+    renderer.resize(width, height, tier === 0 ? Math.min(2, env.dpr()) : 1);
     renderer.upload(state, 0, state.samples);
     dirty = true;
     inView = false;
