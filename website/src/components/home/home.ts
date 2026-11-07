@@ -8,10 +8,8 @@ if (hero) {
     // loop. These offsets also survive the controller replacing a lost canvas.
     const alignField = () => {
         const bounds = hero.getBoundingClientRect();
-        const headline = copy.getBoundingClientRect();
         const instruments = panels.getBoundingClientRect();
         hero.style.setProperty('--hero-field-top', `${instruments.top - bounds.top}px`);
-        hero.style.setProperty('--hero-probe-x', `${(headline.right + instruments.left) / 2 - bounds.left}px`);
     };
     alignField();
     const layout = new ResizeObserver(alignField);

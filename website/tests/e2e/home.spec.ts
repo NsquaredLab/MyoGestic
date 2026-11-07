@@ -113,31 +113,24 @@ test('phone width contains the page and puts the headline above the panels', asy
 });
 
 for (const width of [390, 768, 1024, 1208]) {
-    test(`stacked hero hides the probe and guides at ${width}px`, async ({ page }) => {
+    test(`hero stacks the panels below the copy at ${width}px`, async ({ page }) => {
         await page.setViewportSize({ width, height: 1000 });
         await page.goto(home);
         const copy = await page.locator('.hero-copy').boundingBox();
         const panels = await page.locator('[data-panels]').boundingBox();
         expect(panels!.y).toBeGreaterThanOrEqual(copy!.y + copy!.height);
-        const decorations = page.locator('.home-hero > .hide-sm');
-        await expect(decorations).toHaveCount(4); // Two guides, probe circle, CH 23.
-        for (const decoration of await decorations.all()) await expect(decoration).toBeHidden();
     });
 }
 
 for (const width of [1209, 1280, 1440]) {
-    test(`side-by-side hero keeps the probe in the column gap at ${width}px`, async ({ page }) => {
+    test(`hero puts the panels beside the copy at ${width}px`, async ({ page }) => {
         await page.setViewportSize({ width, height: 1000 });
         await page.goto(home);
         await page.evaluate(() => document.fonts.ready);
-        const decorations = page.locator('.home-hero > .hide-sm');
-        for (const decoration of await decorations.all()) await expect(decoration).toBeVisible();
         const copy = await page.locator('.hero-copy').boundingBox();
         const panels = await page.locator('[data-panels]').boundingBox();
-        const probe = await decorations.nth(2).boundingBox();
         expect(panels!.y).toBeCloseTo(copy!.y, 0);
-        expect(probe!.x).toBeGreaterThanOrEqual(copy!.x + copy!.width);
-        expect(probe!.x + probe!.width).toBeLessThanOrEqual(panels!.x);
+        expect(panels!.x).toBeGreaterThanOrEqual(copy!.x + copy!.width);
     });
 }
 
