@@ -186,6 +186,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The controls guide now limits orphan-alias validation to targets that all report `claims`; a target without `claims` intentionally accepts every alias.
 - `StatusBar` shows the real participant folder using the same safe ID as recording saves, including IDs with spaces, separators or more than 40 characters.
 - The SessionManager screenshot fixture loads and selects its three mock participant takes before capture, with Rest / Fist durations.
+- The CatBoost regression example uses the same 200 ms EMG window for training and live prediction, keeping their feature layouts compatible.
+- The CatBoost and RaulNet regression examples refuse training when every class is unticked, with a clear reason in the training status and log.
 - Follow runs stopped by another panel save their actual target end before metadata is written, so saved-take scoring uses the interrupted interval and later takes remain unaffected.
 - `FollowRun(drive=..., hz=32)` drives the operator hand on its own clock, independent of EMG, the GUI and `predict`; Stop joins the driver before restoring rest. Myocontrol uses separate prediction and operator links so `controls` records predictions only.
 - App shutdown waits for pending recording saves, including takes stopped by cleanup hooks, before stopping streams; unfinished saves are logged after a 30-second timeout.

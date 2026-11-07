@@ -110,6 +110,11 @@ is working and holding still.
 
 ## Training: two iterators, one model
 
+Training and live prediction share the same 200 ms EMG window (`WINDOW_MS`);
+training advances by 100 ms (`HOP_MS`). Once the live window is full, the
+same RMS+MAV+WL extractor produces the same flattened feature layout for
+training and prediction.
+
 The training callback handles **two kinds of session** transparently:
 
 ```python
@@ -135,10 +140,13 @@ control values, but now for a stated reason rather than by accident: `+1`
 *is* flexion. Useful for mixing pre-VHI data into a new training set
 without re-recording.
 
-The labeled fallback honours the class chips the user un-ticked in the
-session manager, via its `classes=data.classes` argument; the kinematics
-path regresses every aligned window (kinematics are continuous, so there's
-nothing to filter by class).
+Select at least one class in the session manager before training. Untick
+every class and both this example and the RaulNet variant refuse with
+"No classes selected — select at least one class before training." in the
+training status and log. With a non-empty selection, the labeled fallback
+honours the class chips via its `classes=data.classes` argument; the
+kinematics path regresses every aligned window (kinematics are continuous,
+so there's nothing to filter by class).
 
 The model is a single
 [`catboost_regressor(loss_function="MultiRMSE")`](../api/models.md) fit
