@@ -1,4 +1,5 @@
 ---
+import { Image } from 'astro:assets';
 import screenshot from '../../../../docs/images/hello-emg.png';
 ---
 
@@ -30,7 +31,7 @@ recording = RecordingControls(
 app.run()</code></pre>
     </div>
     <div class="hello-window" style="flex: 1 1 560px; min-width: 0; background: var(--mg-canvas); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 55%, transparent); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column">
-      <img src={screenshot.src} alt="Hello EMG app with SignalViewer and RecordingControls in the dark theme" width={screenshot.width} height={screenshot.height} loading="lazy" style="display: block; width: 100%; height: auto; flex: 1; min-height: 0; object-fit: contain" />
+      <Image src={screenshot} format="webp" quality={80} width={720} alt="Hello EMG app with SignalViewer and RecordingControls in the dark theme" loading="lazy" style="display: block; width: 100%; height: auto; flex: 1; min-height: 0; object-fit: contain" />
     </div>
   </div>
   <p style="margin: 16px 0 0; font: 400 12px/1.6 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 55%, transparent)">Add a Pipeline and decorate extract / train / predict for a closed-loop experiment.</p>
