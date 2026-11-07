@@ -1,13 +1,15 @@
 ---
 title: "Your first remote target"
 ---
-!!! note "Choose an adapter"
-    Use a remote target for a separate program reached over gRPC and LSL, such as a game,
-    simulator or service in another language or on another machine.
+!!! danger "Choose an adapter"
+    Most devices do not need this page. Use a remote target only for a device that is
+    already a separate program reached over gRPC and LSL, such as a game, simulator or
+    service in another language or on another machine.
 
-    For devices you can import and call from Python, follow
+    For devices you can import and call from Python, such as a serial prosthesis, motor
+    controller, cursor or vendor library, follow
     [Drive your own device](../how-to/add-a-target.md). It uses three methods in one process
-    and includes a runnable example.
+    with no remote wire. Its copyable example runs in a few seconds.
 
 This builds a remote target in seven stages, each ending in something you run and watch. The
 device is a two-axis rig with a gripper that closes and opens and a wrist that rotates.
@@ -43,7 +45,7 @@ nothing moves.
 
 ### Making it your device
 
-To drive your hardware, change these three settings.
+To drive your hardware, change only these three settings. Nothing else in the rig needs to change.
 
 | | what | where |
 |---|---|---|
@@ -65,8 +67,9 @@ rig = InterfaceSpec(name="rig", process=[], n_output_channels=1, output_hz=32.0,
 target = RemoteTarget(client=rig.control_client(), interface=rig)
 ```
 
-These two objects connect MyoGestic to the rig. `virtual_hand()` supplies the
-corresponding VHI settings and resolves its Godot path.
+These two objects are the complete MyoGestic-side wiring. They do not change again.
+`virtual_hand()` supplies the corresponding VHI settings and resolves its Godot path.
+Do not use it for this rig, which has no Godot binary to launch.
 
 Every stream this spec publishes carries the `source_id`
 `myogestic:<name>:<address>`, which lets your target find the same stream again after a
@@ -76,7 +79,8 @@ restart. Keep `name=` stable as described in stage 5.
 
 ## Stage 1. Serve a manifest, and read it back
 
-Implement `GetControlManifest` so clients can discover your controls. Add LSL in stage 4.
+Implement `GetControlManifest`, the remote target's one discovery obligation. That method
+alone lets a client learn the device controls. Add LSL in stage 4.
 
 Save this as `my_target.py`:
 
@@ -165,7 +169,9 @@ closed and `rig.wrist.pronation` at `+1` is pronated.
 !!! tip "End each address in a word that has an opposite"
     `+1` means the direction the address name says, so the name has to say one.
     Use `closure` and `pronation` so stage 6 can check the sign against the name.
-    `rig.gripper` and `rig.wrist.rotation` leave the `+1` direction unspecified.
+    `rig.gripper` names a part; `rig.wrist.rotation` names a motion with two directions.
+    Neither specifies the `+1` direction, so the sign check has no expected answer and
+    the next map author must guess. `closure` and `pronation` each have an opposite.
 
 ### Checkpoint
 
@@ -198,7 +204,8 @@ rig.wrist.pronation  continuous  [-1.0, +1.0]  rest=+0.0
 !!! warning "Use a rig-specific probe"
     `tools/inspect_control.py` is a Virtual Hand walkthrough. It takes no arguments and loads
     `examples/controls/hand.toml`, requiring six `vhi.prediction.*` addresses and
-    `vhi.control.gesture`. Running it against this two-address rig raises from `resolve()`.
+    `vhi.control.gesture`. This two-address rig cannot satisfy that map. Running the tool
+    against it produces an uncaught traceback from `resolve()`.
 
     ```
     ValueError: [dofs] 'fist': this target does not export 'vhi.prediction.thumb.flexion'.
@@ -212,8 +219,10 @@ rig.wrist.pronation  continuous  [-1.0, +1.0]  rest=+0.0
 
 ### Reject an incompatible target
 
-MyoGestic checks the target's vocabulary version. Vocabulary 1 expects a wide pose stream;
-this client publishes per-address streams and rejects that version. Stop the target and
+MyoGestic and the target are installed separately, so their versions can differ.
+MyoGestic checks the target's vocabulary version. Vocabulary 1 expects a wide pose stream
+that this client no longer publishes. Without rejection, the target would wait silently
+and never move. The client publishes per-address streams and rejects that version. Stop the target and
 start it with the wrong version.
 
 ```bash
@@ -230,8 +239,10 @@ Run `probe.py` against it and `client.capabilities()` raises `ValueError`:
 ValueError: rig speaks control vocabulary 1, and MyoGestic needs 2 or newer. Vocabulary 2 publishes one LSL stream per control, named for that control's own address and one channel wide; vocabulary 1 read a single wide pose stream that MyoGestic no longer sends. Paired with this client such a target would report no error and never move. Update rig.
 ```
 
-The one-line error names your target. Read it through the direct probe; from stage 3,
-`ControlLink` catches the exception and returns `None`.
+The error is one string on one line; any wrapping is done by the terminal. It names your
+target because advice to update VHI would name the wrong program. Read it through the
+direct probe. From stage 3, `ControlLink` catches the exception and returns `None`,
+hiding that direct error from the caller.
 
 Restart without `--antique` before going on.
 
@@ -292,7 +303,7 @@ my-rig.toml is usable against this target.
 
 It reaches your target at `127.0.0.1:50051`. With
 nothing running, the second section reports that state and exits `0`, confirming only
-structural validity.
+structural validity. Exit `0` without a running target is not a successful binding check.
 
 Change `rig.wrist.pronation` to `rig.wrist.pronate` and run it again. The
 first section prints unchanged, and the second becomes:
@@ -307,7 +318,7 @@ my-rig.toml was refused.
 ```
 
 Exit status `1`. The refusal names the address, the near miss, and everything the rig exports,
-and it goes to stderr, so it can appear above the stdout section it belongs to. `resolve()` rejects the whole map if any address is unknown.
+and it goes to stderr, so it can appear above the stdout section it belongs to. `resolve()` rejects the whole map if any address is unknown. It never binds only the recognized entries. A dropped control is indistinguishable from one that works and holds still.
 
 The "Did you mean" hint is the addresses sharing the longest dotted prefix with what you
 wrote, so it is absent only when nothing matches even the namespace. Here is that refusal
@@ -377,8 +388,9 @@ With the target stopped, `ensure()` prints `None`. Start it and run again, and y
 <myogestic._controls_bus.ControlBus object at 0x10f5bcc10>
 ```
 
-A bus means the manifest resolved and one LSL outlet per address exists. Add target inlet
-code in stage 4 to read samples.
+A bus means the manifest resolved and one LSL outlet per address exists. The target has
+not read any sample yet because it has no inlet code until stage 4. A bus alone does not
+prove a connected data path.
 
 `link.ensure()` has three outcomes.
 
@@ -388,7 +400,8 @@ code in stage 4 to read samples.
 | target reachable, address wrong | raises `ValueError` |
 | target too old | logs the refusal, returns `None` |
 
-Rows one and three both return `None`, so retries continue for an incompatible target.
+Rows one and three both return `None`. A permanently incompatible target looks the same
+as one that has not started yet, so an application can retry forever.
 Run `drive.py` against `my_target.py --antique` to see row three and a `logging.WARNING`
 on the `myogestic.controls` logger.
 
@@ -410,7 +423,7 @@ link = ControlLink(control_map, [target], ctx=ctx, hz=32)
 MyoGestic publishes one single-channel LSL stream per address, named for that address.
 
 Add imports and five fields to `my_target.py`. Add the seven methods below to the existing
-`Rig` class. `_open`, `_apply`, `_read`, `_status` and `_watch` are additions; replace the
+`Rig` class. Do not start a second `class` statement. `_open`, `_apply`, `_read`, `_status` and `_watch` are additions; replace the
 stage-1 `serve` and `stop` methods to manage the reader thread and gRPC server. See
 [the finished file](#my_targetpy) for placement.
 
@@ -478,7 +491,7 @@ Finding and opening the inlets:
             self._inlets[address].open_stream()
 ```
 
-Apply each sample to the device in this method.
+Apply each sample to the device in this method. This is the only method where a value becomes motion.
 
 ```python
     def _apply(self, address: str, value: float) -> None:
@@ -539,7 +552,7 @@ def _read(self) -> None:
             self._stop.wait(1.0)  # `resolve_streams` can raise too — back off
 ```
 
-Print status to check the rig.
+Print status to check the rig. A rig with no visible state cannot be checked.
 
 ```python
 def _status(self) -> str:
@@ -608,7 +621,10 @@ def stop(self) -> None:
 
 Reject streams where `n_channels != 1`. An inlet is found by address name, so a nine-channel
 stream called `rig.gripper.closure` can reach that inlet. Reading element zero would use
-another DOF's value, such as a thumb, to drive the gripper.
+another DOF's value, such as a thumb, to drive the gripper. Never read element zero of
+a wrong-width stream. The resulting motion could look plausible and stay in range for
+the whole session while following the wrong control. Rejecting the width makes this
+failure visible.
 
 ### Checkpoint 1: routing, not motion
 
@@ -706,7 +722,7 @@ rig: gripper.closure=+0.00  wrist.pronation=-1.00
 rig: gripper.closure=+0.00  wrist.pronation=+0.00
 ```
 
-Read the last line to check rest delivery. You may see two lines because the axes are
+Read the last line to check rest delivery. Never use the number of printed lines as the check. You may see two lines because the axes are
 independent streams whose rest samples arrive milliseconds apart. Each is applied on arrival.
 
 Those lines are [`ControlBus.stop`][myogestic.controls.ControlBus.stop] delivering the neutral
@@ -726,7 +742,8 @@ rig: gripper.closure=-1.00  wrist.pronation=+1.00
 rig: gripper.closure=+0.00  wrist.pronation=+0.00
 ```
 
-Check reconnection separately from initial binding.
+Check reconnection separately from initial binding. A target can work on its first inlet
+and fail silently after a restart.
 
 Liblsl inlet recovery matches a returning outlet by `source_id`. `_inlets` still holds
 both addresses, so `missing` stays empty and `_read` does not resolve again.
@@ -736,8 +753,9 @@ both addresses, so `missing` stays empty and `_read` does not resolve again.
 !!! danger "Change `InterfaceSpec(name=…)` and reconnection stops, silently"
     The `source_id` is built from that name, so a producer that comes back under a different
     one is, to liblsl, a *different stream*. The inlet stays alive and recovering, waiting
-    for the original `source_id`. `pull_chunk` keeps yielding empty, `missing`
-    stays empty, and no resolve sweep occurs. Run under `name="rig"` and then
+    for the original `source_id`, which will never return. `pull_chunk` keeps yielding
+    empty forever, `missing` stays empty, and no resolve sweep, exception or printed
+    diagnostic occurs. Run under `name="rig"` and then
     `name="rig-renamed"` to reproduce the stalled connection.
 
     Pick one name per device and keep it.
@@ -806,7 +824,7 @@ uv run --extra grpc python drive.py                          # terminal 2
 kill -KILL <PID>                                              # terminal 3; use the printed Python PID
 ```
 
-`SIGKILL` skips the producer's `finally` block, testing the rig's timeout. With both inlets connected,
+Unlike Ctrl-C, `SIGKILL` skips the producer's `finally` block. This tests the rig's timeout. It does not test orderly rest delivery. With both inlets connected,
 the rig lets go about a second after the last accepted samples:
 
 ```
@@ -817,14 +835,16 @@ rig: gripper.closure=+0.00  wrist.pronation=+0.00
 
 Set the timeout well above your producer's tick interval. At `output_hz=32.0` a sample is due
 every 31.25 ms, so one second is about 32 missed samples. A software deadman is not a safety
-interlock. For stream recovery, see
+interlock. It performs a different job from stream recovery. See
 [Design notes](../how-to/drive-a-remote-target.md#design-notes).
 
 <a id="stage-6--the-sign-check"></a>
 
 ## Stage 6. The sign check
 
-Check signs by watching your device.
+This stage requires your device and your eyes. It cannot be run here or replaced by
+an automated check. The procedure below must be performed on the device; there is no
+automated output to quote.
 
 Command `grip = +1.0` and watch the gripper. It must close, because `closure` is what
 the name `rig.gripper.closure` denotes at `+1`. Then `-1.0`, and it must open. Command
@@ -832,7 +852,8 @@ the name `rig.gripper.closure` denotes at `+1`. Then `-1.0`, and it must open. C
 denotes at `+1`; `-1.0` supinates.
 
 An inverted gripper can open on `+1` while its automated read-back checks pass.
-The read-back reports the motion performed. See [Concepts ›
+The read-back reports the motion performed. This repository shipped that exact sign
+bug while its automated suite stayed green. A person must make this checkpoint. See [Concepts ›
 Controls](../concepts/controls.md#the-one-convention-a-device-may-not-redefine) for the sign rule.
 
 Stage 1's directional names provide the expected sign. `rig.gripper` alone
@@ -848,8 +869,9 @@ it says.
 
 ## Stage 7. Discrete state
 
-Send held states over gRPC when they change. Re-sending "clamped" at 32 Hz
-produces 32 commands a second. Add a mode to the manifest and implement `SetControl`.
+An amount and a held state are different things. Do not put a held state on a per-tick
+stream. Send held states over gRPC only when they change. Re-sending "clamped" at 32 Hz
+produces 32 commands a second. It does not create one held state. Add a mode to the manifest and implement `SetControl`.
 
 Module level, next to `ADDRESSES`:
 
@@ -936,7 +958,8 @@ mode = { target = "rig.mode", debounce_s = 0.1 }
     another handshake but retains the original `ControlMap`. Restart `drive.py` to reload
     the TOML and bind again.
 
-The target declares `kind`. The same map works when you change a control from continuous
+Only the target declares `kind`. The map cannot say whether an address takes a number
+or a held state. The same map works when you change a control from continuous
 to discrete.
 
 <!--docs:run-->
@@ -1008,17 +1031,20 @@ you push, so it settles on its declared rest and is delivered once, as an edge. 
 `RemoteTarget`, the gRPC command is queued on its client and sent on a worker
 thread. Whether the rig *applied* it is a fact on the target's side, which is why the target prints
 what it applied. The bus rejects `banana` locally because it is absent from your declared states.
-For delivery timing, see
+Delivery timing is not guaranteed. See
 [Design notes](../how-to/drive-a-remote-target.md#design-notes).
 
 !!! note "Match `request.discrete` keys to addresses"
     Match keys against advertised addresses, such as `rig.mode`, and reject unknown keys.
     `continuous` and stream names also use addresses. Aliases such as `mode` belong to
-    the client's map. Address keys distinguish controls even if two share a `hold` state.
+    the client's map. The target has never seen those invented names and cannot interpret
+    them. Address keys distinguish controls even if two share a `hold` state; only the
+    address identifies which control a shared state belongs to.
 
 ## The finished files
 
-Copy these files or compare them with your stage-by-stage version.
+The files below assemble everything from the stages. Copy them as a starting point or
+compare them with your stage-by-stage version.
 
 ### `my_target.py`
 
@@ -1316,9 +1342,12 @@ finally:
 
 ## What you have
 
+The tutorial covers the contract and four operational checks that a client cannot perform
+for the target.
+
 [`examples/synthetic/reference_target.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/reference_target.py)
-is a shorter reference with six addresses, continuous controls, hold-last and a minimal
-inlet reader. Compare it with the four operational checks above.
+is a shorter reference with six addresses, no discrete controls, hold-last and a minimal
+inlet reader. Compare its omissions with the operational checks above and their failure costs.
 
 ## See also
 

@@ -1,7 +1,7 @@
 ---
 title: "Architecture"
 ---
-Sources feed ring buffers on acquisition threads. The predict thread computes decisions, and the main thread renders widgets. A `Target` drives a device from a sanitized control frame. Targets or user code can send values through paced outputs.
+Acquisition, decision and rendering are independent concerns. Sources feed ring buffers on acquisition threads. The predict thread computes decisions, and the main thread renders widgets. Actuation is a fourth concern. A `Target` drives a device from a sanitized control frame. Targets or user code can send values through paced outputs.
 
 ```mermaid
 flowchart TB
@@ -30,7 +30,7 @@ A typical tick of the system:
 1. Acquisition thread for stream `"emg"` reads a chunk from `LSLSource`, appends to the ring buffer, and appends to its Zarr array while a session is attached to that stream. `ctx.session` also holds the most recent stopped take, so it is not the recording flag. It never copies the growing history.
 2. Predict thread, once per `1/predict_hz`, pulls a window via the channels-first `Stream.get_window()`, forwards it to `@pipeline.extract`, then to `@pipeline.predict(model, features)`. The returned `dict[str, Any]` is stored in `pipeline.predictions`.
 3. The main render thread draws widgets from `ctx`. `SignalViewer` asks for only its visible tail and builds a plot-width-sized min/max envelope. The pose-output filter (`PostProcessor`) renders its panel.
-4. Output thread for `LSLOutlet` reads its atomic latest-value slot every `1/hz` and sends it every tick, even if unchanged. Each write replaces the latest value.
+4. Output thread for `LSLOutlet` reads its atomic latest-value slot every `1/hz` and sends it every tick, even if unchanged. Each write replaces the latest value. Delivery is latest-wins; values are never queued.
 
 On desktop, acquisition, prediction and output loops use daemon threads; rendering stays on the main thread. `Context`, `Pipeline` and the stream buffers hold shared state, with locks around buffer and session access. In the browser playground, acquisition and prediction run as scheduled steps on the GUI frame loop.
 
@@ -48,7 +48,7 @@ On desktop, acquisition, prediction and output loops use daemon threads; renderi
 | [`myogestic.recipes`](../api/models.md) | CatBoost / scikit-learn constructor recipes |
 | [`myogestic.widgets`](../api/widgets.md) | Construct-once ImGui widget classes and rendering helpers |
 | [`myogestic.outputs.filters`](../api/filters.md) | OneEuro / Gaussian / Identity output smoothers |
-| `myogestic.bridges` | Subprocess pattern for webcam and ultrasound sources |
+| `myogestic.bridges` | Subprocess pattern for heavy-data sources such as webcams and ultrasound |
 
 ## Public API boundary
 

@@ -3,6 +3,7 @@ title: "Controls"
 ---
 A control is something a person drives, such as a finger, wrist, cursor axis or key. A device
 declares its controls, your application names its model outputs, and a TOML control map pairs them.
+MyoGestic has no hard-coded list of controls. The map file is the whole control configuration surface.
 
 ## Two vocabularies meet on one line
 
@@ -20,7 +21,7 @@ my_thumb = "vhi.prediction.thumb.flexion"
 
 Each entry under `[dofs]` is one DOF, one [degree of
 freedom](../reference/glossary.md#dof). The left side is an alias, such as `my_thumb`, `fist` or
-`drive_x`. Choose any readable name. The same alias can point at a Virtual Hand in one file
+`drive_x`. Choose any readable name. MyoGestic prescribes no alias names and derives no meaning from them. The same alias can point at a Virtual Hand in one file
 and at a cursor axis in another with no code change.
 
 The right side is a dotted, lowercase address with at least two segments. The first segment
@@ -66,9 +67,10 @@ my_control_3 = "vhi.prediction.wrist.rotation"
 
 A keystroke and a 3-D hand share the table. The hand is a Godot application reached over
 gRPC and LSL; the keystroke uses `pynput` in this process. Each device handles delivery.
-To add a device, add its addresses to the map and its `Target` to the bus.
+The map names only what is driven. It contains no transport or delivery instructions.
+To add a device, add its addresses to the map and its `Target` to the bus. Nothing between them changes.
 
-A bare string names one address. An array sends one output to several addresses. Use a table
+The value shapes are the entire map grammar. A bare string names one address. An array sends one output to several addresses. Use a table
 to set a per-address `weight` or `debounce_s` gate. [`docs/api/controls.md`](../api/controls.md) has the full rules
 and every option.
 
@@ -86,7 +88,9 @@ A device converts to its own units, such as degrees for a robotic hand or pixels
 for a cursor. `+1` must follow the direction named by the control.
 
 Check the sign by looking at the device. A device and its read-back can agree even when the
-device flexes in response to an extension command.
+device flexes in response to an extension command. Their contract tests can all pass with
+this sign error. This repository shipped such a bug while its tests passed. A person looking
+at the device provides the check outside that loop.
 
 ## Continuous and discrete are different things
 
@@ -97,13 +101,14 @@ device flexes in response to an extension command.
 | repeated? | every tick, forever | never: a repeat is expressed by returning through rest first |
 | examples | `vhi.prediction.index` | `vhi.control.gesture`, `keyboard.tap.edit.space` |
 
-Re-sending a held state at 32 Hz produces 32 keystrokes a second.
+Do not send a held state on a per-tick stream. Re-sending it at 32 Hz produces 32 keystrokes
+a second instead of one held key.
 [`ControlBus`][myogestic.controls.ControlBus] delivers continuous values as a full frame every
 tick and discrete values as edges when a state settles. Each device uses its own command channel. For VHI that is a
 `SetControl` gRPC call; for [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget] it is a
 key-down or key-up.
 
-The device's manifest declares `kind`. The same map file works if the device changes a
+The device's manifest declares `kind`. The map cannot declare it. The same map file works if the device changes a
 control from continuous to discrete.
 
 For buttons, [`ControlBus.select`][myogestic.controls.ControlBus.select] delivers a state
@@ -143,10 +148,11 @@ assert controls.dofs["fire"].debounce_s == 0.1  # this one the map did say
 ```
 
 The keyboard declares `keyboard.hold.letter.w` as discrete with two states, so `walk` inherits
-those properties. The map sets `debounce_s`, the time a state must hold before this control
-loop accepts it.
+those properties. The map says nothing about states. It sets `debounce_s`, the time a state
+must hold before this control loop accepts it. That duration belongs to the control loop,
+which is why it lives in the map. The keyboard does not define it.
 
-`resolve()` rejects a map with unknown addresses.
+`resolve()` rejects the whole map if it has unknown addresses. It never binds only the entries it recognizes.
 
 <!--docs:run-->
 ```python
@@ -166,6 +172,8 @@ controls = resolve(load_control_map({"dofs": {"twist": "arm.wrist.rotation"}}), 
 assert controls.dofs["twist"].lo == -1.0  # signed, because that capability is
 ```
 
+Silently dropping an unknown control would look like a control holding still. The operator
+could move, see nothing happen and mistakenly investigate the model.
 When every target reports `claims`, [`ControlBus`][myogestic.controls.ControlBus] checks that
 some target claims every alias and rejects any alias that no target drives. Leaving `claims` off
 means the target accepts every alias, as a recorder or test double might. Such a target
@@ -191,8 +199,9 @@ Choose an adapter for your device.
 | what you write instead | the target | the *other side*: the contract your program serves |
 | guide | [Drive your own device](../how-to/add-a-target.md) | [Drive a remote target](../how-to/drive-a-remote-target.md) |
 
-For a device running its own firmware, write a Python target that writes to its port.
-Use the remote adapter if the device serves gRPC and LSL. `examples/synthetic/servo_hand.py` is a whole six-servo hand.
+A device running its own firmware still needs a Python target that writes to its port.
+Firmware alone does not provide the remote contract. Use the remote adapter only if the
+device already serves the gRPC and LSL contract. `examples/synthetic/servo_hand.py` is a whole six-servo hand.
 
 Both adapters declare a manifest and use addresses from the same map. One `ControlBus` can
 drive a mixed list. Moving a device into its own process leaves the map unchanged. To take the remote route end to end on
@@ -207,16 +216,18 @@ Hand is one such program. See [Integrate the Virtual Hand](../how-to/integrate-v
 
 !!! note "Outputs do not drive devices"
     [`Outlet`][myogestic.outputs.Outlet] is a paced latest-wins sender that a target writes
-    through. `RemoteTarget` builds one per address. Use a target for aliases, declared ranges,
-    clamping and rest on shutdown. See
+    through. `RemoteTarget` builds one per address. An outlet alone has no aliases, no declared
+    range, no clamp and no rest on shutdown. Use a target for these guarantees. See
     [Publish a data stream](../how-to/add-an-output.md).
 
 ## Binding retries while the target is unavailable
 
 [`connect_controls()`][myogestic.controls.connect_controls] returns `None` until every device
-can answer. An application can launch its devices from the UI and retry binding.
+can answer. It does not raise for this normal waiting state or leave a half-built bus to
+clean up. An application can launch its devices from the UI and retry binding.
 
-[`ControlLink`][myogestic.controls.ControlLink] manages binding retries.
+[`ControlLink`][myogestic.controls.ControlLink] manages binding retries. Applications need
+no separate nullable bus, guard or retry loop of their own.
 
 <!--docs:run-->
 ```python
@@ -276,7 +287,9 @@ See [Troubleshooting](../troubleshooting.md) for symptoms and fixes.
   the device's manifest is wrong, not the file.
 - Publishing to a stream you named yourself. A stream's name is the address, and the address
   is the device's to declare. Map your aliases onto addresses and let
-  [`RemoteTarget`][myogestic.remote.RemoteTarget] publish one stream per DOF.
+  [`RemoteTarget`][myogestic.remote.RemoteTarget] publish one stream per DOF. When VHI moved
+  to one stream per DOF, every stream name changed. Applications that read names from the
+  manifest needed no code changes.
 - Reaching for a second address for the other direction. A signed control already has both
   halves; emit a negative value, or give that address a negative `weight`.
 - Low-pass filtering a discrete control. Averaging "rest" and "fist" interpolates through

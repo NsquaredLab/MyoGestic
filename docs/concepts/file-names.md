@@ -1,7 +1,8 @@
 ---
 title: "File names"
 ---
-Take names and model autosaves identify the participant and contents in Finder and Explorer.
+Generated take names and model autosaves share one pattern. They identify the participant
+and contents in Finder and Explorer without opening the files.
 
 ```text
 data/<ID>/recordings/   <ID>_<YYYYMMDD-HHMM>_<what>.mg.zip
@@ -90,4 +91,4 @@ that saves models itself gets the same name from
 
 `open_session_store` accepts any `.zip` with `meta.json` and its declared stream arrays,
 including `P-023_2026-11-05_15-33-30_Fist.session.zip`. Match takes with `*.zip` and models
-with `*.joblib`. Files on disk keep their names.
+with `*.joblib`. Never match a fixed naming suffix. Files on disk keep their names.

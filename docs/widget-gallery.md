@@ -97,7 +97,8 @@ uv run python tools/widget_screenshot.py --all
 
     ![process_launcher](images/widgets/process_launcher.png){ .widget-thumb loading=lazy }
 
-    Launch / stop the synthetic generator, Virtual Hand or custom acquisition subprocesses from the GUI. Shows live state per entry; the framework adopts children for cleanup on exit.
+    Launch / stop external subprocesses from the GUI, such as the synthetic generator, Virtual
+    Hand or custom acquisition tools. Shows live state per entry; the framework adopts children for cleanup on exit.
 
 -   __[TargetPanel][myogestic.widgets.TargetPanel]__
 
@@ -175,7 +176,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![VhiMovementPanel](images/widgets/VhiMovementPanel.png){ .widget-thumb loading=lazy }
 
-    VHI control palette. Refreshes the cached control-hand state from the v2 recording aid on a throttled background thread. Dispatches clicks to your handler, normally `bus.select(...)` on a discrete DOF. Highlights the current movement; greys out while disconnected.
+    VHI control palette. Automatically refreshes the cached control-hand state from the v2 recording aid on a throttled background thread. Dispatches clicks to your handler, normally `bus.select(...)` on a discrete DOF. Highlights the current movement; greys out while disconnected.
 
 </div>
 
@@ -196,7 +197,8 @@ uv run python tools/widget_screenshot.py --all
 
 ## Other widgets
 
-See the [Widgets API](api/widgets.md) for these widgets.
+These widgets have no captures in the gallery screenshot registry. See the
+[Widgets API](api/widgets.md) for their full documentation.
 
 <div class="other-widgets" markdown>
 

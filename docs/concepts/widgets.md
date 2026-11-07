@@ -1,7 +1,7 @@
 ---
 title: "Widgets"
 ---
-A widget is a class. You construct it once with its configuration, then call `.ui(...)` each frame with the live per-frame inputs. The class needs only a `.ui()` method.
+A widget is a class. You construct it once with its configuration, then call `.ui(...)` each frame with the live per-frame inputs. Use a plain class with a `.ui()` method. No `Widget` base class or registration with the app is required.
 
 ```python
 class EmgViewer:
@@ -53,7 +53,7 @@ same full-panel controls for a custom filter palette.
 ## The contract
 
 1. Construct once; render every frame. The instance holds state, so build it at module/app scope and only call `.ui(...)` inside the frame. Constructing a widget *inside* `@app.ui` rebuilds it every frame and can reset its instance state, such as filter tuning. Identity-keyed caches, such as viewer channel selection, may outlive the instance.
-2. Config in `__init__`, per-frame in `.ui(...)`. Stable configuration such as stream name, pipeline or plot options goes to the constructor. Pass live inputs to `.ui(...)`, such as `ctx` for stream/recording/log widgets or `data` arrays for plots. Widgets holding `pipeline.predictions`, a filter or the feature map need no per-frame arguments.
+2. Config in `__init__`, per-frame in `.ui(...)`. Stable configuration such as stream name, pipeline or plot options goes to the constructor. Pass only inputs that cannot be held ahead of time to `.ui(...)`, such as `ctx` for stream/recording/log widgets or `data` arrays for plots. Widgets holding `pipeline.predictions`, a filter or the feature map need no per-frame arguments.
 3. One file per widget. ~100–200 LOC. If a widget grows past that, split its private helpers into underscore-prefixed modules (`_state.py`, `_controls.py`, `_plot.py`). Keep the public class in one file.
 4. Bound render work. Widgets read recent snapshots and prediction state. Signal display filtering and decimation run on the render thread, bounded by the visible window. Model training and other heavy work belong outside the render path.
 
@@ -63,6 +63,7 @@ same full-panel controls for a custom filter palette.
 
 `app.streams(...)` can populate `ctx.streams` after widget construction. A reconnect replaces
 stream buffers and changes status, so widgets read `ctx.streams.get(name)` each frame.
+Do not capture a `Stream` at construction.
 `SignalViewer("emg")` stores configuration; `.ui(ctx)` reads live state. A `Pipeline` is stable,
 so `PipelinePanel(pipeline)` holds it and takes no per-frame arguments in `.ui()`.
 
@@ -78,7 +79,8 @@ def ui(ctx):
         print("clicked")  # only true on the frame the click landed
 ```
 
-The class holds state between frames. `.ui()` issues draw calls each frame.
+The class holds state between frames. Rendering remains immediate-mode. `.ui()` issues
+fresh draw calls each frame.
 
 ## State and the `_<widget>_state.py` pattern
 
@@ -150,7 +152,7 @@ app.run()
 
 Drag the tab outside the main OS window and it floats. Layout state persists in `.imgui_state/<App>.ini` so the next launch restores your arrangement.
 
-`popout_panel(title, gui_fn)` renders `gui_fn` directly inside `@app.ui` if docking is off, or creates a docked window if docking is on. Useful for big secondary panels you may want to tear off on multi-monitor setups.
+`popout_panel(title, gui_fn)` is the inline fallback. It renders `gui_fn` directly inside `@app.ui` if docking is off, or creates a docked window if docking is on. Useful for big secondary panels you may want to tear off on multi-monitor setups.
 
 !!! warning "Pop-outs are experimental on macOS"
     Retina viewport sizing of detached windows can be wrong on initial draw. Native dialogs (`pfd.open_file`) plus detached viewports may stack badly. Treat it as experimental until verified for your specific use case.

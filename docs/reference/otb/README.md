@@ -13,9 +13,9 @@ imported and distributed package.
 | `CRC8.m` | OTB MATLAB example | CRC-8 (poly `0x8C`, LSB-first, init 0) used by the SyncStation / Quattrocento framed commands. |
 | `Read_Quattrocento.m` | OTB MATLAB example v5.0 | Direct Quattrocento connection (PC = TCP client `169.254.1.10:23456`). The authoritative 40-byte config + little-endian decode reference. |
 | `FourMapsQuattrocento.m` | OTB MATLAB example | Grid/channel-map helper (maps streamed channels to electrode grids). |
-| `ReadFromOTBiolabLightQuattrocento.m` | OTB MATLAB example | Reference for reading Quattrocento via the OT BioLab Light software server. |
+| `ReadFromOTBiolabLightQuattrocento.m` | OTB MATLAB example | Alternative path for reading Quattrocento via the OT BioLab Light software server. MyoGestic does not use this path; it is kept for reference. |
 
-Protocol verified against these manufacturer PDFs, stored separately.
+Protocol verified against these manufacturer PDFs. They are not committed to this repository.
 - Muovi probe TCP Communication Protocol v2.4
 - SyncStation TCP Communication Protocol v2.8
 - MuoviPro User Manual v5.1

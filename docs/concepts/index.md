@@ -1,7 +1,8 @@
 ---
 title: "Concepts"
 ---
-[Anatomy of an app](../anatomy.md) walks through a complete app. These pages explain its components. Use the [guides](../how-to/index.md) for tasks and the [API reference](../api/index.md) for symbols.
+Read [Anatomy of an app](../anatomy.md) first. It walks through a complete app in the order
+you write it and introduces the runtime model these pages assume. These pages explain its components. Use the [guides](../how-to/index.md) for tasks and the [API reference](../api/index.md) for symbols.
 
 - [Architecture](architecture.md) - the runtime: sources → streams → context → render / predict / output threads.
 - [Streams](streams.md) - the ring buffer, `get_window` vs `get_display`, channels-first convention.

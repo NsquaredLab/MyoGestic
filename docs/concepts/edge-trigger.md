@@ -5,7 +5,7 @@ A classifier emits a class index every tick at ~30-60 Hz. Calling a gRPC RPC,
 serial write or audio cue on each tick can restart animations or flood a
 downstream service.
 
-Call `EdgeTrigger` every tick with the latest value. It runs the callback when
+Call `EdgeTrigger` every tick with the latest value. It runs the callback only when
 the value changes from the last fired value and holds for the configured
 number of stable ticks.
 
@@ -62,8 +62,8 @@ before it fires, swallowing sub-`N` flicker:
 trigger = EdgeTrigger(send_gesture_to_device, n_stable_ticks=5)
 ```
 
-Convert a duration to a call count using the loop rate, including when you
-change `predict_hz`.
+`n_stable_ticks` counts calls, not elapsed time. Convert a duration to a call count using
+the loop rate, including when you change `predict_hz`.
 
 ```python
 import math
@@ -98,7 +98,7 @@ trigger.fire_if_changed((class_name, dominant_dof))
 
 ## Thread-safety
 
-Typically, the predict thread calls `fire_if_changed`, and the UI thread
+Use one writer for `fire_if_changed`, typically the predict thread. The UI thread
 occasionally calls `rebase()`. The whole
 `(last, candidate, count)` state lives in one tuple that's replaced in a single
 assignment, so it updates atomically under CPython's GIL and no lock is needed.

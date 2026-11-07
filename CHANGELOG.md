@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `SyntheticSource(waveform="emg")` adds an opt-in stochastic EMG texture fitted to 8-channel forearm bracelet recordings; the browser playground uses it, and the default sine signal stays unchanged.
-- Prediction takes record training provenance. For models trained in the app, `meta.json`'s `extras.pipeline.trained_on` lists the training takes and `model_file` names the autosaved file in `models/`. These fields are omitted for models loaded from disk or set by hand.
-- `TargetPanel(targets, connectors=)` shows one row per process the app drives. A target with a `ControlLinkConnector` gets Connect, which binds to one already running and launches only when none answers; one without gets Launch. Stop appears only for what the card started, a launched target that exits drops its bus, and a target that cannot be launched says why on hover.
+- Prediction takes record training provenance. For models trained in the app, `meta.json`'s `extras.pipeline.trained_on` lists the training takes and `model_file` names the autosaved file in `models/`. These fields are omitted for models loaded from disk or set by hand, avoiding incorrect
+  training provenance.
+- `TargetPanel(targets, connectors=)` shows one card with one row per process the app drives. A target with a `ControlLinkConnector` gets Connect, which binds to one already running and launches only when none answers; one without gets Launch. Stop appears only for what the card started, a launched target that exits drops its bus, and a target that cannot be launched says why on hover.
 - `ControlLinkConnector.disconnect()` tears down every link and keeps the connector usable, so the next attempt binds whatever answers then.
 - `mono_text(width=)` ellipsizes in the mono face.
 - Independent control links can record named streams with `record_as`, with their maps saved in optional `meta.control_spaces`; duplicate map names are rejected and single-link metadata stays unchanged.
@@ -74,10 +75,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ui_px(n)` in `widgets/common.py` for sizes a widget fixes itself.
 - The control manifest carries the serving build's release version in `target_version`.
   `InterfaceSpec.min_target_version` checks it on every capabilities fetch, including
-  builds launched by double-click, unpacked manually or run from source. Older versions
+  builds launched by double-click, unpacked manually or run from source. The install-time
+  marker check cannot see those launch paths. The manifest provides a runtime check that
+  every launch path answers. Older versions
   are refused like vocabulary mismatches. Builds reporting no version, including those
   before VHI v2.1.0, receive one warning and can be driven. VHI v1.0.0 speaks the supported
-  vocabulary but can drop bursty `SetMovement` commands and leave the hand stationary.
+  vocabulary but can fall behind on bursty `SetMovement` commands and drop them, leaving
+  the hand stationary. This happened mid-session while every existing gate passed and
+  the protocol remained healthy.
 - `tools/muovi_probe_sim.py`, a fake Muovi / Muovi+ probe that dials into
   `MuoviSource` at the real device cadence, so any unmodified example runs without
   hardware. `--self-check` verifies its own pacing; `--rate-scale` simulates crystal
@@ -85,9 +90,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The Astro documentation site uses the app's visual language and brand, a live signal field on the homepage, and Getting Started for 2.x.
+- The documentation site was rebuilt with Astro and a new brand. It uses the app's visual language, a live signal field on the homepage, and Getting Started for 2.x.
 
-- Takes are `.mg.zip`. A stopped recording packs to `<name>.mg.zip`. Readers accept
+- Takes are `.mg.zip`. A stopped recording packs to `<name>.mg.zip`; the previous suffix was
+  `<name>.session.zip`. Readers accept
   any `.zip` holding a `meta.json`, including `<name>.session.zip`. These takes open, list
   in `SessionManager` and replay. Files on disk keep their names. The suffix lives in `myogestic.session._core.ARCHIVE_SUFFIX`.
 
@@ -103,7 +109,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are named by `Pipeline.model_name` or the model's class, and `model_path()` gives the
   same name to apps that save their own. A name already taken gets `-2`; nothing is
   overwritten, even when two takes pack at once. `meta.json`'s `created` stores the take
-  start time, matching the minute in its name. The take list shows the start time.
+  start time, matching the minute in its name. Previously it stored the save time. The take
+  list now shows the start time.
   Files on disk keep their names and remain readable. Code that finds models by `*_model.joblib` should match `*.joblib`. See
   [File names](https://nsquaredlab.github.io/MyoGestic/concepts/file-names/).
 
@@ -126,15 +133,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The signal viewers' empty state is a carousel with one Connect. The stream on its card
   is the one Connect attaches, and the button names it as Connect TestEMG32, starting
   on the app's own stream; ‹ › step through the other streams of its kind, and stepping
-  past the last one scans for more streams. A failure reads Couldn't connect over the error's first sentence,
+  past the last one scans for more streams. Nothing scans on its own. This replaces a
+  Connect beside an unexplained Scan, whose results had a second Connect with a different
+  action. A failure reads Couldn't connect over the error's first sentence,
   the full text on hover. `SignalViewer(stream_type=…)` and
   `RawSignalViewer(stream_type=…)` choose the LSL type offered; by default it is the type
   of the app's own stream, and with no type known, MyoGestic's control outlets and
   marker streams are left out. `LSLSource.discover()` results gain a ``type`` key, and
   their ``info`` reads ``32 ch · 2048 Hz · EMG``.
 - In `RecordingControls` and `RecordButton`, the whole recording row is Stop, or Cancel
-  during warm-up, in the same rectangle as Record. A timed take leads with whole seconds
-  remaining in the same face as the warm-up count. The saved row shows Saved · gesture
+  during warm-up, in the same rectangle as Record. It replaces the small default-grey
+  button at the right edge. A timed take leads with whole seconds remaining in the same
+  face as the warm-up count. It no longer uses the serif display face. The saved row shows Saved · gesture
   over mono time, with early stops first. The lock caption sits below the row, keeping Stop
   in place when a take starts. Record and the Stop label use `RECORD_FILL`,
   simpetru-figstyle's bright red #d80032 with white text at 5.3:1, compared with 3.4:1 for `DANGER`. On the
@@ -146,7 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   produced over the naming dialog are not part of the take. The ML Predict button starts
   from `recording` as well as `idle`.
 - `Pipeline.stop_predicting` returns to `recording` when a take is open, `idle` otherwise.
-- `save_meta` runs on the finalize thread; a caller that read
+- `save_meta` runs on the finalize thread. It no longer runs on the Stop click. A caller that read
   `meta.json` synchronously after `stop_recording()` should pass `wait=True`.
 
 - The 2.0 widget kit uses one header per card, state rows, selectable chips, captioned fields and settings popovers across device, stream, recording, process, training and hand controls.
@@ -166,7 +176,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   side panels keep their proportion to the text in them.
 - Examples use automatic scaling in place of fixed `ui_scale=0.85`.
 - Fonts load at their base size and are scaled through `style.font_scale_main`, so ImGui
-  1.92 re-rasterizes them at the drawn size.
+  1.92 re-rasterizes them at the drawn size. The app no longer reloads the fonts.
 
 ### Fixed
 
@@ -187,8 +197,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Virtual Hand lookup finds an existing per-user installation from another checkout and reports when the hand is not installed.
 - Headers, recording timing fields, signal toolbars and session guidance fit narrow cards and larger UI scales.
 - The macOS Dock icon uses Apple's tile size and transparent padding.
-- A stream counts as connected when `Stream.reconnect` succeeds. Pong's first Follow the cursor block can reconnect its cursor stream and record before the first chunk arrives.
-- Clicking Serve in `PongTask` starts a rally, as does Space.
+- A stream counts as connected when `Stream.reconnect` succeeds, before its first chunk. Pong's first Follow the cursor block can reconnect its cursor stream and record before the first chunk arrives. Previously, `RecordingControls` treated that wait as a lost stream and saved an empty take.
+- Clicking Serve in `PongTask` starts a rally, as does Space. Previously the court underneath
+  intercepted the click, so only Space worked.
 
 ## [2.6.2] - 2026-08-10
 

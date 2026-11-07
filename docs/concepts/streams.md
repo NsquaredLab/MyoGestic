@@ -39,7 +39,7 @@ data, ts = stream.get_window()
 # ts.shape   == (n_samples,)        # pylsl.local_clock() values
 ```
 
-Returns the most recent `window_ms` of data, channels-first and float32. Timestamps, and data for float32 streams, use reusable scratch storage; copy them to keep them past the next read. Pass the newest timestamp, `ts[-1]`, to stateful models with `model.step(emg, last_ts=ts[-1])` to detect ticks that repeat data.
+Returns the most recent `window_ms` of data, channels-first and float32. Timestamps, and data for float32 streams, use reusable scratch storage; copy them to keep them past the next read. Pass the newest timestamp, `ts[-1]`, to stateful models with `model.step(emg, last_ts=ts[-1])` to detect stale ticks that repeat data when prediction runs faster than acquisition.
 
 ### `get_display(n_pixels)` - for widgets
 
@@ -74,7 +74,7 @@ An on-demand contiguous snapshot of the buffered samples in their native orienta
 1. Constant acquisition cost. Appending a chunk never unwraps or copies the accumulated history.
 2. Bounded consumer reads. `get_window()` copies only the prediction window and `SignalViewer` only its visible tail, even when the ring holds much more history.
 
-A `threading.Lock` guards reads and writes; overhead is ~1–5 microseconds per access.
+A `threading.Lock` guards reads and writes; overhead is ~1–5 microseconds per access, negligible compared with each thread's workload.
 
 ## Lifecycle
 
@@ -112,7 +112,7 @@ info.channel_names  # ["EMG_01", "EMG_02", ...] or None
 `SignalViewer` MinMax decimation keeps each bucket's minimum and maximum. Shape and onset timing *within* a bucket can still coarsen. At 2 kHz over a 5 s window on a 600 px plot that bucket is about 5 ms, which is
 also roughly one pixel, so the trace is as faithful as the display can be.
 
-To read a single motor-unit action potential shorter than that, turn decimation off.
+To read a single motor-unit action potential shorter than that, turn decimation off. Increasing Detail is insufficient.
 Detail is limited to a few points per pixel to bound rendering work. The
 1:1 toggle beside it removes decimation.
 
@@ -127,8 +127,9 @@ Open Display for the point-count readout. `MinMax 10,000→1,802 pts/ch` against
 decimation stops once the window fits the point budget. At 600 px and full Detail that
 is a 0.9 s window at 2 kHz.
 
-1:1 turns itself off above 250,000 points per frame across the drawn channels.
-At 64 channels of 2 kHz over 10 s, the frame contains 1.3 M points. Hover the toggle for the count at your current settings.
+1:1 refuses to turn on, and turns itself off, above 250,000 points per frame across the drawn channels.
+At 64 channels of 2 kHz over 10 s, the frame contains 1.3 M points, exceeding detail a display
+can resolve. Hover the toggle for the count at your current settings.
 
 ## Common mistakes
 

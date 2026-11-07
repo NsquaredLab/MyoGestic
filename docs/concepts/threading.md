@@ -40,13 +40,14 @@ flowchart LR
 | Output (one per `Outlet`) | user-owned `Outlet` | drain `_latest` to its destination at `hz` |
 | Bridge subprocess (optional) | `Bridge` | webcam decode → Zarr → publish LSL clock |
 
-The framework's acquisition, prediction, training and output threads are daemons. App cleanup stops an open recording inline and waits up to 30 seconds for pending saves before stopping streams. The predict thread starts at `app.run()` via `app.before_run_hooks` and joined with a short timeout via a `threading.Event` flag on cleanup. Acquisition and output threads are daemons that exit when the process does; their `stop()` methods set a sentinel but don't `join()`.
+The framework's acquisition, prediction, training and output threads are daemons. App cleanup stops an open recording inline and waits up to 30 seconds for pending saves before stopping streams. The predict thread starts at `app.run()` via `app.before_run_hooks`. It does not wait for the first Predict click. Cleanup signals it with a `threading.Event` and joins it with a short timeout. Acquisition and output threads are daemons that exit when the process does; their `stop()` methods set a sentinel but don't `join()`.
 
 <a id="why-the-gil-does-not-serialise-these-threads"></a>
 
 ## GIL release
 
-These libraries release Python's Global Interpreter Lock during computation and I/O.
+Pure-Python CPU work would serialize these threads under Python's Global Interpreter Lock.
+The libraries below move computation and I/O into native code or onto the GPU.
 
 - NumPy releases the GIL inside C extensions (`np.copy`, `np.fft.rfft`, `np.dot`). The ring buffer copy in `get_window` is GIL-released.
 - PyTorch CUDA runs on the GPU; the Python thread is mostly waiting for the kernel.
@@ -66,7 +67,7 @@ Python passes buffers between threads. Computation runs in GIL-released code, al
 2. Ring buffer reads/writes hold a `threading.Lock`. ~1–5 µs overhead per access, compared with µs–ms workload latencies.
 3. `ctx.state` transitions go through the App and Pipeline start/stop methods. Callers don't poke `ctx.state = "..."` directly. State changes are point-in-time; there's no "stop in progress" intermediate state.
 
-Stream buffers, attached sessions, event buffers and connection attempts have their own locks. Prediction shutdown uses a `threading.Event`; following runs also have cancellation events. Outputs pass values through a latest-value slot.
+Stream buffers, attached sessions, event buffers and connection attempts have their own locks. Prediction shutdown uses a `threading.Event`; following runs also have cancellation events. Outputs pass values through a latest-value slot. There is no per-sample queue.
 
 ## The GPU contention rule
 
@@ -80,11 +81,15 @@ ctx.state ∈ {"idle", "recording", "training", "predicting"}
 
 Train is disabled while predicting. Stop prediction and any open recording first, then train. When training completes, click Predict to resume.
 
-The state machine keeps training and prediction separate to avoid GPU memory contention. Training lasts seconds to minutes.
+The state machine refuses concurrent training and prediction to prevent GPU out-of-memory
+failures. Managing parallel PyTorch CUDA streams adds complexity that a single-user experiment
+app does not need. Prediction throughput is zero during training, which lasts seconds to
+minutes. That pause is acceptable for this use case.
 
 ## Bridge subprocesses
 
-Webcam decoding can saturate a Python thread even with OpenCV and disrupt prediction. Run heavy-data sources in a subprocess.
+Heavy-data sources can break the GIL-release assumption. Webcam decoding can saturate a
+Python thread even with OpenCV and disrupt prediction. Run heavy-data sources in a subprocess.
 
 ```python
 cam = WebCamBridge("cam", device=0, zarr_path="session/cam.zarr")
@@ -97,7 +102,7 @@ The bridge process:
 - Writes frames directly to a Zarr array.
 - Publishes one LSL clock timestamp per captured frame for alignment.
 
-The main app never touches the camera frames; it reads per-frame LSL clock timestamps and can look up the corresponding frames in Zarr if the experiment needs them. Call `cam.start()` to start a registered bridge; `app.run()` stops it on cleanup. Use `bridge.status` and `bridge.alive` to display its state. Failed stops are logged.
+The main app never touches the camera frames; it reads per-frame LSL clock timestamps and can look up the corresponding frames in Zarr if the experiment needs them. Registering a bridge does not start it. Call `cam.start()` to start it; `app.run()` stops it on cleanup. The framework does not render a bridge automatically. Use `bridge.status` and `bridge.alive` to display its state. Failed stops are logged.
 
 ## Common mistakes
 

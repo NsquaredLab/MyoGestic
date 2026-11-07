@@ -1,7 +1,9 @@
 ---
 title: "Anatomy of a MyoGestic app"
 ---
-Read the script alongside the descriptions below. The concept pages cover individual components in detail.
+Read this page first to see how the parts fit together in the order you write them.
+Open the script in your editor and read it alongside the descriptions below. The concept
+pages cover Streams, Pipeline, Recording and Widgets in detail.
 
 ```python
 from myogestic import App, Stream, TrainingData
@@ -96,9 +98,9 @@ from sklearn.linear_model import LogisticRegression  # YOUR ML library
 
 Three layers, from framework-owned to user-owned:
 
-1. Compose framework primitives from `App`, `Stream`, `Pipeline` and `TrainingData`.
+1. Compose framework primitives from `App`, `Stream`, `Pipeline` and `TrainingData`. The framework owns these.
 2. Add built-in capabilities from `sources`, `widgets`, `ml` and `session`.
-3. Write domain code with sklearn, MyoVerse, scipy or PyTorch.
+3. Bring your own domain code with sklearn, MyoVerse, scipy or PyTorch. You own this layer.
 
 DSP, ML models and feature extraction are user concerns. `myogestic.recipes` supplies optional feature functions and estimator constructors as starting points. See [Design principles](concepts/design-principles.md).
 
@@ -110,7 +112,7 @@ app = App("EMG Demo")
 
 One per process. [`App`][myogestic.App] owns the GUI loop, the shared [`Context`][myogestic.Context], the run-loop lifecycle hooks, and the recording state machine. Construct it, attach streams and widgets with an optional pipeline, then call `app.run()`.
 
-Compose an `App` by attaching objects.
+Do not subclass `App` or define `class MyApp(App):`. Compose an `App` by attaching objects.
 
 → Deep dive: [Architecture](concepts/architecture.md), [Design principles](concepts/design-principles.md).
 
@@ -177,7 +179,7 @@ def train(data: TrainingData):
     return LogisticRegression().fit(np.array(X), np.array(y))
 ```
 
-Runs on a one-shot training thread when the user clicks Train. Receives [`TrainingData`][myogestic.TrainingData] with `paths`, `class_names` and `classes` populated by [`SessionManager`][myogestic.widgets.SessionManager]. Return an object to store on `pipeline.model`.
+Runs on a one-shot training thread when the user clicks Train. Receives [`TrainingData`][myogestic.TrainingData] with `paths`, `class_names` and `classes` populated by [`SessionManager`][myogestic.widgets.SessionManager]. Return any object to store on `pipeline.model`. It remains there for later prediction calls.
 
 [`iter_labeled_windows`][myogestic.session.iter_labeled_windows] opens session folders or `.mg.zip` archives, reads the label track, and slices trials into overlapping windows. Write your feature extraction for these windows.
 
@@ -214,7 +216,7 @@ def ui(ctx):
     ml_panel.ui()
 ```
 
-The `@app.ui` callback runs on the main thread every frame. Call each widget's `.ui()` method to draw ImGui commands from its live inputs. Its instance or identity-keyed state persists between frames.
+The `@app.ui` callback runs on the main thread every frame. Its body is a flat sequence of widget calls. Call each widget's `.ui()` method to draw ImGui commands from its live inputs. Its instance or identity-keyed state persists between frames.
 
 Widget roles include
 
@@ -245,6 +247,7 @@ Last line of every script. In order:
 
 ## Driving a device
 
+The skeleton above predicts a class index and moves no device.
 Drive a prosthesis on a serial port, a motor controller, a cursor or the Virtual Hand
 through a [`Target`][myogestic.controls.Target]. It has three methods and a TOML control map
 that pairs model outputs with controls.
@@ -257,14 +260,14 @@ uv run python examples/synthetic/my_device.py
 ```
 
 → [Drive your own device](how-to/add-a-target.md). To publish predictions for another
-program, push an [`LSLOutlet`][myogestic.outputs.LSLOutlet] from `predict()`. See
+program, push an [`LSLOutlet`][myogestic.outputs.LSLOutlet] from `predict()`. This publishes data without driving a device. See
 [Publish a data stream](how-to/add-an-output.md).
 
 ## Extending the skeleton
 
 - Recording lifecycle. The controls above start and stop takes. Streams *flow* whether you record or not. Recording starts when [`app.start_recording()`][myogestic.App.start_recording] is called, typically by the [`RecordingControls`][myogestic.widgets.RecordingControls] widget's Record button. See [Recording](concepts/recording.md).
 - Multi-stream. A second `Stream("imu", ...)` and your `extract()` sees `windows["imu"]` too. Match the [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] pattern in `train()` for paired primary/target streams. See [Recording](concepts/recording.md).
-- Bridges. Webcam and ultrasound sources run as subprocesses via [`app.bridges(...)`][myogestic.App.bridges]. See [Threading](concepts/threading.md).
+- Bridges. Heavy-data sources such as webcams and ultrasound run as subprocesses via [`app.bridges(...)`][myogestic.App.bridges]. See [Threading](concepts/threading.md).
 
 ## Where to read next
 

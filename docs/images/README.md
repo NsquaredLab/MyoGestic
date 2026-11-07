@@ -41,7 +41,8 @@ The registry covers
 | `widgets/VhiMovementPanel.png`             | 12 movements, "Fist" highlighted    |
 
 The session fixture creates three takes in `P-014/recordings/`, calls
-`SessionManager.select_all("P-014")`, then renders that participant. The newest day opens with all three takes visible.
+`SessionManager.select_all("P-014")`, then renders that participant. No Rescan click is
+needed. The newest day opens with all three takes visible.
 
 ## Examples - fullscreen, manual
 
@@ -80,7 +81,7 @@ On Linux, capture one window with `gnome-screenshot -w` or use ImageMagick
   captures use native monitor resolution. Downsize Retina captures with
   `sips -Z 1920 *.png` before committing.
 - Use light or dark themes, whichever looks clearer in each screenshot.
-  The docs support both.
+  The docs support both. Mixing themes across screenshots is fine.
 
 ## Once captured
 

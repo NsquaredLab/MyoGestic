@@ -1,12 +1,13 @@
 ---
 title: "Visual language"
 ---
-Use these shared tokens and helpers to style widgets consistently.
-[Design principles](design-principles.md) covers the public API.
+[Design principles](design-principles.md) is the *code* contract. It specifies no base classes,
+one name one meaning and a public API that fits on a page. This page is the *visual* contract.
+Its tokens and rules make new controls consistent with existing widgets. Avoid stock ImGui styling.
 
 Everything here exists in [`myogestic/_theme.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/myogestic/_theme.py)
 and [`myogestic/widgets/common.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/myogestic/widgets/common.py).
-Use the helpers to style widgets.
+Use the helper. Do not re-derive the styling inline.
 
 ## The 2.0 kit
 
@@ -20,17 +21,17 @@ the card. A state row, a control row and the forward action give it its structur
 | --- | --- | --- |
 | State in words | `tinted_row(tone)` | Say what is happening, such as Running, Recording or Connection failed; put values and elapsed time in `mono_text`. Reserve room for the action beside the detail. `tinted_row()` without a tone uses the theme's surface for a neutral utility row. |
 | Forward action | `primary_button` | One full-width forward action, such as Launch, Train or Start. Pass `size=(imgui.get_content_region_avail().x, 0)` to fill the available width; the default only fits the label. |
-| State that is its own exit | `action_row(label, tone, height=…)` | When an action ends a state, such as Stop while recording or Cancel during warm-up, use the whole tinted row as its button. Place it where the starting action was. Name the action as text at the right edge; draw nothing interactive inside. |
-| Pick one of a few found things | `carousel(id, items, index, can_look=…)` | Show one card at a time, starting on the expected choice. Name the card in the action beneath it, such as Connect Galvani. › past the last card and the refresh icon look for more; nothing looks on its own. For a long list the user knows by name, a combo reads faster. |
+| State that is its own exit | `action_row(label, tone, height=…)` | When the one action ends the state, such as Stop while recording or Cancel during a warm-up, the whole tinted row is the button. Put it in the slot the action that started it filled, so the second click lands where the first did. Name the action as text at the right edge; draw nothing interactive inside. |
+| Pick one of a few found things | `carousel(id, items, index, can_look=…)` | One card at a time, starting on the expected choice, and the action beneath names the card. Use Connect Galvani. Never use a bare Connect beside a list. › past the last card and the refresh icon look for more; nothing looks on its own. For a long list the user knows by name, a combo reads faster. |
 | Removal | `destructive_button` | Quiet at rest, red on hover or press. Never make a removal button permanently red. Use `TRASH` for the whole item and `XMARK` for an entry inside it, with a tooltip naming what will be removed. |
 | Sticky on/off | `push_selected()` / `pop_selected()` around a chip button | Use chips instead of checkboxes or solid `PALETTE` fills. Capture the selected state before the button can change it, so the push and pop stay paired. Use `segmented()` for a visible one-of-N choice. |
 | Lists | `mono_text`, `imgui.small_button`, and reserved action space | Compact one-line rows, approximately `ui_px(26)` high with room for the current font and padding. Keep values and times mono and right-aligned. Ellipsize names and details instead of wrapping; expose the full clipped text on hover. |
 | Rare settings | An icon-only `imgui.small_button`, then `imgui.open_popup` / `imgui.begin_popup` / `imgui.end_popup` | Put rarely touched settings in a popover opened by a `SLIDERS` icon with a Settings tooltip. Keep the current setting or summary visible on the card. |
 | Fields | `imgui.text_colored(muted(), caption)` above each control, arranged with `imgui.begin_table` | Use captions above controls in a two-column grid, with mono values beside slider captions. Fall back to one column when the controls no longer fit, including narrow cells around 320 px. Do not use `label_column` for this layout. |
-| Empty state | Plain words with `imgui.text_wrapped` and `muted()` for supporting text | Centre a short explanation in an empty panel and give the next step, such as The hand is not running / Launch it, then refresh to load its movements. Avoid a bare (no data) when an action can help. |
-| Locked state | `imgui.begin_disabled` / `imgui.end_disabled`, followed by a visible caption | Dim the unavailable controls and explain how to unlock them outside the disabled block, such as Stop the recording to add or remove streams. A tooltip alone is not enough. |
+| Empty state | Plain words with `imgui.text_wrapped` and `muted()` for supporting text | Centre a short explanation in an empty panel and give the next step: The hand is not running / Launch it, then refresh to load its movements. Avoid a bare (no data) when an action can help. |
+| Locked state | `imgui.begin_disabled` / `imgui.end_disabled`, followed by a visible caption | Dim the unavailable controls and explain how to unlock them outside the disabled block: Stop the recording to add or remove streams. A tooltip alone is not enough. |
 
-State colours have one meaning across the kit. `SUCCESS` indicates working state, `IDLE` is not running
+State colours have one meaning across the kit: `SUCCESS` is working now, `IDLE` is not running
 and nothing is wrong, `WARNING` is something worth knowing, and `DANGER` is a failure. An
 unattached stream is `IDLE`, not `DANGER`; a failed connection gets `DANGER` with the error
 and Retry. Selection uses the accent tint; `PALETTE` is only for categorical identity, such
@@ -50,8 +51,8 @@ assert tone is IDLE  # Being unattached is not a failure.
 ```
 
 Use `ui_px` for every fixed pixel size and theme tokens for every colour. Check the whole card
-at UI scale 2.0, in the light theme, and in a narrow cell. Check that captions stack, rows
-ellipsize, actions stay reachable, and states remain readable in words. Keep any selection or popup state
+at UI scale 2.0, in the light theme, and in a narrow cell: captions stack, rows ellipsize, actions
+stay reachable, and every state remains readable in words. Keep any selection or popup state
 under the widget's stable `widget_id`, so two cards never share it accidentally.
 
 ## Type
@@ -63,30 +64,32 @@ under the widget's stable `widget_id`, so two cards never share it accidentally.
 | Everything else | the theme's UI face | — |
 
 Size comes from the global scale, which resolves `$MYOGESTIC_UI_SCALE` →
-`App(ui_scale=…)` → automatic OS display scale × window fit. See
-[Grid layout](grid-layout.md#ui-scale). A control sized in `imgui.get_frame_height()` units
+`App(ui_scale=…)` → automatic (OS display scale × window fit, live; see
+[Grid layout](grid-layout.md#ui-scale)). A control sized in `imgui.get_frame_height()` units
 follows it; a size a widget fixes in pixels must go through `ui_px(n)` from
 `widgets/common.py`, or its label overflows the box on a large screen.
 
 ## Colour
 
-- `PALETTE` has ten categorical colours for series identity, such as channel 0 vs channel 1. Never
+- `PALETTE`: ten categorical colours, for *series identity* (channel 0 vs channel 1). Never
   use it as a ramp; adjacent entries carry no ordering.
 - Continuous data gets a perceptually uniform ramp. Viridis is `Heatmap`'s default because
   ImPlot's stock "Deep" is categorical and misleads on a heatmap.
-- Read semantic tones from the theme. Use `Col_.text_disabled` for muted text
-  and `Col_.child_bg` for cell surfaces in light and dark themes.
+- Semantic tone comes from the theme, not literals: `Col_.text_disabled` for muted text,
+  `Col_.child_bg` for cell surfaces. Reading the tone keeps light and dark themes honest.
 
 ## Panels
 
-`panel_header(title, icon)` renders an uppercase title muted with `text_disabled` and an
-optional Font-Awesome icon. Narrow panels truncate the title with an ellipsis or show only the icon. Pass `reserve=` to keep space for a right-aligned
+`panel_header(title, icon)` renders the standard panel title: uppercased, muted
+(`text_disabled`), optional Font-Awesome icon, ellipsis-truncated when the panel is too narrow
+(icon-only when there is no room at all). Pass `reserve=` to keep space for a right-aligned
 control so the *title* collapses instead of pushing it off.
 
 `panel_header_button(title, icon, button_icon)` is the same header with one right-aligned
 icon-only action, dropping to its own line when the row is too tight.
 
-Use one header per card. The helper provides consistent casing, muting, icons and truncation.
+Use one header per card. Never `imgui.text()` a panel title directly: you lose the casing, the
+muting, the icon and the truncation, and the panel stops matching its neighbours.
 
 ## State cues
 
@@ -97,25 +100,28 @@ Use one header per card. The helper provides consistent casing, muting, icons an
 | Blue fill with white text | `primary_button()` | the one forward action in a step |
 | Quiet button, red on hover or press | `destructive_button()` | remove or discard |
 | Theme surface with a semantic tint | `tinted_row()` | state in words, with detail and an action |
-| Colour flash decaying over ~0.18 s | `flash_color()` | "value updated" |
+| Colour flash decaying over ~0.18 s | `flash_color()` | "this value just updated" |
 
-`primary_button` uses `PRIMARY_FILL` set to `#0062CC` and white `ON_PRIMARY_TEXT`, fixed
+`primary_button` uses `PRIMARY_FILL` (`#0062CC`) and `ON_PRIMARY_TEXT` (white), fixed
 in both themes for readable action labels. Hover and press gently lighten the fill.
-Use it full-width for the forward action, such as Train, Start predicting or Start session.
+Use it full-width for the one forward action (Train, Start predicting, Start session).
 
-Use the selected tint for sticky on/off controls, including the channel grid's `Edit…`,
-the Manual scale-mode button and the panel chrome toggle.
+The selected cue is a *tint*. Do not use a solid fill. It should read as selection. A solid fill
+looks like a button caught mid-press. Any control with a sticky on/off state uses it. The channel grid's
+`Edit…`, the Manual scale-mode button, and the panel chrome toggle all do.
 
-Inline actions that sit in a row of pills, such as `All` / `None` / `Invert` / `Edit…`, use
+Inline actions that sit in a row of pills (`All` / `None` / `Invert` / `Edit…`) use
 `imgui.small_button`. A full-height `button` sits out of line with them.
 
 ## Icons
 
-Use one glyph per action. Toggles swap icons to show what clicking will do. `PLAY`↔`PAUSE` on transport, `ANGLES_DOWN`↔`ARROW_DOWN` on
-log autoscroll, the expand↔collapse arrows on pop-out, `ANGLES_UP`↔`ANGLES_DOWN` on panel chrome. A button
+One glyph per meaning. The glyph shows what clicking will do. Do not use it to show the current
+state. A toggle therefore swaps its icon. Transport uses `PLAY`↔`PAUSE`,
+log autoscroll uses `ANGLES_DOWN`↔`ARROW_DOWN`, pop-out uses the expand↔collapse arrows,
+and panel chrome uses `ANGLES_UP`↔`ANGLES_DOWN`. A button
 whose icon never changes reads as a one-shot action.
 
-Reuse these established glyph meanings.
+Reuse these established meanings. Avoid near-synonyms.
 
 | Glyph | Means |
 | --- | --- |
@@ -125,7 +131,7 @@ Reuse these established glyph meanings.
 | `UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER` / its inverse | pop out to a window / dock back |
 | `BARS` | reveal a hidden menu |
 | `TERMINAL` | program output |
-| `CIRCLE` | the live state of the panel's control |
+| `CIRCLE` | the live state of whatever this panel controls - see below |
 | `PLUS` | append one more row to the list this button sits at the end of |
 | `TRASH` | delete the thing this row *is* |
 | `XMARK` | remove one row from a list |
@@ -137,9 +143,14 @@ actions (`panel_header_button`) are icon-only.
 
 An editable list follows one shape at every depth, so a nested one reads without instructions:
 
-* Place `PLUS` at the end of the list it appends to, indented with its rows.
-* Use `destructive_button` for removal. It is quiet at rest and red on hover.
-* `TRASH` for the whole row, a bare `XMARK` for one entry inside it. Deleting a control removes its targets too. A bare icon needs a tooltip that names
+* `PLUS` goes at the end of the list it appends to, indented with its rows, never up beside
+  the list's title. A button that says `+ Add target` while sitting a level above the targets is
+  claiming to belong to the row it is on.
+* Removing is `destructive_button`, red *on hover only*. `DANGER` means destructive and a
+  delete has to read as one, but a permanently red button in every row turns the list into an
+  alarm. Quiet at rest, red when the pointer is on it.
+* `TRASH` for the whole row, a bare `XMARK` for one entry inside it. The glyphs express the
+  hierarchy. Deleting a control removes its targets too. A bare icon needs a tooltip that names
   what it removes; add a label when the surrounding row does not make that clear.
 
 ### Stream chips
@@ -163,11 +174,11 @@ tooltip.
 
 ### State colours
 
-Use these four state tokens consistently.
+Four tokens, and they mean the same thing everywhere:
 
 | Token | Means |
 | --- | --- |
-| `SUCCESS` | running, connected, armed - working |
+| `SUCCESS` | running, connected, armed - working right now |
 | `IDLE` | not running or unattached, and nothing is wrong with that |
 | `WARNING` | something is worth knowing or needs attention, such as missing calibration |
 | `DANGER` | failed or refused; also the hover/press cue for a destructive action |
@@ -176,23 +187,26 @@ Use these four state tokens consistently.
 of the header row. Stacked panels line their titles up on the first glyph; a leading dot would
 indent only the ones that carry state. Colour is the only thing a dot carries, so the kit
 also puts the state in words in a `tinted_row`, readable without distinguishing the hues.
-A header tooltip can add detail such as a PID or exit code; avoid repeating visible state text. An unattached stream uses `IDLE` and Not connected, with a
+A header tooltip can add detail such as a PID or exit code; do not repeat a visible read-out
+just to explain the same dot. An unattached stream uses `IDLE` and Not connected, with a
 Connect action; reserve `DANGER` for a connection that actually failed.
 
 ## Plots
 
 `SignalViewer` keeps transport, View and Scale on its title row; Channels and Display popups hold the detailed controls, leaving only sample rate and frame rate below the plot.
 
-Call `ensure_implot_style()` at the top of any plot widget for a transparent background,
-faint grid and no chart border. The card surface frames the plot.
+Call `ensure_implot_style()` at the top of any plot widget. Plots then read as part of the app.
+There is no chart border because the surface tone frames them. The plot background is transparent
+so the card shows through. The grid is faint.
 
-For comparisons, plots must share a scale. Use `Heatmap.ui(vrange=…)` for colour, a common manual `y_range`
+Comparison needs a shared range. Any time several plots are meant to be read against each
+other, they must share one scale: `Heatmap.ui(vrange=…)` for colour, a common manual `y_range`
 for traces. With per-instance autoscaling a quiet electrode array and a loud one render
 identically, which silently inverts the conclusion the operator draws.
 
 ## Units
 
-Label controls in the operator's units.
+Label a control in the unit the operator thinks in, not the one the code stores:
 
 | Quantity | Format | Example |
 | --- | --- | --- |
@@ -200,27 +214,31 @@ Label controls in the operator's units.
 | Multiplier | `%.2fx` | Gain `1.00x` |
 | Physical quantity | its own unit | Window `1.0 s`, Artifact `< 20 ms` |
 
-Spell out the action in a label, such as `Artifact < 20 ms`. Avoid `Reject <`.
+A label states what the control *does*, spelled out: `Artifact < 20 ms`, not `Reject <`.
 Truncated or operator-symbol labels read as jargon to the clinician running the session.
 
 ## Space
 
-Use pop-out windows for more space and collapse chrome within fixed cells.
+Two different affordances, two different jobs; don't substitute one for the other:
 
 - Pop out (`popout_panel`): the panel becomes its own dockable, tearable window. For a panel
   the user wants *bigger*, or on another monitor.
 - Collapse chrome (`SignalViewer(show_controls=…)` and its `ANGLES_UP`↔`ANGLES_DOWN` header
-  toggle): folds controls, channel bar and footer away, keeping the plot and title. Use it
-  within a fixed `Grid` cell. Set `show_title=False` to hide the whole header row.
+  toggle): controls, channel bar and footer fold away, leaving the plot and its title. A panel
+  that loses its name is one you cannot identify at a glance, and the toggle needs a place
+  to stay. For a panel whose cell is *fixed*, a tile in a `Grid`, where the chrome costs more
+  than it gives. Dropping the title too is `show_title=False`, which takes the whole header row.
 
 Panel placement is always [`Grid`](grid-layout.md) with `Px`/`Fr` tracks. Widgets lay out their
 controls within the cell they receive; they do not position themselves in the app.
 
 ### Four ways a row lies to you
 
-Check these four rules when laying out a widget row.
+Inside a widget, laying out one row is immediate-mode arithmetic. Four rules can be easy to
+misread. Each has produced a shipped layout bug in this codebase more than once.
+These bugs fail silently. The row can look plausible while being wrong.
 
-`same_line(offset)` measures from the window edge and ignores
+`same_line(offset)` measures from the window edge. It does not measure from the item, and it ignores
 `imgui.indent`. Inside an indented block or a popup it therefore lands the next item *on top of*
 the one before it, or collapses the gutter you were trying to create. Set the column explicitly
 instead:
@@ -233,8 +251,9 @@ imgui.set_cursor_pos_x(left + gutter)  # not same_line(gutter)
 ```
 
 Measure the space left *after* `same_line()`, never before. Before the call the cursor has
-already wrapped to the next line, so `get_content_region_avail().x` reports the whole row.
-Using that width to right-align a control can push it off the panel edge.
+already wrapped to the next line, so `get_content_region_avail().x` reports the whole row. A
+right-aligned control offset by it overshoots by the width of everything already on the row, which
+puts it off the panel edge.
 
 ```python
 imgui.same_line()  # first
@@ -245,7 +264,8 @@ if avail > button_w:
 
 `ItemSpacing.y` is charged when the item is placed, so it sets the gap *below* it. To tighten
 the space between two rows, push the smaller spacing around the upper one and pop after its
-last item. Pushing it around the lower one shortens the gap under *that*, pulling the next row up.
+last item. Pushing it around the lower one shortens the gap under *that*, which pulls the next row
+up instead. This produces the same fault in the other direction.
 
 ```python
 imgui.push_style_var(imgui.StyleVar_.item_spacing, imgui.ImVec2(sp.x, 0.0))
@@ -256,7 +276,8 @@ detail_row()
 
 A push/pop pair is guarded on the value as it was at push time, never on the live one. A
 toggle button flips its own state *between* the two, so a pop guarded on the flag itself
-can pop a colour that was never pushed or leak three colours into later widgets. Read it into a local first:
+disagrees with the push on the one frame the user clicks. It pops a colour that was never
+pushed or leaks three into every widget after it. Read it into a local first.
 
 ```python
 selected = v.enabled  # not `if v.enabled:` on both sides
@@ -268,16 +289,17 @@ if selected:
     pop_selected()
 ```
 
-Simulate a click in the test. Without it, `small_button` returns False and the flag stays
-unchanged, so both branches agree.
+A layout pass cannot catch this: with no mouse, `small_button` returns False, the flag never
+flips and both branches agree. Simulate the click in the test.
 
-Plain `imgui.text` sits at the top of its line box. Call `imgui.align_text_to_frame_padding()`
-to align it with an adjacent frame-height button.
+A related one: plain `imgui.text` sits at the top of its line box. On a row made frame-height
+by a button beside it, the text floats above a band of empty row. Call
+`imgui.align_text_to_frame_padding()` first.
 
 ## Identity
 
-Key state by widget identity, as in rule 8 of the
-[design principles](design-principles.md). Widgets that can appear more than once take an explicit
+State is keyed by widget identity, never by the data it happens to show (rule 8 of the
+[design principles](design-principles.md)). Widgets that can appear more than once take an explicit
 `widget_id`, defaulting to the natural single-instance name:
 
 ```python

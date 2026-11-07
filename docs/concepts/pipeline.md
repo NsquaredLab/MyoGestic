@@ -1,7 +1,8 @@
 ---
 title: "Pipeline"
 ---
-[`Pipeline(app, predict_hz=50)`][myogestic.ml.Pipeline] is the optional ML layer. It adds a predict thread, training/predicting states to `ctx.state`, and three decorators for your ML functions.
+[`Pipeline(app, predict_hz=50)`][myogestic.ml.Pipeline] is the optional ML layer. It adds a predict thread, training/predicting states to `ctx.state`, and three decorators for your ML functions. These define the entire ML interface.
+No base class, registration or config is required.
 
 ```python
 from myogestic.ml import Pipeline, save_pickle, load_pickle
@@ -36,7 +37,8 @@ def predict(model, features):
 
 Runs on the predict thread at `predict_hz` while predicting, when at least one selected input stream has data. Receives a `dict[str, np.ndarray]` keyed by stream name. Each value is channels-first `(n_channels, n_samples)`. Return the input your model needs, such as a feature vector, tuple or raw window. It need not be pickleable.
 
-Call the same function from your `train()` code during training. See `examples/synthetic/emg_classification.py` for examples.
+Call the same function from your `train()` code during training. The framework does not call
+it for you during training. See `examples/synthetic/emg_classification.py` for examples.
 
 ### `@pipeline.train`
 
@@ -50,9 +52,9 @@ class TrainingData:
     classes: set[int]  # subset selected in the UI
 ```
 
-Return an object to store on `pipeline.model` and pass to subsequent `predict()` calls. If `pipeline.save_model` is set, the Save Model button calls it as `save_model(pipeline.model, path)`. The persistence helpers [`save_pickle`][myogestic.ml.save_pickle] / [`load_pickle`][myogestic.ml.load_pickle] from `myogestic.ml` provide pickle persistence.
+Return an object to store on `pipeline.model` and pass to subsequent `predict()` calls. If `pipeline.save_model` is set, the Save Model button calls it as `save_model(pipeline.model, path)`. The persistence helpers [`save_pickle`][myogestic.ml.save_pickle] / [`load_pickle`][myogestic.ml.load_pickle] from `myogestic.ml` provide pickle persistence and are the recommended default.
 
-Set `pipeline.training_data` from [`SessionManager`][myogestic.widgets.SessionManager] inside `@app.ui`:
+Set `pipeline.training_data` externally, usually from [`SessionManager`][myogestic.widgets.SessionManager] inside `@app.ui`:
 
 ```python
 sessions = SessionManager(str(Path("data")), class_names=CLASSES)
@@ -99,7 +101,7 @@ stateDiagram-v2
     end note
 ```
 
-`ctx.state` is `training` or `predicting` while the pipeline is busy. Otherwise it is `recording` if a take is open, or `idle`. Training requires `idle`; stop prediction and any open take before Train. The independent `ctx.recording` flag tracks recording. Press Record while predicting to save raw streams, pipeline inputs and outputs, and delivered control frames in one session. See [Recording → Event streams](recording.md#event-streams).
+`ctx.state` is `training` or `predicting` while the pipeline is busy. Otherwise it is `recording` if a take is open, or `idle`. Training requires `idle`; stop prediction and any open take before Train. The Train button refuses otherwise. The independent `ctx.recording` flag tracks recording. Press Record while predicting to save raw streams, pipeline inputs and outputs, and delivered control frames in one session. See [Recording → Event streams](recording.md#event-streams).
 
 The user-facing UI layer (`PipelinePanel`, `TrainButton`, `PredictButton`) handles transitions; user code rarely calls `start_training()` / `stop_predicting()` directly.
 
@@ -145,7 +147,8 @@ Return the previous prediction from `step()` if `last_ts` hasn't advanced since 
 
 ## Lifecycle hooks
 
-`Pipeline` registers itself via `app.before_run_hooks` and `app.cleanup_hooks`. The predict thread runs for the app's lifetime, starting at `app.run()`. While `ctx.state == "predicting"`, it calls `extract` / `predict`. Clicking Predict again returns to `recording` if a take is open, otherwise `idle`. Closing the window signals the thread to stop. Cleanup signals via a `threading.Event` and joins with a short timeout. The pipeline manages the thread.
+`Pipeline` registers itself via `app.before_run_hooks` and `app.cleanup_hooks`. The predict thread runs for the app's lifetime, starting at `app.run()`. Clicking Predict sets `ctx.state` to `"predicting"`. Only in that state does the thread call
+`extract` / `predict`. Clicking Predict again returns to `recording` if a take is open, otherwise `idle`. Closing the window signals the thread to stop. Cleanup signals via a `threading.Event` and joins with a short timeout. The pipeline manages the thread.
 
 ## Common mistakes
 

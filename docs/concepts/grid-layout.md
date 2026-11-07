@@ -2,7 +2,7 @@
 title: "Grid layout - Px and Fr"
 ---
 Place `@app.ui` panels with a `Grid`. Its two CSS Grid track types mean the
-same thing on both axes.
+same thing on both axes. `Px` and `Fr` are the only supported track types.
 
 | Unit       | Meaning                                                                 |
 |------------|-------------------------------------------------------------------------|
@@ -10,7 +10,7 @@ same thing on both axes.
 | `Fr(n)`    | `n` shares of the space remaining after Px tracks are subtracted.       |
 
 Use `Px(300)` for 300 pixels or `Fr(300)` for 300 shares of leftover space.
-Bare numbers are rejected. With no track list, every row/column is `Fr(1)`
+Bare numbers are rejected so pixels cannot be confused with shares of leftover space. With no track list, every row/column is `Fr(1)`
 and shares space equally.
 
 ## The shape of a Grid
@@ -67,8 +67,7 @@ See [UI scale](#ui-scale). These examples use scale 1.0.
 * `[Px(600), Fr(1)]` over 500 px total → `600, 0`. Px overflow is preserved;
   the Fr track collapses to zero.
 
-When you resize the window, `Fr` tracks absorb the change. `Px` tracks scale
-with the text. Use them for fixed-width control palettes, status panels or
+When you resize the window, `Fr` tracks absorb the change. `Px` tracks stay fixed relative to the text. They grow or shrink only with UI scale. Use them for fixed-width control palettes, status panels or
 logos. A `Px(300)` sidebar keeps its proportion to its labels on a laptop
 and a 4K monitor.
 
@@ -82,7 +81,8 @@ to 0.5–2.0. It is recomputed every frame on resize or monitor change. Set
 `App(ui_scale=1.1)` or `MYOGESTIC_UI_SCALE=1.1` for a fixed scale. The shell
 setting takes precedence.
 
-Use `Layout` to change the arrangement in small windows.
+The scale floor is deliberately limited. A window too small for its arrangement needs
+a different arrangement rather than smaller text. Use `Layout` to change it.
 
 ## Named areas and reflow
 
@@ -139,7 +139,7 @@ Reflow behaviour
   also keeps its scroll position; one that moves into or out of a tab group
   starts scrolled to the top.
 * A hidden tab still runs. Its body executes every frame inside a clipped
-  window. Return values keep flowing, so
+  window. The widgets draw nothing, but return values keep flowing, so
   `pipeline.training_data = sessions.ui()` stays current while the Train tab is
   showing.
 * The breakpoint is in scale-1.0 pixels, so it switches at the same window
@@ -228,7 +228,8 @@ These inputs fail at `Grid(...)` construction.
 
 ## Content-sized tracks
 
-ImGui child windows need their size before rendering. For a content-sized
+CSS Grid supports content-sized `auto` tracks. MyoGestic does not support `auto` because
+every cell is an ImGui child window, which needs its size before rendering. For a content-sized
 panel, set the row's `Px(...)` to its natural height, typically one or two
 text rows plus padding. Inside the cell, skip the surrounding child window's
 scrollbar with `imgui.begin_child(..., child_flags=imgui.ChildFlags_.auto_resize_y)`.

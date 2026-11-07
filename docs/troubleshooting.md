@@ -1,7 +1,7 @@
 ---
 title: "Troubleshooting"
 ---
-Find a symptom and its fix below. The concept and how-to pages link here from their "Common mistakes" sections.
+Find a symptom, its cause and its fix below. The concept and how-to pages link here from their "Common mistakes" sections.
 
 ## Streams and acquisition
 
@@ -76,7 +76,8 @@ Several causes:
 
 ### "GPU contention" / training and predict don't run together
 
-The state machine runs `training` and `predicting` separately to avoid PyTorch CUDA memory contention.
+The state machine refuses entry to `training` while `predicting`, and vice versa, to avoid
+PyTorch CUDA memory contention. This exclusion is intentional and is not a bug.
 
 !!! tip "Fix"
     Click Predict again after training finishes.
@@ -97,7 +98,7 @@ See [Pipeline concept page](concepts/pipeline.md), [Add a custom model](how-to/a
 `Grid` cells use Python slicing conventions. `grid[0:6, 1:3]` is rows 0-5 inclusive, cols 1-2 inclusive. Two widgets occupying overlapping cells will draw on top of each other.
 
 !!! tip "Fix"
-    Assign each widget its own cells.
+    Assign each widget its own cells. The grid silently allows overlaps.
 
 ### Widget state shared accidentally between instances
 
@@ -122,7 +123,8 @@ See [Widgets concept page](concepts/widgets.md), [Add a custom widget](how-to/ad
 `Outlet.push(data)` writes to a *latest-value slot*. The output thread sends whatever's in the slot every `1/hz`. If you stop pushing but the slot still holds the last value, the same value gets re-sent forever.
 
 !!! tip "Fix"
-    Each push replaces the latest value. For one send per event, implement a queue-based output by overriding the daemon-thread loop.
+    This is the latest-wins contract. Each push replaces the latest value; values are never
+    queued. For one send per event, implement a queue-based output by overriding the daemon-thread loop.
 
 ### The output thread falls behind { #output-thread-falls-behind }
 
@@ -164,7 +166,7 @@ Install VHI where `virtual_hand()` looks by default, at `<repo>/tools/MyoGestic-
 You're pushing raw model output. VHI moving at 32-50 Hz amplifies any per-tick jitter.
 
 !!! tip "Fix"
-    Pair every VHI integration with a [`PostProcessor`][myogestic.widgets.PostProcessor] block. It defaults to the 1€ filter. Pass `timestamp=time.monotonic()` into the filter so it computes real elapsed dt.
+    Pair every VHI integration with a [`PostProcessor`][myogestic.widgets.PostProcessor] block. It defaults to the 1€ filter, which is usually suitable. Pass `timestamp=time.monotonic()` into the filter so it computes real elapsed dt.
 
 ### VHI hand drifts after retraining
 
@@ -182,7 +184,7 @@ See [Integrate the Virtual Hand](how-to/integrate-vhi.md), [Post-process predict
 It blocks the predict thread. The framework already paces ticks at `predict_hz`.
 
 !!! tip "Fix"
-    Lower `predict_hz` or use a state machine that returns the previous prediction on stale ticks.
+    Do not sleep in `@pipeline.predict`. Lower `predict_hz` or use a state machine that returns the previous prediction on stale ticks.
 
 ### Stale-tick warnings
 

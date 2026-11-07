@@ -1,7 +1,7 @@
 ---
 title: "API cheatsheet"
 ---
-Common public signatures. Each name links to its description and parameter/return tables in the [API reference](../api/index.md).
+Common public signatures, maintained by hand. This list is not exhaustive. Each name links to its description and parameter/return tables in the [API reference](../api/index.md).
 
 ## Core
 
@@ -87,7 +87,8 @@ ControlLinkConnector(*links, retry_s=2.0).poll() -> bool  # non-blocking UI retr
 ## Outlets
 
 [`LSLOutlet`][myogestic.outputs.LSLOutlet] sends paced telemetry or serves as a target's
-transport. Use a target for aliases, ranges and rest on stop.
+transport. It drives nothing on its own. It has no aliases, no declared range and no
+rest on stop. Use a target for these guarantees.
 
 <!--docs:skip-->
 ```python

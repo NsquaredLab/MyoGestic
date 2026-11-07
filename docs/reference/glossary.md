@@ -8,7 +8,7 @@ Terms that mean different things in different parts of the codebase. The "common
 Three meanings, kept separate by convention:
 
 1. Acquisition conditioning via `Stream(notch_hz=50)` or `60` (`0` is off). Filters the samples before they reach the ring buffer and recording, so training and live prediction see the conditioned signal. The setting is saved in the take metadata.
-2. Display transform in `SignalViewer`. Applies an optional 50/60 Hz mains-hum notch, then rectification, DC removal or RMS envelope to the displayed signal. Recording and `extract()` retain the acquired samples. See the widget tooltip.
+2. Display transform in `SignalViewer`. Applies an optional 50/60 Hz mains-hum notch, then rectification, DC removal or RMS envelope to the displayed signal. Recording and `extract()` retain the acquired samples. Display transforms never affect the model. See the widget tooltip.
 3. Post-prediction smoother like `OneEuroFilter` or `GaussianFilter` from `myogestic.outputs.filters`. Smooths the prediction output vector, such as a pose or control command, before it leaves the app. UI panel via `PostProcessor`.
 
 ### Source
@@ -18,14 +18,14 @@ A Protocol with `connect()` / `read()` / `disconnect()`. Wraps a device, file, o
 ### Target
 
 A Protocol with `bind()` / `send()` / `stop()`, optionally a `capabilities()` list of what it can
-drive, such as a prosthesis on a serial port, a motor controller, a cursor or the Virtual Hand. It receives *named* values from a control map, can refuse a
+drive. Anything that moves is a target, such as a prosthesis on a serial port, a motor controller, a cursor or the Virtual Hand. It receives *named* values from a control map, can refuse a
 configuration at `bind`, and gets range, clamping, dead zone, debounce and rest-on-teardown
 from the [bus](#dof). Implement `send` for your device's transport. See
 [Drive your own device](../how-to/add-a-target.md).
 
 ### Outlet { #output }
 
-A class with `.push(data)` and a daemon thread that sends the latest pushed value to its destination at `hz`. It takes an array, paces one wire, and has no aliases, no declared range and no rest on shutdown. User code owns it. Drive a device through a [Target](#target), which can send values through an outlet, and `RemoteTarget` owns one `LSLOutlet` per address it drives. See [Publish a data stream](../how-to/add-an-output.md).
+A class with `.push(data)` and a daemon thread that sends the latest pushed value to its destination at `hz`. It takes an array, paces one wire, and has no aliases, no declared range and no rest on shutdown. User code owns it. It is not registered with the app. Drive a device through a [Target](#target), which can send values through an outlet, and `RemoteTarget` owns one `LSLOutlet` per address it drives. See [Publish a data stream](../how-to/add-an-output.md).
 
 ### Stream
 
@@ -53,7 +53,7 @@ A 9-float vector understood by the Virtual Hand Interface (VHI). Indices 0–5 c
 
 ### Bridge
 
-A subprocess pattern for webcam and ultrasound sources that would otherwise saturate a Python thread. The bridge writes frames to a Zarr array and publishes a clock stream over LSL; the main app reads timestamps, not pixels.
+A subprocess pattern for heavy-data sources such as webcams and ultrasound that would otherwise saturate a Python thread. The bridge writes frames to a Zarr array and publishes a clock stream over LSL; the main app reads timestamps, not pixels.
 
 ### Predict thread / acquisition thread / output thread
 

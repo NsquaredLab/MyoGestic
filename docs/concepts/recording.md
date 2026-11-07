@@ -1,7 +1,8 @@
 ---
 title: "Recording"
 ---
-Streams flow continuously. Recording appends samples to Zarr. Labels form a separate timestamped event track, so signal arrays and labels can be read independently.
+Streams flow continuously. Recording appends samples to Zarr. Labels form a separate timestamped event track. They are never interleaved with signal
+samples, so signals and labels can be read independently. This keeps signal arrays cheap to slice and labels cheap to scan.
 
 ## Mental model
 
@@ -27,7 +28,7 @@ stateDiagram-v2
 
 Acquisition threads append each chunk while their stream has an attached session. Stop detaches the streams, freezes event buffers, then finalizes metadata and the archive on a daemon thread.
 
-`ctx.recording` indicates whether a take is open, independently of `ctx.state`. from `idle`, Record moves the state to `recording`; while a `Pipeline` is `predicting`, Record leaves the state alone and sets the flag. `RECORDABLE_STATES` in `myogestic.core` lists the states a take may start from. Core registers `idle`, `myogestic.ml` registers `predicting`. `ctx.session` stays set after a stop so the signal viewer can keep drawing the last take's label markers; do not use it as the flag.
+`ctx.recording` indicates whether a take is open, independently of `ctx.state`. From `idle`, Record moves the state to `recording`; while a `Pipeline` is `predicting`, Record leaves the state alone and sets the flag. `RECORDABLE_STATES` in `myogestic.core` lists the states a take may start from. Core registers `idle`, `myogestic.ml` registers `predicting`. `ctx.session` stays set after a stop so the signal viewer can keep drawing the last take's label markers; do not use it as the flag.
 
 ## On-disk layout
 
@@ -72,7 +73,7 @@ data/P-014/recordings/
 └── P-014_20260506-1846_R.mg.zip  # archive - contains the same internal layout
 ```
 
-The source folder is removed after a successful pack; if packing fails, it is kept. Saved folders and archives are both loadable via [`open_session_store(path)`][myogestic.session.open_session_store].
+The source folder is removed after a successful pack; if packing fails, it is kept. Saved folders and archives are both loadable via [`open_session_store(path)`][myogestic.session.open_session_store]. Readers need no format-specific branch.
 
 ## Notifications
 
@@ -127,7 +128,7 @@ Use `on_gesture` to change a synthetic generator's pattern through a control LSL
 
 ## Event streams
 
-A sampled stream has a clock; an event stream has one row per *thing that happened*. `Session.append_event(name, values, timestamp, channel_names=..., fs=...)` declares such a stream on first use and appends one float32 row to it. On disk it is the same `<name>.zarr` / `<name>_timestamps.zarr` pair as any stream, so `open_session_store`, `ReplaySource` and the window iterators can read it. `meta.json` lists these names under `event_streams`, and their nominal `fs` is the producer's tick rate, used by `ReplaySource` for pacing. Timestamps record event times.
+A sampled stream has a clock; an event stream has one row per *thing that happened*. `Session.append_event(name, values, timestamp, channel_names=..., fs=...)` declares such a stream on first use and appends one float32 row to it. On disk it is the same `<name>.zarr` / `<name>_timestamps.zarr` pair as any stream, so `open_session_store`, `ReplaySource` and the window iterators can read it. `meta.json` lists these names under `event_streams`, and their nominal `fs` is the producer's tick rate, used by `ReplaySource` for pacing. Timestamps are authoritative for event times; nominal `fs` is only for replay pacing.
 
 Rows are buffered in memory and written 1024 at a time or once a second, whichever comes first, because a single-row zarr append rewrites the partial chunk, taking about 1.5 ms each on zarr 3.2. `Session.freeze()` flushes every buffer and closes the session to new rows and new streams; `App.stop_recording` calls it before finalization metadata and the archive are written.
 
@@ -147,7 +148,7 @@ A dict becomes one stream per key. A value is recorded when it is a bool, a numb
 
 For a take that recorded pipeline ticks, `extras.pipeline` identifies it as a Drive run. Takes shows a Drive tag and leaves it unticked for training; the operator can still tick it. Continue → Train selects ordinary takes and skips Drive runs.
 
-On stop, `App.finalize_hooks` run on the finalize thread before `meta.json` is updated with `finished: true`. When `pipeline.save_model` is set, the pipeline's hook saves the running model as `model.joblib` beside the arrays and writes `extras.pipeline` with the model type, its `report` if it has one, the event streams, and the skip list.
+On stop, `App.finalize_hooks` run on the finalize thread before `meta.json` is updated with `finished: true`. The pipeline's hook saves the running model as `model.joblib` beside the arrays when `pipeline.save_model` is set. It writes `extras.pipeline` with the model type, its `report` if it has one, the event streams, and the skip list.
 
 ## Reading recordings
 
@@ -222,6 +223,6 @@ On desktop Zarr 3, if `zarrs` is installed, its codec pipeline is selected on im
 
 See [Troubleshooting](../troubleshooting.md) for symptoms and fixes.
 
-- `sess.class_names = [...]` after `save_meta`. Pass class names to `save_meta(name, class_names=...)` to persist them. `RecordingControls` handles this through `app.start_recording`.
+- `sess.class_names = [...]` after `save_meta`. Pass class names to `save_meta(name, class_names=...)` to persist them. Setting the attribute after saving does not persist them. `RecordingControls` handles this through `app.start_recording`.
 - Treating the label track as a stream. Labels are events. To iterate "rest periods" by time, slice with the labels and the timestamp arrays manually, or use `iter_labeled_windows`.
-- Too little data. `iter_labeled_windows` uses every nonnegative labeled segment long enough for a window; it does not skip the first trial. Record several sustained trials per class.
+- Too little data. `iter_labeled_windows` uses every nonnegative labeled segment long enough for a window; it does not skip the first trial. Record several sustained trials per class. Do not rely on one short segment.

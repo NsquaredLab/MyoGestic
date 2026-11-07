@@ -1,10 +1,13 @@
 ---
 title: "EMG classification (CatBoost)"
 ---
-[`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py) classifies synthetic 8-channel EMG with CatBoost using RMS+MAV features from [`myogestic.recipes.features`][myogestic.recipes.features]. It can send LSL poses and gRPC movements to VHI.
+[`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py) classifies synthetic 8-channel EMG into two classes with CatBoost using RMS+MAV features from [`myogestic.recipes.features`][myogestic.recipes.features]. It can send LSL poses and gRPC movements to VHI.
 
 !!! note "Code below is included from the example"
-    The Python blocks are included from the runnable example.
+    The Python blocks are included verbatim from the runnable example, so they cannot drift
+    from that script.
+
+The app requires no user-defined classes beyond the framework's `App` and `Pipeline`.
 
 
 ## Run it first
@@ -45,7 +48,7 @@ The example declares two outputs in `examples/controls/classification_grpc.toml`
 --8 < --"examples/synthetic/emg_classification.py:filter"
 ```
 
-[`PostProcessor`][myogestic.widgets.PostProcessor] is callable and has a UI panel. Pass it as `ControlBus(..., smoothing=output_filter)` to filter each frame before delivery. Render its panel inside `@app.ui`.
+[`PostProcessor`][myogestic.widgets.PostProcessor] is callable and has a UI panel. Pass it as `ControlBus(..., smoothing=output_filter)` to filter once per frame before any target sees the values. Render its panel inside `@app.ui`.
 
 See [Post-process predictions](../how-to/post-process-output.md) for tuning.
 
@@ -81,7 +84,8 @@ The stream window is 0.2 s. Each `extract()` call sees the most-recent 0.2 s of 
 
 [`iter_labeled_windows`][myogestic.session.iter_labeled_windows] loads sessions and slices overlapping windows along the label track. Call `extract()` on each window. See [Record and replay](../how-to/record-and-replay.md).
 
-The `is_empty` and `len(data.classes) < 2` checks validate the training selection. If you forget to tick a session in [`SessionManager`][myogestic.widgets.SessionManager], you'll see "No sessions selected. Load some and tick the checkboxes." in the status panel.
+The `is_empty` and `len(data.classes) < 2` checks validate the training selection and give
+actionable errors. They follow the design principle "errors tell you what to write." If you forget to tick a session in [`SessionManager`][myogestic.widgets.SessionManager], you'll see "No sessions selected. Load some and tick the checkboxes." in the status panel.
 
 ### 7. `predict` - classify, smooth the pose and command movements
 
@@ -91,7 +95,7 @@ The `is_empty` and `len(data.classes) < 2` checks validate the training selectio
 
 The class index chooses both values from `CTRL_VALUES` and `CLASSES`. One bus frame carries `{"fist": 1.0, "gesture": "Fist"}` for a fist prediction. The bus smooths the continuous activation and debounces the discrete movement; LSL carries the predicted-hand pose and gRPC carries control-hand class changes. Palette clicks use `bus.select("gesture", state)` to send an immediate movement and rebase that trigger.
 
-Without a connected bus, `predict` returns class and probabilities normally. The Connect row runs capability discovery on a background worker because its RPC blocks. The returned `hand` dict, when present, supplies the values shown under Sent to the hand.
+Without a connected bus, `predict` returns class and probabilities normally. `predict` never tries to bind. The Connect row runs capability discovery on a background worker because its RPC blocks. The returned `hand` dict, when present, supplies the values shown under Sent to the hand.
 
 ### 8. Layout
 
@@ -113,7 +117,7 @@ In the GUI:
 6. Open Predict and start predicting. Use Simulated EMG to switch between Rest and Fist; the predicted class updates with or without the optional hand.
 7. With a hand connected, inspect the smoothed `fist` and debounced `gesture` values under Sent to the hand.
 
-Tune the One Euro sliders in the filter panel while predicting to adjust the lag/responsiveness trade-off.
+Tune the One Euro sliders in the filter panel while predicting to adjust the lag/responsiveness trade-off in real time.
 
 ## Variations
 
