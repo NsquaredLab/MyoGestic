@@ -27,6 +27,15 @@
 
     /* Website-only field and brand colours. */
     --mg-field-bg: #0F1012;
+    --mg-home-ink: #EBEBF5;
+    --mg-home-hairline: #545458;
+    --mg-home-control: #3A3A3C;
+    --mg-home-window-dot: #5A5A5E;
+    --mg-home-black: #000000;
+    --mg-home-link-hover: #9CCFFF;
+    --mg-home-code-keyword: #C4A6F2;
+    --mg-home-code-string: #9FCBF5;
+    --mg-home-code-decorator: #F2B66D;
     --mg-brand-blue: #6BA5DB;
     --mg-brand-mid: #8E95DA;
     --mg-brand-violet: #B184D9;

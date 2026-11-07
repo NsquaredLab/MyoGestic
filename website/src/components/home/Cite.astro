@@ -1,0 +1,23 @@
+---
+import { readFileSync } from 'node:fs';
+const readme = readFileSync(new URL('../../../../README.md', import.meta.url), 'utf8');
+const bibtex = readme.match(/```bibtex\n([\s\S]*?)\n```/)?.[1];
+if (!bibtex) throw new Error('README.md must contain the paper BibTeX');
+---
+
+<section class="pad-x" style="max-width: 1360px; margin: 0 auto; padding: 120px 40px 0">
+  <div style="display: flex; align-items: center; gap: 16px; font: 500 12px/1 var(--mg-font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent)"><span>09 · Cite</span><span style="flex: 1 1 auto; border-top: 1px solid color-mix(in srgb, var(--mg-home-hairline) 60%, transparent)"></span></div>
+  <div style="margin-top: 36px; display: flex; flex-wrap: wrap; gap: 24px 48px; align-items: flex-start; padding: 32px; background: var(--mg-canvas); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 55%, transparent); border-radius: 10px">
+    <div style="flex: 1 1 560px; min-width: 0">
+      <div style="font: 500 11.5px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--mg-brand-amber)">Science Advances · 2025</div>
+      <p style="margin: 14px 0 0; font-family: var(--mg-font-display); font-size: 34px; line-height: 1.15">MyoGestic: EMG interfacing framework for decoding multiple spared motor dimensions in individuals with neural lesions</p>
+      <p style="margin: 14px 0 0; font-size: 14px; color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent)">Sîmpetru, Braun, Simon, März, Cnejevici, Souza de Oliveira, Weber, Walter, Franke, Höglinger, Prahm, Ponfick, Del Vecchio</p>
+      <p style="margin: 6px 0 0; font: 400 12.5px/1.5 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 60%, transparent)">Sci. Adv. 11(15), eads9150 · doi:10.1126/sciadv.ads9150</p>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px">
+      <button type="button" data-copy-bibtex data-bibtex={bibtex} style="height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: var(--mg-home-control); color: var(--mg-text); font: 500 14px/1 var(--mg-font-body); cursor: pointer">Copy BibTeX</button>
+      <a href="https://www.science.org/doi/abs/10.1126/sciadv.ads9150" style="display: inline-flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 8px; background: var(--mg-home-control); color: var(--mg-text); text-decoration: none; font-weight: 500; font-size: 14px">Read the paper</a>
+    </div>
+  </div>
+  <span class="sr-only" role="status" data-cite-status></span>
+</section>

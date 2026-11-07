@@ -1,0 +1,63 @@
+---
+import '../../styles/fonts.css';
+import '../../styles/tokens.css';
+import { readFileSync } from 'node:fs';
+
+const base = import.meta.env.BASE_URL;
+const readme = readFileSync(new URL('../../../../README.md', import.meta.url), 'utf8');
+const description = readme.match(/\n(MyoGestic is[\s\S]*?\.)\n/)?.[1].replace(/\s+/g, ' ');
+if (!description) throw new Error('README.md must contain the MyoGestic introduction');
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>MyoGestic · Real-time biosignal experiment GUI builder</title>
+        <meta name="description" content={description} />
+        <link rel="canonical" href="https://nsquaredlab.github.io/MyoGestic/" />
+        <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+        <link rel="icon" href={`${base}favicon.ico`} sizes="any" />
+        <link rel="apple-touch-icon" href={`${base}apple-touch-icon.png`} />
+    </head>
+    <body>
+        <a class="skip-link" href="#main">Skip to content</a>
+        <slot />
+    </body>
+</html>
+
+<script>
+    import './home';
+</script>
+
+<style is:global>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--mg-field-bg); color: var(--mg-text); font: 400 16px/1.5 var(--mg-font-body); }
+    a { color: var(--mg-link); }
+    a:hover { color: var(--mg-home-link-hover); }
+    button { font-family: inherit; }
+    button:hover { filter: brightness(1.12); }
+    :focus-visible { outline: 2px solid var(--mg-selected-line); outline-offset: 4px; }
+    ::selection { background: color-mix(in srgb, var(--mg-info) 35%, transparent); }
+    .sr-only, .skip-link:not(:focus) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+    .skip-link:focus { position: absolute; z-index: 10; top: 10px; left: 10px; padding: 10px 16px; background: var(--mg-pill-bg); color: var(--mg-on-pill); }
+    .gesture-chip { height: 44px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 6px; color: var(--mg-text); font: 500 13.5px/1 var(--mg-font-body); cursor: pointer; background: var(--mg-home-control); }
+    .gesture-chip > span { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--gesture-dot); }
+    .gesture-chip[aria-pressed='true'] { background: var(--mg-selected); box-shadow: inset 0 -2px 0 var(--mg-selected-line); }
+    [data-auto][aria-pressed='false'] { background: var(--mg-home-control) !important; }
+    @media (max-width: 760px) {
+        .hide-sm { display: none !important; }
+        .hero-h1 { font-size: 52px !important; }
+        .h2 { font-size: 38px !important; }
+        .pad-x { padding-left: 16px !important; padding-right: 16px !important; }
+        .hero-content { padding-top: 48px !important; min-height: 0 !important; gap: 40px !important; padding-bottom: 40px; }
+        [data-panels] { flex-basis: 100% !important; padding: 10px !important; }
+        [data-panels] > div:nth-last-child(2) { font-size: 9px !important; }
+        .gesture-chip { gap: 4px; font-size: 12px; }
+        .hello-window { min-height: 300px; }
+        #widgets > div:nth-child(2) { grid-template-columns: minmax(0, 1fr) !important; }
+        pre { max-width: 100%; }
+        #playground > div, #docs { padding-top: 72px !important; }
+    }
+</style>

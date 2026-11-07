@@ -90,6 +90,7 @@ def _self_capture_after(seconds: float, output_path: Path) -> None:
 # Per-widget window sizes (logical pixels). Tuned so each widget fills
 # the window at its natural rendered height with no empty padding.
 SIZES: dict[str, tuple[int, int]] = {
+    "hello_emg": (1000, 600),
     "signal_viewer": (700, 380),
     "recording_controls": (440, 200),
     "session_manager": (440, 240),
@@ -107,11 +108,11 @@ SIZES: dict[str, tuple[int, int]] = {
 }
 
 
-def render_signal_viewer(out: Path) -> None:
+def render_signal_viewer(out: Path, *, hello_emg: bool = False) -> None:
     import time
     import numpy as np
-    from myogestic import App, Stream, StreamInfo
-    from myogestic.widgets import SignalViewer
+    from myogestic import App, Fr, Grid, Px, Stream, StreamInfo
+    from myogestic.widgets import RecordingControls, SignalViewer
 
     FS = 256.0
     N = 32  # samples per read - 32 / 256 = 125 ms per chunk
@@ -169,7 +170,7 @@ def render_signal_viewer(out: Path) -> None:
         def disconnect(self):
             pass
 
-    app = App("signal_viewer")
+    app = App("Hello EMG" if hello_emg else "signal_viewer")
     # Attached here, not by the acquire loop: a screenshot of a disconnected stream is
     # a screenshot of an empty plot.
     stream = Stream("emg", source=FakeSource(), window_ms=2000, buffer_ms=10000)
@@ -177,15 +178,36 @@ def render_signal_viewer(out: Path) -> None:
     app.streams(stream)
 
     viewer = SignalViewer("emg")
+    recording = (
+        RecordingControls(
+            ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
+        )
+        if hello_emg
+        else None
+    )
+    # Give both captured widgets a cell: an unconstrained viewer consumes the
+    # full window height and would leave the recording controls below the fold.
+    grid = Grid(1, 2, col_width=[Px(260), Fr(1)]) if hello_emg else None
 
     @app.ui
     def ui(ctx):
-        viewer.ui(ctx)
+        if grid is None:
+            viewer.ui(ctx)
+        else:
+            with grid[0, 1]:
+                viewer.ui(ctx)
+            with grid[0, 0]:
+                recording.ui(ctx)
 
     # 7 s delay gives the paced source enough samples to fill the viewer's
     # persisted 5 s resolution window edge-to-edge before capture.
     _self_capture_after(7.0, out)
-    app.run(window_size=SIZES["signal_viewer"])
+    app.run(window_size=SIZES["hello_emg" if hello_emg else "signal_viewer"])
+
+
+def render_hello_emg(out: Path) -> None:
+    """Capture the Hello EMG widgets with a paced fake stream."""
+    render_signal_viewer(out, hello_emg=True)
 
 
 def render_recording_controls(out: Path) -> None:
@@ -534,6 +556,7 @@ def render_follow_run(out: Path) -> None:
 # ─────────────────────────────────────────────────────────────────────
 
 WIDGETS: dict[str, callable] = {
+    "hello_emg": render_hello_emg,
     "FollowRun": render_follow_run,
     "signal_viewer": render_signal_viewer,
     "recording_controls": render_recording_controls,
