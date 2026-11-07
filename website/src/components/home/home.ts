@@ -74,3 +74,44 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy-co
     const status = button.closest('article')?.querySelector<HTMLElement>('[data-command-status]') ?? null;
     copyButton(button, status, button.dataset.command ?? '', true);
 }
+
+// Hello EMG: pointing at a code group lights up what it builds in the screenshot,
+// and pointing at part of the screenshot lights up its code.
+const hello = document.querySelector<HTMLElement>('[data-hello]');
+if (hello) {
+    const regions = JSON.parse(hello.dataset.regions ?? '{}') as Record<string, { x: number; y: number; w: number; h: number; label: string }>;
+    const spot = hello.querySelector<HTMLElement>('[data-spot]')!;
+    const label = spot.querySelector<HTMLElement>('[data-spot-label]')!;
+    const lines = hello.querySelectorAll<HTMLElement>('.hello-line[data-link]');
+    const show = (id: string | null) => {
+        const region = id ? regions[id] : undefined;
+        if (!region) {
+            delete hello.dataset.active;
+            spot.hidden = true;
+        } else {
+            hello.dataset.active = id!;
+            spot.style.left = `${region.x}%`;
+            spot.style.top = `${region.y}%`;
+            spot.style.width = `${region.w}%`;
+            spot.style.height = `${region.h}%`;
+            label.textContent = region.label;
+            spot.hidden = false;
+        }
+        for (const line of lines) line.classList.toggle('is-active', line.dataset.link === id);
+    };
+    for (const el of hello.querySelectorAll<HTMLElement>('[data-link]')) {
+        const id = el.dataset.link!;
+        el.addEventListener('pointerenter', () => show(id));
+        // A tap on a phone keeps the highlight; only a mouse leaving clears it.
+        el.addEventListener('pointerleave', (event) => { if (event.pointerType === 'mouse') show(null); });
+        el.addEventListener('focus', () => show(id));
+        el.addEventListener('blur', () => show(null));
+        el.addEventListener('click', () => show(id));
+    }
+    hello.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            (document.activeElement as HTMLElement | null)?.blur();
+            show(null);
+        }
+    });
+}

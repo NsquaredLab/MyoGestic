@@ -1,38 +1,105 @@
 ---
 import { Image } from 'astro:assets';
 import screenshot from '../../../../docs/images/hello-emg.png';
+
+// Each code group links to the part of the window it builds (regions in % of the screenshot).
+type Link = 'title' | 'stream' | 'viewer' | 'recording' | 'window';
+type Token = [string, ('k' | 's' | 'd')?];
+const code: [Link | null, Token[]][] = [
+  [null, [['from', 'k'], [' myogestic '], ['import', 'k'], [' App, Stream']]],
+  [null, [['from', 'k'], [' myogestic.sources '], ['import', 'k'], [' LSLSource']]],
+  [null, [['from', 'k'], [' myogestic.widgets '], ['import', 'k'], [' RecordingControls, SignalViewer']]],
+  [null, []],
+  ['title', [['app = App('], ['"Hello EMG"', 's'], [')']]],
+  ['stream', [['app.streams(']]],
+  ['stream', [['    Stream('], ['"emg"', 's'], [', source=LSLSource('], ['"EMG"', 's'], ['), window_ms=1000)']]],
+  ['stream', [[')']]],
+  [null, []],
+  ['viewer', [['viewer = SignalViewer('], ['"emg"', 's'], [')']]],
+  ['recording', [['recording = RecordingControls(']]],
+  ['recording', [['    ['], ['"Rest"', 's'], [', '], ['"Fist"', 's'], ['],']]],
+  ['recording', [['    on_record=app.start_recording,']]],
+  ['recording', [['    on_stop=app.stop_recording,']]],
+  ['recording', [[')']]],
+  [null, []],
+  [null, []],
+  ['window', [['@app.ui', 'd']]],
+  ['window', [['def', 'k'], [' ui(ctx):']]],
+  ['viewer', [['    viewer.ui(ctx)']]],
+  ['recording', [['    recording.ui(ctx)']]],
+  [null, []],
+  [null, []],
+  ['window', [['app.run()']]],
+];
+const blocks: { link: Link | null; lines: Token[][] }[] = [];
+for (const [link, tokens] of code) {
+  const last = blocks.at(-1);
+  if (last && last.link === link) last.lines.push(tokens);
+  else blocks.push({ link, lines: [tokens] });
+}
+const regions: Record<Link, { x: number; y: number; w: number; h: number; label: string; name: string }> = {
+  title: { x: 0, y: 0, w: 100, h: 4.4, label: 'App("Hello EMG")', name: 'the title bar' },
+  stream: { x: 26.3, y: 15.4, w: 69.8, h: 73.4, label: 'Stream + LSLSource', name: 'the EMG traces' },
+  viewer: { x: 24.6, y: 6.6, w: 73.7, h: 91.3, label: 'SignalViewer', name: 'the signal viewer' },
+  recording: { x: 1.6, y: 6.6, w: 22, h: 91.3, label: 'RecordingControls', name: 'the recording controls' },
+  window: { x: 0, y: 0, w: 100, h: 100, label: 'app.run()', name: 'the whole window' },
+};
+const colour = { k: 'var(--mg-home-code-keyword)', s: 'var(--mg-home-code-string)', d: 'var(--mg-home-code-decorator)' };
+const hits: Link[] = ['title', 'recording', 'viewer', 'stream'];
 ---
 
 <section id="docs" class="pad-x" style="max-width: 1360px; margin: 0 auto; padding: 120px 40px 40px">
   <div style="display: flex; align-items: center; gap: 16px; font: 500 12px/1 var(--mg-font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent)"><span>A minimal app</span></div>
   <h2 class="h2" style="margin: 26px 0 0; font-family: var(--mg-font-display); font-weight: 400; font-size: 56px; line-height: 1.04; max-width: 820px">Hello EMG</h2>
-  <div style="margin-top: 44px; display: flex; flex-wrap: wrap; gap: 24px; align-items: stretch">
+  <div data-hello data-regions={JSON.stringify(regions)} style="margin-top: 44px; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
     <div style="flex: 1 1 520px; min-width: 0; background: var(--mg-console-bg); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 50%, transparent); border-radius: 10px; overflow: hidden">
       <div style="display: flex; justify-content: space-between; align-items: center; height: 40px; padding: 0 16px; border-bottom: 1px solid color-mix(in srgb, var(--mg-home-hairline) 45%, transparent); font: 500 11px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent)"><span>hello_emg.py</span><span>Python 3.12+</span></div>
-<pre tabindex="0" role="region" aria-label="Hello EMG Python script" style="margin: 0; padding: 20px 22px; font: 400 13.5px/1.7 var(--mg-font-mono); color: var(--mg-console-text); white-space: pre; overflow-x: auto"><code is:raw><span style="color: var(--mg-home-code-keyword)">from</span> myogestic <span style="color: var(--mg-home-code-keyword)">import</span> App, Stream
-<span style="color: var(--mg-home-code-keyword)">from</span> myogestic.sources <span style="color: var(--mg-home-code-keyword)">import</span> LSLSource
-<span style="color: var(--mg-home-code-keyword)">from</span> myogestic.widgets <span style="color: var(--mg-home-code-keyword)">import</span> RecordingControls, SignalViewer
-
-app = App(<span style="color: var(--mg-home-code-string)">"Hello EMG"</span>)
-app.streams(Stream(<span style="color: var(--mg-home-code-string)">"emg"</span>, source=LSLSource(<span style="color: var(--mg-home-code-string)">"EMG"</span>), window_ms=1000))
-
-viewer = SignalViewer(<span style="color: var(--mg-home-code-string)">"emg"</span>)
-recording = RecordingControls(
-    [<span style="color: var(--mg-home-code-string)">"Rest"</span>, <span style="color: var(--mg-home-code-string)">"Fist"</span>], on_record=app.start_recording, on_stop=app.stop_recording
-)
-
-
-<span style="color: var(--mg-home-code-decorator)">@app.ui</span>
-<span style="color: var(--mg-home-code-keyword)">def</span> ui(ctx):
-    viewer.ui(ctx)
-    recording.ui(ctx)
-
-
-app.run()</code></pre>
+      <div class="hello-code" role="group" aria-label="hello_emg.py">
+        {blocks.map((block) => {
+          const rows = block.lines.map((tokens) => (
+            <span class="hello-row">{tokens.map(([text, kind]) => kind ? <span style={`color: ${colour[kind]}`}>{text}</span> : text)}</span>
+          ));
+          return block.link
+            ? <button type="button" class="hello-line" data-link={block.link} aria-describedby="hello-hint">{rows}</button>
+            : <div class="hello-line">{rows}</div>;
+        })}
+      </div>
     </div>
-    <div class="hello-window" style="flex: 1 1 560px; min-width: 0; background: var(--mg-canvas); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 55%, transparent); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column">
-      <Image src={screenshot} format="webp" quality={80} width={720} alt="Hello EMG app with SignalViewer and RecordingControls in the dark theme" loading="lazy" style="display: block; width: 100%; height: auto; flex: 1; min-height: 0; object-fit: contain" />
+    <div class="hello-window" style="flex: 1 1 560px; min-width: 0; background: var(--mg-canvas); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 55%, transparent); border-radius: 10px; padding: 10px">
+      <div class="hello-shot">
+        <Image src={screenshot} format="webp" quality={80} width={720} alt="Hello EMG app with SignalViewer and RecordingControls in the dark theme" loading="lazy" style="display: block; width: 100%; height: auto" />
+        {hits.map((id) => {
+          const r = regions[id];
+          return <button type="button" class="hello-hit" data-link={id} aria-label={`Show the code for ${r.name}`} style={`left: ${r.x}%; top: ${r.y}%; width: ${r.w}%; height: ${r.h}%`}></button>;
+        })}
+        <div class="hello-spot" data-spot aria-hidden="true" hidden><span data-spot-label></span></div>
+      </div>
     </div>
   </div>
-  <p style="margin: 16px 0 0; font: 400 12px/1.6 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 55%, transparent)">To train and predict, add a Pipeline with extract, train and predict functions.</p>
+  <p id="hello-hint" style="margin: 16px 0 0; font: 400 12px/1.6 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 55%, transparent)">Point at a line to see what it draws, or at the window to find its code.</p>
+  <p style="margin: 4px 0 0; font: 400 12px/1.6 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 55%, transparent)">To train and predict, add a Pipeline with extract, train and predict functions.</p>
 </section>
+
+<style>
+  .hello-code { padding: 14px 0; font: 400 13.5px/1.7 var(--mg-font-mono); color: var(--mg-console-text); }
+  .hello-line { display: block; box-sizing: border-box; width: 100%; margin: 0; padding: 0 22px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; transition: opacity 120ms, background-color 120ms; }
+  button.hello-line { cursor: pointer; }
+  .hello-row { display: block; min-height: 1.7em; white-space: pre; }
+  [data-hello][data-active] .hello-line { opacity: 0.42; }
+  [data-hello][data-active] .hello-line.is-active { opacity: 1; background: color-mix(in srgb, var(--mg-selected-line) 14%, transparent); box-shadow: inset 2px 0 0 var(--mg-selected-line); }
+  .hello-line:focus-visible, .hello-hit:focus-visible { outline: 2px solid var(--mg-selected-line); outline-offset: -2px; }
+  .hello-shot { position: relative; border-radius: 6px; overflow: hidden; }
+  .hello-hit { position: absolute; padding: 0; border: 0; background: transparent; cursor: pointer; }
+  .hello-spot { position: absolute; box-sizing: border-box; border: 2px solid var(--mg-selected-line); border-radius: 8px; pointer-events: none; box-shadow: 0 0 0 9999px color-mix(in srgb, var(--mg-field-bg) 62%, transparent); transition: left 160ms, top 160ms, width 160ms, height 160ms; }
+  .hello-spot[hidden] { display: none; }
+  .hello-spot span { position: absolute; left: 8px; top: 8px; padding: 4px 8px; border-radius: 4px; background: var(--mg-selected-line); color: var(--mg-field-bg); font: 500 11px/1 var(--mg-font-mono); white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) {
+    .hello-line, .hello-spot { transition: none; }
+  }
+  @media (max-width: 760px) {
+    .hello-code { font-size: 12px; }
+    .hello-line { padding: 0 14px; }
+    /* Long lines wrap with a hanging indent instead of scrolling sideways. */
+    .hello-row { white-space: pre-wrap; padding-left: 4ch; text-indent: -4ch; }
+  }
+</style>

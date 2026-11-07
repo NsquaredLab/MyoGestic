@@ -223,6 +223,39 @@ for (const width of [320, 390, 768]) {
     });
 }
 
+test('Hello EMG code and screenshot point at each other', async ({ page }) => {
+    await page.goto(home);
+    const spot = page.locator('[data-spot]');
+    const recording = page.locator('.hello-line[data-link="recording"]');
+    await recording.first().scrollIntoViewIfNeeded();
+    await recording.first().hover();
+    await expect(spot).toBeVisible();
+    await expect(page.locator('[data-spot-label]')).toHaveText('RecordingControls');
+    await expect(recording.nth(1)).toHaveClass(/is-active/); // recording.ui(ctx) lights up too
+    await page.locator('.hello-hit[data-link="title"]').hover();
+    await expect(page.locator('.hello-line[data-link="title"]')).toHaveClass(/is-active/);
+    await page.mouse.move(1, 1);
+    await expect(spot).toBeHidden();
+    await page.locator('.hello-line[data-link="viewer"]').first().focus();
+    await expect(page.locator('[data-spot-label]')).toHaveText('SignalViewer');
+    await page.keyboard.press('Escape');
+    await expect(spot).toBeHidden();
+});
+
+for (const width of [1440, 390]) {
+    test(`Hello EMG code never scrolls sideways and the screenshot fills its frame at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(home);
+        const code = page.locator('.hello-code');
+        await code.scrollIntoViewIfNeeded();
+        expect(await code.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+        const shot = await page.locator('.hello-shot').boundingBox();
+        const frame = await page.locator('.hello-window').boundingBox();
+        expect(shot!.width).toBeGreaterThan(frame!.width - 24);
+        expect(shot!.height).toBeGreaterThan(frame!.height - 24);
+    });
+}
+
 test('Hello EMG ships a sized WebP in tens of kilobytes', async ({ page }) => {
     await page.goto(home);
     const image = page.getByRole('img', { name: 'Hello EMG app with SignalViewer and RecordingControls in the dark theme' });
