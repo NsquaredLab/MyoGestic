@@ -1,6 +1,5 @@
 """Viewer headers and their original body cards fit the light, scaled window."""
 
-import platform
 import runpy
 from pathlib import Path
 from types import SimpleNamespace
@@ -33,7 +32,7 @@ VIEWERS = {
 )
 @pytest.mark.parametrize("width", [2560, 1280])
 @pytest.mark.parametrize("connected", [False, True])
-@pytest.mark.parametrize("ui_font", ["platform", "dejavu"])
+@pytest.mark.parametrize("ui_font", ["plex", "dejavu"])
 def test_viewer_header_and_body_fit(
     name,
     title,
@@ -69,9 +68,7 @@ def test_viewer_header_and_body_fit(
         font_path = Path(get_data_path()) / "fonts/ttf/DejaVuSans.ttf"
         assert font_path.is_file()
     else:
-        font_path = Path(_theme._SYS_FONTS.get(platform.system(), ""))
-        if not font_path.is_file():
-            font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
+        font_path = ROOT / "myogestic/assets/fonts/IBMPlexSans-Regular.ttf"
     io.font_default = io.fonts.add_font_from_file_ttf(str(font_path), 14)
     font = io.fonts.add_font_from_file_ttf(
         str(ROOT / "myogestic/assets/fonts/IBMPlexMono-Regular.ttf"),

@@ -2,8 +2,8 @@
 title: "Docs screenshots"
 slug: images
 ---
-The docs site uses PNGs from this folder. Capture widgets automatically
-with one script and examples manually as full windows.
+The docs site uses PNGs from this folder. Capture widgets and examples with
+the script below, or capture a full window interactively.
 
 ## Widgets - automated via `tools/widget_screenshot.py`
 
@@ -17,6 +17,12 @@ uv run --extra dev python tools/widget_screenshot.py --all
 # or one at a time
 uv run --extra dev python tools/widget_screenshot.py signal_viewer
 uv run --extra dev python tools/widget_screenshot.py hello_emg --out docs/images/hello-emg.png
+# Check every isolated panel and the three start_here apps (local review captures).
+uv run --extra dev python tools/widget_screenshot.py --examples
+# Or run one unchanged example with the same timed capture helper.
+uv run --extra dev python tools/widget_screenshot.py --example examples/start_here/myocontrol.py --out .superpowers/screens/app-font-myocontrol.png
+# Reproduce the classification overview without a generator or hand process.
+uv run --extra dev python tools/widget_screenshot.py --overview
 ```
 
 The registry covers
@@ -44,7 +50,14 @@ The session fixture creates three takes in `P-014/recordings/`, calls
 `SessionManager.select_all("P-014")`, then renders that participant. No Rescan click is
 needed. The newest day opens with all three takes visible.
 
-## Examples - fullscreen, manual
+## Examples
+
+`--overview` runs the classification tutorial with an in-process synthetic EMG
+source in a temporary data directory. It records Rest and Fist takes, trains the
+tutorial's CatBoost model, starts prediction and captures `gui-overview.png`.
+The screenshot uses the real widgets and fitted model; no hardware is needed.
+
+### Fullscreen, manual
 
 For the classification tutorial screenshot (`gui-overview.png`) and any
 future per-example shots, run the example fullscreen and capture the whole

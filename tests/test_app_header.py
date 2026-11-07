@@ -1,6 +1,5 @@
 """The shared header fits a bare Grid row, with independent widget identities."""
 
-import platform
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,9 +16,7 @@ from myogestic.widgets.panels import app_header
 @pytest.fixture
 def real_fonts(imgui_frame):
     """Measure the body font and merged check glyph used by the application."""
-    font_path = Path(_theme._SYS_FONTS.get(platform.system(), ""))
-    if not font_path.is_file():
-        font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
+    font_path = Path(__file__).resolve().parents[1] / "myogestic/assets/fonts/IBMPlexSans-Regular.ttf"
     atlas = imgui.get_io().fonts
     imgui.get_io().font_default = atlas.add_font_from_file_ttf(str(font_path), 14)
     config = imgui.ImFontConfig()

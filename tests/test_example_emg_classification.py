@@ -122,9 +122,7 @@ def test_classification_shell_fits_light_theme(
     recording_active,
 ):
     """Every active card fits the default window; narrow cards remain reachable."""
-    import platform
-
-    from imgui_bundle import hello_imgui, imgui
+    from imgui_bundle import imgui
 
     from myogestic import _scale, _theme
     from myogestic.ml import widgets as ml_widgets
@@ -151,9 +149,7 @@ def test_classification_shell_fits_light_theme(
     _theme.apply_theme()
     # The app uses a proportional body face. The fixture's monospace default
     # makes ordinary session guidance 45% wider than the real control surface.
-    font_path = Path(_theme._SYS_FONTS.get(platform.system(), ""))
-    if not font_path.is_file():
-        font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
+    font_path = Path(__file__).resolve().parents[1] / "myogestic/assets/fonts/IBMPlexSans-Regular.ttf"
     imgui.get_io().font_default = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14)
     font_dir = _EXAMPLES_ROOT.parent / "myogestic" / "assets" / "fonts"
     for attr, filename, size in (

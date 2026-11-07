@@ -76,6 +76,7 @@ examples = ["catboost>=1.2.10", "myoverse>=2.0.0", "torch>=2.0", "scikit-learn>=
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.6.0",
+    "fonttools>=4.0",  # audit the bundled body face against UI string glyphs
     "catboost>=1.2.10",
     "myoverse>=2.0.0",
     "torch>=2.0",

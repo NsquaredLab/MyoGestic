@@ -61,7 +61,12 @@ under the widget's stable `widget_id`, so two cards never share it accidentally.
 | --- | --- | --- |
 | Hero / display text | Instrument Serif | `display_font()` |
 | Console, logs, anything columnar | IBM Plex Mono | `mono_font()` |
-| Everything else | the theme's UI face | — |
+| Body text and controls | IBM Plex Sans Regular | — |
+
+All three faces ship with the app. Body text uses the same IBM Plex Sans face on
+macOS, Windows, Linux and in the browser playground, matching the website. The
+complete static font covers the UI's arrows, punctuation and scientific symbols;
+Font Awesome 6 is merged into it for icons. Its base size is 14 px.
 
 Size comes from the global scale, which resolves `$MYOGESTIC_UI_SCALE` →
 `App(ui_scale=…)` → automatic (OS display scale × window fit, live; see

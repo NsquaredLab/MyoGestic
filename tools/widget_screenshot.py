@@ -3,6 +3,8 @@
 Usage:
     uv run python tools/widget_screenshot.py <widget_name> [--out PATH]
     uv run python tools/widget_screenshot.py --all
+    uv run python tools/widget_screenshot.py --examples
+    uv run python tools/widget_screenshot.py --example examples/start_here/myocontrol.py
 
 For each widget in the registry below, this builds a minimal App with
 ONLY that widget rendered, waits ~3 s for the window to settle, captures
@@ -21,12 +23,13 @@ from __future__ import annotations
 
 import argparse
 import os
-import signal
+import runpy
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+from contextlib import chdir
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -43,17 +46,22 @@ def _self_capture_after(
     seconds: float, output_path: Path, *, window_only: bool = False
 ) -> None:
     """In a background thread, wait ``seconds``, find this process's
-    main GUI window via Quartz, screencapture it, then SIGINT main to
-    exit cleanly.
+    main GUI window via Quartz, screencapture it, then close at the next
+    frame boundary so a signal cannot interrupt an ImGui push/pop pair.
     """
 
     def _run() -> None:
+        from imgui_bundle import hello_imgui
+
+        def finish() -> None:
+            hello_imgui.get_runner_params().app_shall_exit = True
+
         time.sleep(seconds)
         try:
             import Quartz  # type: ignore
         except Exception as e:
             print(f"[capture] Quartz import failed: {e}", file=sys.stderr)
-            os.kill(os.getpid(), signal.SIGINT)
+            finish()
             return
         my_pid = os.getpid()
         wid = None
@@ -66,7 +74,7 @@ def _self_capture_after(
                 break
         if wid is None:
             print(f"[capture] no window found for pid {my_pid}", file=sys.stderr)
-            os.kill(os.getpid(), signal.SIGINT)
+            finish()
             return
         output_path.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
@@ -82,7 +90,7 @@ def _self_capture_after(
         else:
             print(f"[capture] saved {output_path} ({output_path.stat().st_size} B)")
         time.sleep(0.5)
-        os.kill(os.getpid(), signal.SIGINT)
+        finish()
 
     threading.Thread(target=_run, daemon=True).start()
 
@@ -593,6 +601,61 @@ def render_follow_run(out: Path) -> None:
     app.run(window_size=(380, 530))
 
 
+def render_gui_overview(out: Path) -> None:
+    """Run the classification tutorial's real record/train/predict cycle on fake EMG."""
+    from myogestic import Stream
+    from myogestic.sources import SyntheticSource
+
+    # Isolate recorded takes and window settings from the user's data.
+    with tempfile.TemporaryDirectory(prefix="myogestic_overview_") as tmp, chdir(tmp):
+        ns = runpy.run_path(str(REPO / "examples/synthetic/emg_classification.py"))
+        app, pipeline = ns["app"], ns["pipeline"]
+        source = SyntheticSource(n_channels=8, fs=2048, waveform="emg", hum=0.0)
+        stream = Stream("emg", source=source, window_ms=200, buffer_ms=10000)
+        stream.reconnect()
+        app.streams(stream)
+        app.ctx.participant = "P-014"
+        app.ctx.class_names = ns["CLASSES"]
+
+        def workflow():
+            try:
+                time.sleep(2)
+                ns["steps"].active = 1
+                for index, activation in enumerate((0.035, 1.0)):
+                    source.activation = activation
+                    app.ctx.current_label = index
+                    ns["simulator"].set(float(index))
+                    app.start_recording()
+                    assert app.ctx.recording, app.ctx.status_message
+                    app.ctx.session.add_label(index)
+                    time.sleep(3)
+                    app.stop_recording(wait=True)
+                ns["sessions"].select_all("P-014")
+                ns["steps"].active = 2
+                time.sleep(0.5)  # let the UI publish the selected TrainingData
+                pipeline.start_training()
+                deadline = time.monotonic() + 20
+                while app.ctx.state == "training" and time.monotonic() < deadline:
+                    time.sleep(0.1)
+                assert pipeline.model is not None, pipeline.train_log
+                pipeline.start_predicting()
+                ns["steps"].active = 3
+                time.sleep(7)  # fill the viewer and let the success toast expire
+                assert "class" in pipeline.predictions, app.ctx.status_message
+                print(f"[overview] trained and predicting: {pipeline.predictions}", flush=True)
+                _self_capture_after(0.1, out, window_only=True)
+            except Exception:
+                import traceback
+
+                traceback.print_exc()
+                from imgui_bundle import hello_imgui
+
+                hello_imgui.get_runner_params().app_shall_exit = True
+
+        threading.Thread(target=workflow, daemon=True).start()
+        app.run(window_size=(1280, 750))
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Registry + driver
 # ─────────────────────────────────────────────────────────────────────
@@ -617,10 +680,34 @@ WIDGETS: dict[str, callable] = {
 }
 
 
+def render_example(path: Path, out: Path) -> None:
+    """Capture an unchanged example using the same timed window capture as widgets."""
+    from myogestic import App
+
+    original_run = App.run
+
+    def capture_run(self, *args, **kwargs):
+        # Enough time for synthetic sources and background setup to settle.
+        _self_capture_after(7.0, out, window_only=True)
+        return original_run(self, *args, **kwargs)
+
+    App.run = capture_run
+    sys.argv = [str(path)]
+    try:
+        runpy.run_path(str(path), run_name="__main__")
+    finally:
+        App.run = original_run
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("widget", nargs="?", help="Widget name to render")
     parser.add_argument("--all", action="store_true", help="Render every widget in the registry")
+    parser.add_argument("--example", type=Path, help="Capture one unmodified example app")
+    parser.add_argument("--overview", action="store_true", help="Record/train/predict the tutorial")
+    parser.add_argument(
+        "--examples", action="store_true", help="Capture all panels and the three start_here apps"
+    )
     parser.add_argument(
         "--out",
         type=Path,
@@ -629,6 +716,19 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.examples:
+        for path in sorted((REPO / "examples/panels").glob("*.py")) + sorted(
+            (REPO / "examples/start_here").glob("*.py")
+        ):
+            out = REPO / ".superpowers/screens" / f"app-font-{path.parent.name}-{path.stem}.png"
+            print(f"=== {path.relative_to(REPO)} ===", flush=True)
+            subprocess.run(
+                [sys.executable, __file__, "--example", str(path), "--out", str(out)],
+                check=True,
+                timeout=60,
+            )
+        return
+
     if args.all:
         # Spawn this script as subprocess for each widget so windows
         # don't pile up in the same process.
@@ -636,24 +736,37 @@ def main() -> None:
             print(f"=== {name} ===")
             subprocess.run(
                 [sys.executable, __file__, name],
-                check=False,
+                check=True,
+                timeout=60,
             )
         return
 
-    if not args.widget:
+    if not args.widget and not args.example and not args.overview:
         parser.print_help()
         sys.exit(2)
 
-    if args.widget not in WIDGETS:
+    if not args.example and not args.overview and args.widget not in WIDGETS:
         print(f"Unknown widget: {args.widget!r}", file=sys.stderr)
         print(f"Available: {sorted(WIDGETS)}", file=sys.stderr)
         sys.exit(2)
 
-    out = args.out or (OUT_DIR / f"{args.widget}.png")
+    default_out = (
+        REPO / "docs/images/gui-overview.png" if args.overview
+        else OUT_DIR / f"{args.widget or args.example.stem}.png"
+    )
+    out = (args.out or default_out).resolve()
+    out.unlink(missing_ok=True)
     try:
-        WIDGETS[args.widget](out)
+        if args.overview:
+            render_gui_overview(out)
+        elif args.example:
+            render_example(args.example.resolve(), out)
+        else:
+            WIDGETS[args.widget](out)
     except KeyboardInterrupt:
         pass
+    if not out.is_file():
+        raise SystemExit(f"Capture failed: {out}")
 
 
 if __name__ == "__main__":

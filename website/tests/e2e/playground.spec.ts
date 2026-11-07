@@ -55,6 +55,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
         await expect(page.locator('#loader')).toHaveCount(0, { timeout: 180_000 });
         await expect.poll(async () => (await state(page)).step).toBe('Connect');
         const initial = await state(page);
+        expect(initial.body_font).toBe('IBMPlexSans-Regular 14');
         expect(initial.participant).toBe('P-DEMO');
         expect(initial.connected).toBe(false);
         expect(initial.trained).toBe(false);
@@ -97,7 +98,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
             await expect.poll(async () => (await state(page)).sessions.total).toBe(index + 1);
             expect((await state(page)).sessions.selected).toBe(index + 1);
             expect((await state(page)).sessions.classes[gesture]).toBeGreaterThan(2.5);
-            expect((await state(page)).sessions.paths[index]).toMatch(/\.mg\.zip$/);
+            // Selection and TrainingData are published on adjacent frames after save.
+            await expect.poll(async () => (await state(page)).sessions.paths[index]).toMatch(/\.mg\.zip$/);
             if (index === 1) await openStep(1);
         }
         await capture('record-saved');

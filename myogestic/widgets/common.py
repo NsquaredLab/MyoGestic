@@ -656,10 +656,9 @@ def format_age(seconds: float | None) -> str:
     11 characters, so paired with `mono_text` the value can update every frame
     without the text around it moving.
 
-    Padding to a fixed *digit count* is not enough on its own. The UI face is
-    proportional and its digits are not tabular: on macOS, SF Pro renders ``1``
-    at 6 px and ``9`` at 9 px, so ``last 111 ms`` and ``last 999 ms`` differ by
-    9 px however they are padded. Only a monospaced face holds still.
+    Padding to a fixed *digit count* is not enough on its own. Proportional UI faces can
+    give digits different widths, so equal character counts need not occupy
+    equal space. The bundled mono face keeps every band at the same width.
     """
     if seconds is None:
         return "last   — ms"

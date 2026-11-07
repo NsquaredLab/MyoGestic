@@ -1,6 +1,5 @@
 """Signal discovery actions stay together and fit real, scaled viewer cells."""
 
-import platform
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,9 +22,7 @@ def scan_ui(imgui_frame, monkeypatch):
     monkeypatch.setattr(_scan, "_scans", {})
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     io = imgui.get_io()
-    font_path = Path(_theme._SYS_FONTS.get(platform.system(), ""))
-    if not font_path.is_file():
-        font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
+    font_path = Path(__file__).resolve().parents[1] / "myogestic/assets/fonts/IBMPlexSans-Regular.ttf"
     io.font_default = io.fonts.add_font_from_file_ttf(str(font_path), 14)
     config = imgui.ImFontConfig()
     config.merge_mode = True
@@ -156,7 +153,7 @@ def test_carousel_and_one_connect_are_centred_and_fit(scan_ui, width, scale, sca
         (connect,) = _named(items, "##emg_reconnect")
         assert connect.fill == tuple(PRIMARY_FILL)
         # The label names the stream, ellipsized in a narrow cell. How much fits depends
-        # on the font (DejaVu on Linux is wider than SF), so check the shape, not a length.
+        # on the font, so check the shape, not a length.
         shown, full = connect.label.split("##")[0], f"{fa.ICON_FA_PLUG}  Connect scan-test"
         assert shown == full or (shown.endswith("…") and full.startswith(shown[:-1])), shown
         assert "Connect" in shown

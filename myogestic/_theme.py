@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import math
-import os
 import platform
 import subprocess
+from pathlib import Path
 
 from imgui_bundle import hello_imgui, imgui
 
@@ -168,13 +168,6 @@ def apply_theme() -> None:
     # the scale changes, after the whole style chain has run.
 
 
-_SYS_FONTS = {
-    "Darwin": "/System/Library/Fonts/SFNS.ttf",
-    "Windows": "C:/Windows/Fonts/segoeui.ttf",
-    "Linux": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-}
-
-
 def _unscaled_params() -> hello_imgui.FontLoadingParams:
     params = hello_imgui.FontLoadingParams()
     params.adjust_size_to_dpi = False
@@ -186,18 +179,18 @@ def load_fonts() -> None:
     if _FONT is not None:
         return
 
-    sys_font = _SYS_FONTS.get(platform.system())
     # Unscaled sizes, and no DPI adjustment from hello_imgui: `apply_live_scale`
     # sets `style.font_scale_main`, which already carries the OS display scale.
     # ImGui 1.92 rasterises glyphs at the size they are drawn, so this stays crisp.
     size = 14.0
 
     params = _unscaled_params()
-    if sys_font and os.path.exists(sys_font):
-        params.inside_assets = False
-        _FONT = hello_imgui.load_font(sys_font, size, params)
-    else:
-        _FONT = hello_imgui.load_font("fonts/Roboto/Roboto-Regular.ttf", size, params)
+    # Use the complete static face, including Greek, arrows and scientific symbols,
+    # on desktop and Pyodide alike. Resolve from the package so this cannot pick up
+    # a different face from an application's own HelloImGui asset search path.
+    params.inside_assets = False
+    body_font = Path(__file__).parent / "assets" / "fonts" / "IBMPlexSans-Regular.ttf"
+    _FONT = hello_imgui.load_font(str(body_font), size, params)
     # Merge Font Awesome 6 glyphs onto the body font
     fa_params = _unscaled_params()
     fa_params.merge_to_last_font = True

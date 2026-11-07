@@ -90,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Body text and controls use bundled IBM Plex Sans Regular on every platform, including the browser playground, matching the website.
 - The documentation site was rebuilt with Astro and a new brand. It uses the app's visual language, a live signal field on the homepage, and Getting Started for 2.x.
 
 - Takes are `.mg.zip`. A stopped recording packs to `<name>.mg.zip`; the previous suffix was

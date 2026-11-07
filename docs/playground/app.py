@@ -268,7 +268,9 @@ def _publish_state():
     summary = sessions.selection()
     predicted = pipeline.predictions.get("class")
     data = pipeline.training_data
+    font = imgui.get_io().font_default if imgui.get_current_context() else None
     state = {
+        "body_font": font.get_debug_name() if font is not None else None,
         "state": str(app.ctx.state),
         "participant": app.ctx.participant,
         "connected": stream.status == "connected",
