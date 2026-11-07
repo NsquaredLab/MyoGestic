@@ -11,7 +11,7 @@ test('hero gesture chip holds the prediction', async ({ page }) => {
     await chip.click();
     await expect(prediction(page)).toHaveText('Pinch');
     await expect(chip).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('button', { name: 'Record Pinch', exact: true })).toBeVisible();
+    await expect(page.locator('[data-record-label]')).toHaveText('Pinch');
     await expect(page.locator('[data-confidence]')).toHaveText('0.91');
     await page.waitForTimeout(4100);
     await expect(prediction(page)).toHaveText('Pinch');
@@ -26,7 +26,7 @@ test('hero exposes Rest, Fist, Pinch and Index in order and holds each predictio
         await expect(prediction(page)).toHaveText(gesture);
         await expect(chip).toHaveAttribute('aria-pressed', 'true');
         await expect(page.locator('[data-confidence]')).toHaveText(confidence);
-        await expect(page.getByRole('button', { name: `Record ${gesture}`, exact: true })).toBeVisible();
+        await expect(page.locator('[data-record-label]')).toHaveText(gesture);
     }
 });
 

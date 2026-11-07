@@ -29,7 +29,7 @@ if (hero) {
             prediction.textContent = gesture;
             confidence.textContent = CONFIDENCE[gesture].toFixed(2);
             confidenceBar.style.width = `${Math.round(CONFIDENCE[gesture] * 100)}%`;
-            recordLabel.textContent = `Record ${gesture}`;
+            recordLabel.textContent = gesture;
             for (const chip of chips) chip.setAttribute('aria-pressed', String(chip.dataset.gesture === gesture));
             auto.textContent = automatic ? 'Auto' : 'Auto off';
             auto.setAttribute('aria-pressed', String(automatic));
