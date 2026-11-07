@@ -151,10 +151,11 @@ for (const width of [390, 768]) {
         const centre = { x: panels!.x + panels!.width / 2, y: panels!.y + panels!.height / 2 };
         expect(centre.x).toBeGreaterThanOrEqual(field!.x);
         expect(centre.x).toBeLessThanOrEqual(field!.x + field!.width);
-        // The mask is fully opaque after the first 48 px, including the centre.
-        await expect(canvas).toHaveCSS('mask-image', /^linear-gradient\(rgba\(0, 0, 0, 0\), rgb\(\d+, \d+, \d+\) 48px\)$/);
+        // The mask fades in over the first 48 px and out over the last 96 px, where the
+        // traces settle into the rule; the panels' centre is in the opaque part between.
+        await expect(canvas).toHaveCSS('mask-image', /^linear-gradient\(rgba\(0, 0, 0, 0\), rgb\(\d+, \d+, \d+\) 48px, rgb\(\d+, \d+, \d+\) calc\(100% - 96px\), rgba\(0, 0, 0, 0\)\)$/);
         expect(centre.y).toBeGreaterThan(field!.y + 48);
-        expect(centre.y).toBeLessThan(field!.y + field!.height);
+        expect(centre.y).toBeLessThan(field!.y + field!.height - 96);
         await expect(canvas).toHaveCSS('opacity', '1');
     });
 }
