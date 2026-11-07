@@ -1,7 +1,7 @@
 ---
 title: "Widgets"
 ---
-A widget is a **class**. You construct it once with its configuration, then call `.ui(...)` each frame with the live per-frame inputs. No inheritance, no `Widget` base, no registration with the app — just a plain class with a `.ui()` method.
+A widget is a **class**. You construct it once with its configuration, then call `.ui(...)` each frame with the live per-frame inputs. No required `Widget` base, no registration with the app — just a plain class with a `.ui()` method.
 
 ```python
 class EmgViewer:
@@ -9,11 +9,13 @@ class EmgViewer:
         self._stream = stream  # config held on the instance
 
     def ui(self, ctx: Context) -> None:  # per-frame: takes ctx
-        env_min, env_max = ctx.streams[self._stream].get_display(n_pixels=800)
+        snapshot = ctx.streams[self._stream].get_display(n_pixels=800)
+        if snapshot is None:
+            return
+        ts, data = snapshot
         if implot.begin_plot("EMG", imgui.ImVec2(-1, 300)):
-            for ch in range(env_min.shape[1]):
-                implot.plot_line(f"##min{ch}", env_min[:, ch])
-                implot.plot_line(f"##max{ch}", env_max[:, ch])
+            for ch in range(data.shape[1]):
+                implot.plot_line(f"##ch{ch}", ts, data[:, ch])
             implot.end_plot()
 ```
 
@@ -28,7 +30,7 @@ def ui(ctx):
     viewer.ui(ctx)  # every frame
 ```
 
-Every widget follows this shape — `SignalViewer("emg").ui(ctx)`, `Heatmap("Confusion").ui(cm)`, `PipelinePanel(pipeline).ui()`. One convention, no exceptions.
+The public widget classes follow this shape — `SignalViewer("emg").ui(ctx)`, `Heatmap("Confusion").ui(cm)`, `PipelinePanel(pipeline).ui()`. Functional helpers such as `panel_header` and `popout_panel` are called directly.
 
 `ProcessLauncher(processes)` shows a full-width process selector and **Launch**.
 While running, its tinted state row gives the PID, elapsed time and **Stop**;
@@ -50,10 +52,10 @@ same full-panel controls for a custom filter palette.
 
 ## The contract
 
-1. **Construct once; render every frame.** The instance holds state, so build it at module/app scope and only call `.ui(...)` inside the frame. Constructing a widget *inside* `@app.ui` rebuilds it every frame and silently resets its state (channel selection, scroll, filter tuning).
+1. **Construct once; render every frame.** The instance holds state, so build it at module/app scope and only call `.ui(...)` inside the frame. Constructing a widget *inside* `@app.ui` rebuilds it every frame and can reset its instance state (for example, filter tuning). Identity-keyed caches, such as viewer channel selection, may outlive the instance.
 2. **Config in `__init__`, per-frame in `.ui(...)`.** Stable configuration (stream name, pipeline, plot options) goes to the constructor. `.ui(...)` receives only what can't be held ahead of time: `ctx` for stream/recording/log widgets, live `data` arrays for plots, or nothing for widgets that read from held references (`pipeline.predictions`, a filter, the feature map).
 3. **One file per widget.** ~100–200 LOC. If a widget grows past that, split its private helpers into underscore-prefixed modules (`_state.py`, `_controls.py`, `_plot.py`) — never split the public class across files.
-4. **No work in the render path.** Widgets read precomputed values (`get_display`, `pipeline.predictions`, `ctx.session`). Heavy computation runs on the acquisition or predict threads.
+4. **Bound render work.** Widgets read recent snapshots and prediction state. Signal display filtering and decimation run on the render thread, bounded by the visible window. Model training and other heavy work belong outside the render path.
 
 ## Why `ctx` is a `.ui()` argument, not constructor state
 
@@ -121,7 +123,7 @@ def ui(ctx):
         save.ui()
 ```
 
-Slices accept Python conventions: `0:8` is rows 0–7 inclusive, `1:3` is cols 1–2 inclusive. There's no flex layout — sizes are even fractions of the window. If you want non-uniform sizing, drop to `imgui.set_next_window_size` directly.
+Slices accept Python conventions: `0:8` is rows 0–7 inclusive, `1:3` is cols 1–2 inclusive. With no track lists, sizes are even fractions of the window. Use `Px` and `Fr` for non-uniform tracks, or named areas and `Layout` for responsive arrangements; see [Grid layout](grid-layout.md).
 
 ## Pop-out windows
 
@@ -148,7 +150,7 @@ Drag the tab outside the main OS window and it floats. Layout state persists in 
 
 See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
 
-- **Constructing a widget inside `@app.ui`.** `SignalViewer("emg").ui(ctx)` in the frame loop rebuilds the widget every frame and resets its state. Build it once, outside.
+- **Constructing a widget inside `@app.ui`.** `SignalViewer("emg").ui(ctx)` in the frame loop rebuilds the widget every frame and can reset instance state. Build it once, outside.
 - **Calling `.ui(...)` outside `@app.ui`.** It'll throw because no ImGui context is bound. Widgets only render inside the frame.
 - **Putting computation in the widget.** If you find yourself doing `np.fft.rfft(stream.get_window()[0])` inside `.ui()`, move it to a thread (acquisition or predict) and stash the result on `ctx` or your own object.
-- **Reading `pipeline.predictions` mid-write.** `predictions` is a dict; widgets get a reference. Read scalar fields and you're fine. If you need a coherent snapshot, copy-on-read.
+- **Reading `pipeline.predictions` mid-write.** `predictions` is a dict; widgets get a reference. Read scalar fields and you're fine. The pipeline replaces the whole dict after a successful prediction. Hold one local reference for a coherent result; avoid mutating the published dict in place.

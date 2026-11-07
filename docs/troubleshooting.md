@@ -12,7 +12,7 @@ The deep-dive concept and how-to pages have their own short "Common mistakes" ad
 `Stream.get_window()` returns an empty array because the acquisition thread hasn't received any chunks yet. Either the source isn't connected (`stream.info is None`), or the upstream LSL outlet hasn't started publishing.
 
 !!! tip "Fix"
-    In headless scripts, sleep ~2 s between `app.run` startup and your first `app.start_recording()` / first prediction. In GUI mode, click **Launch** on the EMG generator (or wait for hardware to warm up). Check `app.ctx.streams["emg"].info` is not `None` before trusting the buffer.
+    Streams start detached. In headless scripts, call `stream.reconnect()` before `app.run(mode="headless")` and start recording from a startup hook or another control path. In GUI mode, press **Connect** in the device picker or viewer after the source is available. Wait for `get_window()` to return nonempty data; a fixed sleep does not connect a source.
 
 ### Acquisition thread freezes
 
@@ -23,7 +23,7 @@ A blocking call inside the source's `read()` pauses the acquisition thread, whic
 
 ### Wrong shape from a custom source
 
-If a Source subclass accidentally returns `(n_channels, n_samples)` instead of sample-major `(n_samples, n_channels)`, the recording layer writes a Zarr array with the wrong shape and replay won't match.
+If a Source adapter accidentally returns `(n_channels, n_samples)` instead of sample-major `(n_samples, n_channels)`, the recording layer writes a Zarr array with the wrong shape and replay won't match.
 
 !!! tip "Fix"
     Stay sample-major in the source. The transpose to channels-first happens at one edge, inside `Stream.get_window()`.
@@ -34,7 +34,7 @@ See: [Streams concept page](concepts/streams.md), [Add a custom source](how-to/a
 
 ### One-click sessions yield bad models
 
-A session with two label clicks (e.g. Rest + Fist) and a few seconds of data extracts exactly one usable trial after the framework's "skip first" heuristic. Classifiers see one window per class and underfit badly.
+`iter_labeled_windows` uses every nonnegative labeled segment long enough for a window, including the first. One short trial per class may supply too few representative windows for a useful model.
 
 !!! tip "Fix"
     Cycle-style recording: one session with 6-10 button clicks (Rest → Fist → Rest → Fist → … hold each ~3 s). See the dedicated guide: [Record good training data](how-to/record-good-training-data.md).
@@ -46,12 +46,12 @@ Setting `class_names` as an attribute on the session object after the fact doesn
 !!! tip "Fix"
     `RecordingControls` calls `app.start_recording` which handles this for you. Only relevant if you're constructing sessions manually.
 
-### `.mg.zip` truncated when script exits
+### Waiting for a `.mg.zip` save
 
-`app.stop_recording()` kicks off a daemon thread that packs the session folder. If the script exits immediately, the zip may not finish.
+`app.stop_recording()` normally finalizes and packs the session on a daemon thread. Returning from it does not mean the archive is ready. `App.run()` cleanup saves an open take inline and waits up to 30 seconds for saves already in progress.
 
 !!! tip "Fix"
-    Sleep 1-2 seconds after `stop_recording()` in headless scripts, or check `data/recordings/<YYYYMMDD-HHMM>.mg.zip` exists before exiting.
+    Use `app.stop_recording(wait=True)` when the next step needs the finished archive. Successful saves go to `data/<ID>/recordings/<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip`, or `predictions/` for a take started while predicting. Do not use a fixed sleep as completion evidence.
 
 See: [Recording concept page](concepts/recording.md), [Record and replay](how-to/record-and-replay.md), [Run headless](how-to/headless-mode.md).
 
@@ -64,12 +64,12 @@ Several causes:
 1. `pipeline.start_predicting()` was never called. Click **Predict** in the GUI (or call it explicitly headless).
 2. `pipeline.model is None`. Train first or load a saved model with `pipeline.load_model = load_pickle` plus the **Load Model** button / explicit call.
 3. Your `@pipeline.predict` returned a non-`dict` value. Non-dict returns are silently dropped and the previous prediction stays in `pipeline.predictions`.
-4. The state machine is stuck in `training` or `recording`. Check `app.ctx.state`.
+4. The app is still in `idle`, `recording` or `training`, so prediction has not started. `start_predicting()` accepts either `idle` or `recording`; also check that input windows are nonempty and both decorators are wired.
 
 !!! tip "Fix"
     Always `return {"...": ...}` from `predict()`. Check the state. A `print()` inside `predict()` confirms whether the predict thread is firing at all.
 
-### "Save Model button does nothing"
+### "Save Model button is disabled"
 
 `pipeline.save_model` is unset, so the button has no callable to invoke.
 
@@ -103,10 +103,10 @@ See: [Pipeline concept page](concepts/pipeline.md), [Add a custom model](how-to/
 
 ### Widget state shared accidentally between instances
 
-Two `SignalViewer("emg")` instances share state because the stream-name key matches; that's intentional. If you want independent state, use different stream names or different `widget_id` arguments where the widget supports them.
+Two `SignalViewer("emg")` instances share state because their default identity is the stream name. Give them distinct `widget_id` values to view the same stream independently.
 
 !!! tip "Fix"
-    Match the widget's keying convention. Some key by `stream_name` (signal viewers), others by `uid` (template inspectors).
+    Match the widget's keying convention. Signal viewers default to the stream name; template inspectors require an explicit `widget_id`.
 
 ### Widget calls work in `@app.ui` but not elsewhere
 
@@ -159,7 +159,7 @@ VHI isn't installed at the location `virtual_hand()` looks at - by default `<rep
     export GODOT_BIN=$HOME/Applications/Godot.app/Contents/MacOS/Godot
     ```
 
-    Or accept that the launcher button errors at click time and use a different output (the bundled examples wrap `vhi.launcher()` in a try/except so the button stays visible regardless).
+    For an optional hand in your own app, use `vhi.launchable()` to return an empty process list when it cannot be launched. The start-here apps can still connect to an already running hand; they report when no hand is available.
 
 ### VHI hand looks twitchy
 
@@ -179,7 +179,7 @@ See: [Integrate the Virtual Hand](how-to/integrate-vhi.md), [Post-process predic
 
 ## Threading and performance
 
-### `time.sleep` in `@pipeline.predict` blocks everything
+### `time.sleep` in `@pipeline.predict` delays predictions
 
 It blocks the predict thread. The framework already paces ticks at `predict_hz`.
 

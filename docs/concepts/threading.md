@@ -1,45 +1,30 @@
 ---
 title: "Threading"
 ---
-stdlib `threading` only. No asyncio, no multiprocessing on the hot path. Subprocess isolation is reserved for "bridges" - heavy-data sources like webcams or ultrasound that would otherwise saturate a thread.
+On desktop, acquisition, prediction and sending use stdlib `threading`; the hot path uses no multiprocessing. The browser playground schedules those steps on the GUI frame loop instead of creating OS threads. Subprocess isolation is reserved for "bridges" - heavy-data sources like webcams or ultrasound that would otherwise saturate a thread.
 
 ## What runs where
 
-```mermaid
-flowchart LR
-    subgraph MAIN["Main thread"]
-        UI["GUI event loop<br/>ImGui render<br/>button clicks"]
-    end
-
-    subgraph DAEMONS["Daemon threads (one each)"]
-        direction TB
-        AT["Acquisition thread (per Stream)<br/>source.read → ring buffer<br/>→ display snapshot<br/>→ optional Zarr append"]
-        PT["Predict thread (only with Pipeline)<br/>extract → predict<br/>→ pipeline.predictions"]
-        TT["Training thread (transient)<br/>train → pipeline.model"]
-        OT["Output thread (per Outlet)<br/>drain _latest → transport @ hz"]
-    end
-
-    subgraph BRIDGE["Subprocess (optional)"]
-        BR["Bridge process<br/>webcam decode → Zarr<br/>→ publish LSL clock"]
-    end
-
-    AT --> CTX["ctx.streams[name]<br/>(threading.Lock)"]
-    CTX --> PT
-    CTX --> UI
-    PT -.->|push| OT
-    BR -.->|LSL clock| AT
+```text
+Main thread           GUI event loop, ImGui, button clicks, display snapshots
+Acquisition threads   source.read → ring buffer → optional Zarr append
+Predict thread        get_window → extract → predict → pipeline.predictions
+Training thread       train → pipeline.model (one training run)
+Output threads        latest-value slot → transport at each outlet's hz
+Bridge subprocess     webcam → Zarr + LSL clock timestamps (optional)
 ```
+
 
 | Thread | Owner | Job |
 |--------|-------|-----|
 | Main | OS | GUI event loop, ImGui render, button clicks |
-| Acquisition (one per `Stream`) | `Stream` | source.read → ring buffer → display snapshot → optional Zarr append |
+| Acquisition (one per `Stream`) | `Stream` | source.read → ring buffer → optional Zarr append |
 | Predict | `Pipeline` | extract → predict → write to `pipeline.predictions` |
 | Training (transient) | `Pipeline` | train → assign to `pipeline.model` |
 | Output (one per `Outlet`) | user-owned `Outlet` | drain `_latest` to its destination at `hz` |
 | Bridge subprocess (optional) | `Bridge` | webcam decode → Zarr → publish LSL clock |
 
-Every non-main thread is a daemon: the program exits cleanly even if a thread is mid-iteration when the user closes the window. The predict thread is started via `app.before_run_hooks` (at `app.run()`, not on first Predict click) and joined with a short timeout via a `threading.Event` flag on cleanup. Acquisition and output threads are daemons that exit when the process does; their `stop()` methods set a sentinel but don't `join()`.
+The framework's acquisition, prediction, training and output threads are daemons. App cleanup stops an open recording inline and waits up to 30 seconds for pending saves before stopping streams. The predict thread is started via `app.before_run_hooks` (at `app.run()`, not on first Predict click) and joined with a short timeout via a `threading.Event` flag on cleanup. Acquisition and output threads are daemons that exit when the process does; their `stop()` methods set a sentinel but don't `join()`.
 
 ## Why the GIL does not serialise these threads
 
@@ -55,13 +40,13 @@ The Python interpreter is mostly orchestrating - handing buffers between threads
 
 ## Synchronisation
 
-The shared `Context` is the only synchronisation surface, and it relies on three properties:
+`Context`, `Pipeline` and stream/session objects share state using these conventions:
 
 1. **Reference assignment is atomic in CPython.** `pipeline.model = trained` doesn't tear; readers either see the old reference or the new one. Same for `pipeline.predictions = {...}`.
 2. **Ring buffer reads/writes hold a `threading.Lock`.** ~1–5 µs overhead per access - invisible against the µs–ms latencies of real workloads.
-3. **`ctx.state` transitions go through `App.start_*` / `App.stop_*`.** Callers don't poke `ctx.state = "..."` directly. State changes are point-in-time; there's no "stop in progress" intermediate state.
+3. **`ctx.state` transitions go through the App and Pipeline start/stop methods.** Callers don't poke `ctx.state = "..."` directly. State changes are point-in-time; there's no "stop in progress" intermediate state.
 
-No condition variables, no queues, and the only `threading.Event` is the predict thread's shutdown flag. If a thread needs the latest value, it reads the field; if a thread needs to update, it writes the field.
+Stream buffers, attached sessions, event buffers and connection attempts have their own locks. Prediction shutdown uses a `threading.Event`; following runs also have cancellation events. Outputs pass values through a latest-value slot rather than a per-sample queue.
 
 ## The GPU contention rule
 
@@ -73,7 +58,7 @@ ctx.state ∈ {"idle", "recording", "training", "predicting"}
                                     └─ exclusive ┘
 ```
 
-Click Train while predicting is running → predicting stops first. Training completes → user clicks Predict again to resume.
+Train is disabled while predicting. Stop prediction and any open recording first, then train. When training completes, click Predict to resume.
 
 Why: PyTorch CUDA streams can be juggled, but the engineering complexity isn't worth it for a single-user experiment app. Predict throughput drops to zero during training, which lasts seconds-to-minutes; that's acceptable for the use case. The state machine refuses parallel attempts so you can't accidentally OOM the GPU.
 
@@ -90,9 +75,9 @@ The bridge process:
 
 - Owns its own Python interpreter (no GIL contention with the main app).
 - Writes frames directly to a Zarr array - that's the persistence step.
-- Publishes an LSL "clock" stream so the main app knows what frame number is current.
+- Publishes one LSL clock timestamp per captured frame for alignment.
 
-The main app never touches the camera frames; it just reads frame-number stamps from the LSL stream and looks up frames in the Zarr if the experiment needs them. Registering a bridge does not start it — call `cam.start()` when you want it up; `app.run()` stops it on cleanup. Nothing renders a bridge for you: `bridge.status` and `bridge.alive` are there if you want to show them, and a stop that does not land is logged.
+The main app never touches the camera frames; it reads per-frame LSL clock timestamps and can look up the corresponding frames in Zarr if the experiment needs them. Registering a bridge does not start it — call `cam.start()` when you want it up; `app.run()` stops it on cleanup. Nothing renders a bridge for you: `bridge.status` and `bridge.alive` are there if you want to show them, and a stop that does not land is logged.
 
 ## Common mistakes
 

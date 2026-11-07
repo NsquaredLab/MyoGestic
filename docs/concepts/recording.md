@@ -57,8 +57,8 @@ During recording, one folder per take:
 ```text
 data/P-014/recordings/
 └── P-014_20260506-1846/
-    ├── meta.json                   # class_names, started_at, model_meta
-    ├── labels.json                 # label_track (timestamps + class indices)
+    ├── meta.json                   # class_names, created, streams, extras (written on stop)
+    ├── labels.json                 # timestamps + class indices (written on stop)
     ├── emg.zarr/                   # (n_samples, n_channels) sample-major
     ├── emg_timestamps.zarr/        # (n_samples,) float64 LSL clock
     ├── imu.zarr/                   # if a second stream was recorded
@@ -69,11 +69,10 @@ After `stop_recording`, the folder packs to a single archive:
 
 ```text
 data/P-014/recordings/
-├── P-014_20260506-1846/          # original folder (kept until pack succeeds)
 └── P-014_20260506-1846_R.mg.zip  # archive - contains the same internal layout
 ```
 
-Both are loadable via [`open_session_store(path)`][myogestic.session.open_session_store] - readers don't need to know which they got.
+The source folder is removed after a successful pack; if packing fails, it is kept. Saved folders and archives are both loadable via [`open_session_store(path)`][myogestic.session.open_session_store] - readers don't need to know which they got.
 
 ## Notifications
 
@@ -110,7 +109,7 @@ class LabelEvent:
     class_index: int  # -1 = unlabeled (terminator)
 ```
 
-The label track is a list of these events, persisted to `labels.json` on stop. Each consecutive pair `(events[i], events[i+1])` defines one **trial** - every sample in between is labelled `class_index`. The `-1` terminator at the end marks the boundary of the last trial so iterators know where to stop.
+The label track is a list of these events, persisted to `labels.json` on stop. Each consecutive pair `(events[i], events[i+1])` defines one **trial** - every sample in between is labelled `class_index`. An optional `-1` event marks an unlabeled boundary. Without a closing event, the last trial extends to the end of the recorded samples.
 
 [`RecordingControls`][myogestic.widgets.RecordingControls] writes labels when the user clicks a button:
 
@@ -130,7 +129,7 @@ rec_controls.ui(ctx)
 
 A sampled stream has a clock; an event stream has one row per *thing that happened*. `Session.append_event(name, values, timestamp, channel_names=..., fs=...)` declares such a stream on first use and appends one float32 row to it. On disk it is the same `<name>.zarr` / `<name>_timestamps.zarr` pair as any stream, so every reader — `open_session_store`, `ReplaySource`, the window iterators — sees it unchanged. `meta.json` lists these names under `event_streams`, and their `fs` is *nominal* (the producer's tick rate) so `ReplaySource` can pace them; the timestamps are the truth.
 
-Rows are buffered in memory and written 1024 at a time or once a second, whichever comes first, because a single-row zarr append rewrites the partial chunk (about 1.5 ms each on zarr 3.2). `Session.freeze()` flushes every buffer and closes the session to new rows and new streams; `App.stop_recording` calls it before anything is written.
+Rows are buffered in memory and written 1024 at a time or once a second, whichever comes first, because a single-row zarr append rewrites the partial chunk (about 1.5 ms each on zarr 3.2). `Session.freeze()` flushes every buffer and closes the session to new rows and new streams; `App.stop_recording` calls it before finalization metadata and the archive are written.
 
 Rows are float32 by default; a value that is itself a clock — an LSL timestamp, `local_clock()` — loses milliseconds at float32 after a day of uptime, so pass `dtype=np.float64` for it (the pipeline does for `pipeline.tick`) or record an offset instead.
 
@@ -163,7 +162,8 @@ data, ts = sess.get_continuous("emg")
 
 # Per-trial slices (labelled segments)
 trials = sess.get_trials("emg", pre_s=0, post_s=0)
-# list[Recording] - each has .data, .ts, .class_index, .class_name
+# list[Recording] - each has .data, .timestamps, .class_index, .class_name
+# Pass class_names=sess.class_names to get names rather than numeric strings.
 
 # Stream metadata
 info = sess.stream_info("emg")  # StreamInfo(n_channels, fs, dtype, channel_names)
@@ -207,7 +207,7 @@ for window, aligned, ts in iter_aligned_windows(
     target_pose = aligned["vhi_control"]  # shape (n_channels,)
 ```
 
-Yields the primary window plus a synchronised target snapshot per `aligned_stream_names` entry - handy when the ground truth is a continuous signal (kinematics, torque, joint angles).
+Yields the primary window plus a target snapshot nearest its midpoint, averaging `n_alignment_samples` around that target index, per `aligned_stream_names` entry - handy when the ground truth is a continuous signal (kinematics, torque, joint angles).
 
 ## Backends
 
@@ -216,7 +216,7 @@ Zarr is the storage layer. Two compression backends are supported transparently:
 - **Pure-Python `zarr`** (default) - works everywhere.
 - **`zarrs`** (Rust codec via PyO3, optional via `uv sync --extra zarrs`) - drop-in faster compression for big sessions.
 
-If `zarrs` is installed, the codec is registered on import; if not, recording falls back to plain `zarr` with no code change.
+On desktop Zarr 3, if `zarrs` is installed, its codec pipeline is selected on import; if not, recording falls back to plain `zarr` with no code change.
 
 ## Common mistakes
 
@@ -224,4 +224,4 @@ See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by 
 
 - **`sess.class_names = [...]` after `save_meta`.** The class names persist only when passed as a kwarg to `save_meta(name, class_names=...)`, not when set as an attribute after the fact. (`RecordingControls` handles this for you when it calls `app.start_recording`.)
 - **Treating the label track as a stream.** It isn't - it's events. To iterate "rest periods" by time, slice with the labels and the timestamp arrays manually, or use `iter_labeled_windows`.
-- **Single-click sessions.** A session with two clicks (Rest + DOF0) yields exactly one usable trial after the skip-first heuristic. Long cycle-style recordings (rest 3 s → DOF 3 s → rest 3 s → DOF 3 s, etc.) yield many trials per session and produce robust models.
+- **Too little data.** `iter_labeled_windows` uses every nonnegative labeled segment long enough for a window; it does not skip the first trial. Record several sustained trials per class rather than relying on one short segment.

@@ -122,9 +122,8 @@ says, and cannot: change a device's build so a control becomes discrete and the 
 keeps working.
 
 A button is the one case that does not want the gate: [`ControlBus.select`][myogestic.controls.ControlBus.select]
-delivers a state immediately **and rebases** the DOF's debounce, so the predict ticks that
-follow do not re-fire what the click just did, even though they still carry the class from a
-sliding window that has not caught up.
+delivers a state immediately **and rebases** the DOF's debounce, so matching predict ticks do not re-fire what the click just did. A different predicted
+state must pass the debounce gate again.
 
 ## Who answers what
 
@@ -291,8 +290,8 @@ Prediction still reads `link.bus`; `poll()` belongs only in the UI loop. Call
     unavailable visualisation cannot disable a keyboard, robot, or another output.
 
 A device that answers `None` is distinct from one that answers with an empty list: `None` means
-"cannot say yet", and an empty manifest would mean "drives nothing", which resolves without
-error into a bus that drives nothing.
+"cannot say yet", and an empty manifest means "drives nothing". If the map names addresses absent from the
+combined manifest, resolution raises instead of building an empty bus.
 
 ## Common mistakes
 

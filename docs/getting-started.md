@@ -18,7 +18,7 @@ Extras add optional parts. Install one with `pip install "myogestic[grpc]"`.
 | `grpc` | the Virtual Hand control plane |
 | `brainflow` | BrainFlow devices |
 | `serial` | serial sources and outputs |
-| `zarrs` | the Rust-accelerated Zarr codec |
+| `zarrs` | the Rust-accelerated Zarr codec pipeline |
 
 ## Run a protocol
 
@@ -32,23 +32,25 @@ uv run --extra examples --extra grpc python examples/start_here/myocontrol.py
 ```
 
 !!! info "No amplifier?"
-    Each protocol picks its hardware from a dropdown, so the same file runs against the synthetic one when you have none.
+    In the **Connect** step, use the device picker to choose **Synthetic (no hardware)**, then press **Connect**. Set a participant ID before recording. The synthetic source uses sine waves by default; stochastic EMG is opt-in with `SyntheticSource(waveform="emg")`.
+
+The [browser playground](playground/) follows **Connect → Record → Train → Predict** with a synthetic EMG source and an LDA classifier. Takes stay in the tab's temporary filesystem; reloading clears them.
 
 ## Where your takes go
 
-Each take is one `.mg.zip`, named by participant, start time and the gestures recorded. Takes started while a model predicts go to `predictions/`.
+Each saved take is one `.mg.zip`, named by participant, start time and the gestures recorded or the run name. Takes started while a model predicts go to `predictions/`.
 
 ```text
 data/
 └── P-001/
     ├── recordings/   P-001_20261106-1412_R+F.mg.zip
     ├── predictions/  P-001_20261106-1430_guided.mg.zip
-    └── models/       P-001_20261106-1425_catboost.joblib
+    └── models/       P-001_20261106-1425_tuple.joblib
 ```
 
 ## Write your own
 
-This is the whole loop: a stream, a signal viewer and recording controls.
+This is the whole loop: a stream, a signal viewer and recording controls. Start an LSL outlet named `EMG`, then press **Connect** in the viewer to attach it.
 
 <!--docs:skip-->
 ```python
