@@ -1,23 +1,58 @@
 ---
 import { readFileSync } from 'node:fs';
+import { Image } from 'astro:assets';
+import page from '../../assets/paper-page1.webp';
 const readme = readFileSync(new URL('../../../../README.md', import.meta.url), 'utf8');
 const bibtex = readme.match(/```bibtex\n([\s\S]*?)\n```/)?.[1];
 if (!bibtex) throw new Error('README.md must contain the paper BibTeX');
+const pdf = 'https://www.science.org/doi/pdf/10.1126/sciadv.ads9150';
+const button = 'display: inline-flex; align-items: center; height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: var(--mg-home-control); color: var(--mg-text); text-decoration: none; font: 500 14px/1 var(--mg-font-body); cursor: pointer';
 ---
 
 <section class="pad-x" style="max-width: 1360px; margin: 0 auto; padding: 120px 40px 0">
-  <div style="display: flex; align-items: center; gap: 16px; font: 500 12px/1 var(--mg-font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent)"><span>Cite</span></div>
-  <div style="margin-top: 36px; display: flex; flex-wrap: wrap; gap: 24px 48px; align-items: flex-start; padding: 32px; background: var(--mg-canvas); border: 1px solid color-mix(in srgb, var(--mg-home-hairline) 55%, transparent); border-radius: 10px">
-    <div style="flex: 1 1 560px; min-width: 0">
-      <div style="font: 500 11.5px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--mg-brand-amber)">Science Advances · 2025</div>
-      <p style="margin: 14px 0 0; font-family: var(--mg-font-display); font-size: 34px; line-height: 1.15">MyoGestic: EMG interfacing framework for decoding multiple spared motor dimensions in individuals with neural lesions</p>
-      <p style="margin: 14px 0 0; font-size: 14px; color: color-mix(in srgb, var(--mg-home-ink) 70%, transparent)">Sîmpetru, Braun, Simon, März, Cnejevici, Souza de Oliveira, Weber, Walter, Franke, Höglinger, Prahm, Ponfick, Del Vecchio</p>
-      <p style="margin: 6px 0 0; font: 400 12.5px/1.5 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 60%, transparent)">Sci. Adv. 11(15), eads9150 · doi:10.1126/sciadv.ads9150</p>
+  <div style="font: 500 12px/1 var(--mg-font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: color-mix(in srgb, var(--mg-home-ink) 62%, transparent)">Cite</div>
+  <div class="cite">
+    <div class="cite-head">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px">
+        <span style="font: 600 18px/1 var(--mg-font-body); letter-spacing: -0.01em">Science Advances</span>
+        <span style="font: 500 11.5px/1 var(--mg-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--mg-brand-amber)">Research article · 2025</span>
+      </div>
+      <p class="cite-title">MyoGestic: EMG interfacing framework for decoding multiple spared motor dimensions in individuals with neural lesions</p>
     </div>
-    <div style="display: flex; flex-wrap: wrap; gap: 10px">
-      <button type="button" data-copy-bibtex data-bibtex={bibtex} style="height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: var(--mg-home-control); color: var(--mg-text); font: 500 14px/1 var(--mg-font-body); cursor: pointer">Copy BibTeX</button>
-      <a href="https://www.science.org/doi/abs/10.1126/sciadv.ads9150" style="display: inline-flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 8px; background: var(--mg-home-control); color: var(--mg-text); text-decoration: none; font-weight: 500; font-size: 14px">Read the paper</a>
+    <a class="cite-page" href={pdf} aria-label="Open the PDF, 14 pages">
+      <div class="cite-crop">
+        <Image src={page} widths={[520, 1040]} sizes="(max-width: 1100px) 100vw, 520px" format="webp" quality={80} alt="First page of the MyoGestic paper in Science Advances" loading="lazy" style="display: block; width: 100%; height: auto" />
+      </div>
+    </a>
+    <div class="cite-meta">
+      <p style="margin: 0; font-size: 15px; line-height: 1.55; color: color-mix(in srgb, var(--mg-home-ink) 78%, transparent)">Sîmpetru, Braun, Simon, März, Cnejevici, Souza de Oliveira, Weber, Walter, Franke, Höglinger, Prahm, Ponfick, Del Vecchio</p>
+      <p style="margin: 6px 0 0; font: 400 12.5px/1.5 var(--mg-font-mono); color: color-mix(in srgb, var(--mg-home-ink) 66%, transparent)">Sci. Adv. 11(15), eads9150 · doi:10.1126/sciadv.ads9150</p>
+      <div style="margin-top: 28px; display: flex; flex-wrap: wrap; gap: 10px">
+        <a href="https://www.science.org/doi/abs/10.1126/sciadv.ads9150" style={button}>Read the paper</a>
+        <a href={pdf} style={button}>PDF</a>
+        <button type="button" data-copy-bibtex data-bibtex={bibtex} style={button}>Copy BibTeX</button>
+      </div>
     </div>
   </div>
   <span class="sr-only" role="status" data-cite-status></span>
 </section>
+
+<style>
+  .cite { margin-top: 36px; display: grid; grid-template-columns: minmax(0, 1fr) 520px; grid-template-rows: auto 1fr; grid-template-areas: 'head page' 'meta page'; gap: 0 72px; }
+  .cite-head { grid-area: head; padding-top: 48px; }
+  .cite-meta { grid-area: meta; margin-top: 22px; }
+  .cite-title { margin: 22px 0 0; font-family: var(--mg-font-display); font-size: 50px; line-height: 1.06; }
+  .cite-page { grid-area: page; display: block; border-radius: 6px 6px 0 0; }
+  /* The whole width of page 1; only the bottom fades into the page. */
+  .cite-crop { aspect-ratio: 520 / 624; overflow: hidden; border-radius: 6px 6px 0 0; mask-image: linear-gradient(#000 calc(100% - 180px), transparent); }
+  @media (max-width: 1100px) {
+    .cite { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: 'head' 'page' 'meta'; }
+    .cite-head { padding-top: 0; }
+    .cite-page { margin-top: 28px; max-width: 520px; }
+    .cite-crop { aspect-ratio: 520 / 560; mask-image: linear-gradient(#000 calc(100% - 120px), transparent); }
+    .cite-meta { margin-top: 8px; }
+  }
+  @media (max-width: 760px) {
+    .cite-title { font-size: 32px; line-height: 1.1; }
+  }
+</style>

@@ -270,6 +270,22 @@ test('Hello EMG ships a sized WebP in tens of kilobytes', async ({ page }) => {
 });
 
 for (const width of [1440, 390]) {
+    test(`Cite shows the full width of page 1 and links it to the PDF at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(home);
+        const link = page.getByRole('link', { name: 'Open the PDF, 14 pages' });
+        await expect(link).toHaveAttribute('href', 'https://www.science.org/doi/pdf/10.1126/sciadv.ads9150');
+        const image = link.getByRole('img', { name: 'First page of the MyoGestic paper in Science Advances' });
+        await image.scrollIntoViewIfNeeded();
+        const shot = (await image.boundingBox())!;
+        const frame = (await link.boundingBox())!;
+        expect(Math.abs(shot.width - frame.width)).toBeLessThan(1);
+        expect(shot.x).toBeGreaterThanOrEqual(0);
+        expect(shot.x + shot.width).toBeLessThanOrEqual(width);
+    });
+}
+
+for (const width of [1440, 390]) {
     test(`axe: no serious or critical violations at ${width}px`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(home);
