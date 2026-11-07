@@ -512,7 +512,7 @@ class App:
 
         Creates ``base_path/<ID>/recordings/<ID>_<timestamp>/``, or
         ``.../predictions/...`` when the take starts while a model is
-        predicting, and starts appending each
+        predicting, writes initial metadata marked ``finished=False``, and starts appending each
         stream's data + timestamps to per-stream Zarr arrays. Streams
         whose ``info`` is still ``None`` (disconnected) are skipped -
         they won't be retroactively captured if they connect later in
@@ -546,6 +546,18 @@ class App:
         if self.ctx.state == AppState.IDLE:
             self.ctx.state = AppState.RECORDING
         self.ctx.session = Session(base_path=base_path, participant=self.ctx.participant, kind=kind)
+        controls = self.ctx.control_space
+        self.ctx.session.save_meta(
+            self.name,
+            class_names=list(self.ctx.class_names) or None,
+            class_codes=dict(self.ctx.class_codes),
+            control_space=controls.as_control_space() if controls is not None else None,
+            control_spaces={
+                name: control_map.as_control_space()
+                for name, control_map in self.ctx.control_spaces.items()
+            },
+            finished=False,
+        )
         n_ready = 0
         for name, stream in self.ctx.streams.items():
             if stream.info is None:
@@ -561,6 +573,7 @@ class App:
             if stream.notch_hz:
                 conditioning = self.ctx.session.extras.setdefault("conditioning", {})
                 conditioning[name] = {"notch_hz": int(stream.notch_hz)}
+        self.ctx.session._checkpoint_meta()
         if n_ready == 0:
             self.ctx.status_message = "No connected streams to record"
             self.ctx.log("Recording: no connected streams")
@@ -572,7 +585,8 @@ class App:
         """Stop the active recording and pack the session to a ``.mg.zip``.
 
         Detaches every stream and freezes the session on the calling thread, then on a
-        daemon thread runs `finalize_hooks`, writes ``meta.json`` and ``labels.json``,
+        daemon thread runs `finalize_hooks`, updates ``meta.json`` with ``finished=True``
+        and writes ``labels.json``,
         packs the folder into ``<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip`` (the folder is kept
         until the pack succeeds) and registers the archive with the session browser. ``wait=True``
         does that work inline instead — for tests, and for shutdown, where a daemon would
@@ -669,8 +683,8 @@ class App:
         take the operator threw away — a false start, a bad trial. Detaches every
         stream, removes the session folder, and returns the state to ``"idle"`` when
         the take was started from idle (a take under ``"predicting"`` leaves the state
-        alone). Nothing is written to ``meta.json`` and no archive is produced, so a
-        discarded recording leaves no trace to clean up later.
+        alone). Removes the take's arrays and initial metadata without producing an
+        archive, so a discarded recording leaves no trace to clean up later.
 
         Refuses if no recording is open.
         """

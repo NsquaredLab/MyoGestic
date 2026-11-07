@@ -41,7 +41,7 @@ def test_meta_has_duration_and_class_seconds(tmp_path, monkeypatch):
     assert meta["duration_s"] == 10.0
     assert isinstance(meta["duration_s"], float)
     assert meta["class_seconds"] == {"Rest": 4.0, "Fist": 6.0}
-    assert meta["schema_version"] == 3
+    assert meta["schema_version"] == 4
 
 
 @pytest.mark.parametrize(
