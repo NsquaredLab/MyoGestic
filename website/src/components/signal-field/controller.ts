@@ -116,7 +116,7 @@ export function mountSignalField(canvas: HTMLCanvasElement, opts: FieldOptions =
   const software = /SwiftShader|llvmpipe|Software|Microsoft Basic Render/i.test(info);
   let tier = software ? 1 : 0;
   let state = createFieldState(tier === 0 ? opts.channels ?? 64 : 32, tier === 0 ? 480 : 240);
-  const samplesPerFrame = Math.max(1, Math.min(state.samples, Math.round(opts.samplesPerFrame ?? 2)));
+  const samplesPerFrame = Math.max(1, Math.min(state.samples, Math.round(opts.samplesPerFrame ?? 1)));
   const autoCycleMs = Math.max(1, opts.autoCycleMs ?? 2800);
   const rand = mulberry32(7);
   // Read the inherited token once, before rendering or any frame is scheduled.

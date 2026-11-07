@@ -1,4 +1,4 @@
-import { channelColor, FIELD_GAIN, type FieldState } from './field';
+import { channelColor, FIELD_GAIN, FIELD_HOT, type FieldState } from './field';
 import { FIELD_BACKGROUND_FALLBACK, type Renderer } from './gl';
 
 export function createCanvas2DRenderer(
@@ -24,7 +24,12 @@ export function createCanvas2DRenderer(
     const rgb = channelColor(c / Math.max(1, channels - 1));
     // Join into flat strings now. Lazy template-string ropes can otherwise
     // allocate when Canvas first reads a new colour during a gesture change.
-    for (let a = 0; a <= 32; a++) styles.push(['rgba(', rgb[0], ',', rgb[1], ',', rgb[2], ',', a / 32, ')'].join(''));
+    // Per-channel heat by activation: brighter and whiter as the channel works harder.
+    for (let a = 0; a <= 32; a++) {
+      const t = a / 32;
+      const mix = (k: number) => Math.round(rgb[k] + (FIELD_HOT[k] - rgb[k]) * 0.8 * t * t);
+      styles.push(['rgba(', mix(0), ',', mix(1), ',', mix(2), ',', 0.22 + 0.6 * t, ')'].join(''));
+    }
   }
   // Fixed-point coordinates retain 1/256 CSS-pixel precision while passing
   // integers across the Canvas binding.
@@ -76,7 +81,7 @@ export function createCanvas2DRenderer(
     cursor[0] = s.head | 0;
     const count = Math.min(samples, _count);
     for (let c = 0; c < channels; c++) {
-      alphas[c] = ((0.22 + 0.6 * s.act[c]) * 32 + 0.5) | 0;
+      alphas[c] = Math.min(32, Math.max(0, (s.act[c] * 32 + 0.5) | 0));
       for (let i = 0; i < count; i++) {
         const index = c * samples + (_from + i) % samples;
         pixels[index] = (s.data[index] * amplitude) | 0;

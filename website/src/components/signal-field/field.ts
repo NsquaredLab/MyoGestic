@@ -105,6 +105,10 @@ export function setGesture(s: FieldState, gesture: Gesture): void {
 
 /** Trace height in channel lanes per unit of signal: bulk activity stays inside its lane. */
 export const FIELD_GAIN = 0.26;
+/** A trace brightens toward FIELD_HOT as its swing grows from HEAT_LOW to HEAT_HIGH lanes. */
+export const HEAT_LOW = 0.08;
+export const HEAT_HIGH = 0.5;
+export const FIELD_HOT: [number, number, number] = [255, 232, 248];
 
 // 120 columns/s, point sampling. Single-gesture takes lack transition cues,
 // so retain the 18 ms envelope constants. All mutable noise lives in buffers.
