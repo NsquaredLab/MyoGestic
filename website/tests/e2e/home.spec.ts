@@ -261,7 +261,10 @@ test('links and package version match the integrated site', async ({ page }) => 
         ['API', '/MyoGestic/api/'],
         ['Changelog', 'https://github.com/NsquaredLab/MyoGestic/blob/main/CHANGELOG.md'],
     ]) await expect(nav.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', href);
-    await expect(page.getByRole('link', { name: 'Open the Playground', exact: true })).toHaveAttribute('href', '/MyoGestic/playground/');
+    // The hero and the Playground section both offer it under the same name.
+    const playgroundLinks = page.getByRole('link', { name: 'Open the Playground', exact: true });
+    await expect(playgroundLinks).toHaveCount(2);
+    for (const link of await playgroundLinks.all()) await expect(link).toHaveAttribute('href', '/MyoGestic/playground/');
     await expect(page.getByRole('link', { name: 'Get started', exact: true })).toHaveAttribute('href', '/MyoGestic/getting-started/');
     await expect(page.getByRole('link', { name: 'Search ⌘K in the docs' })).toHaveAttribute('href', '/MyoGestic/getting-started/');
     const version = readFileSync('../pyproject.toml', 'utf8').match(/^version\s*=\s*"([^"]+)"/m)![1];
