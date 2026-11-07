@@ -140,7 +140,8 @@ layout = Layout(
         log
         status
         """,
-        row_height=[Px(52), Fr(2), Fr(3), Fr(1.5), Px(110), Px(26)],
+        # Leave room for the wrapped gesture tiles and the full take action.
+        row_height=[Px(52), Fr(2.4), Fr(4.5), Fr(1.5), Px(60), Px(26)],
         bare=("header", "status"),
     ),
     breakpoint=Px(1100),

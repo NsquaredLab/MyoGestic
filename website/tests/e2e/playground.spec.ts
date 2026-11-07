@@ -32,15 +32,11 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
                 ? resolve(process.env.MG_PLAYGROUND_SCREEN_DIR, name) : testInfo.outputPath(name) });
         };
         const panelClick = async (x: number, y: number) => {
-            const [left, top] = (await state(page)).panels.step;
-            await page.mouse.click(left + x, top + y);
-        };
-        const scrollStep = async (bottom: boolean) => {
-            if (!phone) return;
             const [left, top, width, height] = (await state(page)).panels.step;
-            await page.mouse.move(left + width - 30, top + height / 2);
-            await page.mouse.wheel(0, bottom ? 1000 : -1000);
-            await page.waitForTimeout(150);
+            expect(x).toBeLessThan(width);
+            expect(y).toBeLessThan(height);
+            expect(top + y).toBeLessThan(viewport.height);
+            await page.mouse.click(left + x, top + y);
         };
         const openStep = async (index: number) => {
             const current = (await state(page)).step;
@@ -86,12 +82,10 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
         await openStep(1);
         await capture('record');
         for (const [index, gesture] of ['Rest', 'Fist', 'Pinch'].entries()) {
-            await scrollStep(false);
             await panelClick(phone ? [90, 250, 90][index] : [76, 200, 324][index], phone && index === 2 ? 130 : 78);
             await expect.poll(async () => (await state(page)).gesture).toBe(gesture);
             await expect.poll(async () => (await state(page)).take).toBe('idle');
-            await scrollStep(true);
-            await panelClick(phone ? 170 : 200, phone ? 230 : 224); // timed Record
+            await panelClick(phone ? 170 : 200, phone ? 275 : 224); // timed Record
             await expect.poll(async () => (await state(page)).take).toBe('warmup');
             await capture(`record-${gesture.toLowerCase()}-warmup`);
             await expect.poll(async () => (await state(page)).recording).toBe(true);
@@ -108,7 +102,6 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
         }
         await capture('record-saved');
         await openStep(2);
-        await scrollStep(false);
         await capture('train');
         await panelClick(phone ? 170 : 200, 75); // public TrainButton
         await expect.poll(async () => (await state(page)).trained).toBe(true);
@@ -122,14 +115,12 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
         await capture('trained');
 
         await openStep(3);
-        await scrollStep(false);
         await capture('predict');
         await panelClick(phone ? 170 : 200, 47); // public PredictButton
         await expect.poll(async () => (await state(page)).state).toBe('predicting');
         await expect.poll(async () => (await state(page)).prediction).toBe('Pinch');
-        await scrollStep(true);
         for (const [index, gesture] of ['Rest', 'Fist', 'Pinch'].entries()) {
-            await panelClick([38, 82, 132][index], phone ? 241 : 255);
+            await panelClick([38, 82, 132][index], 255);
             await expect.poll(async () => (await state(page)).gesture).toBe(gesture);
             await expect.poll(async () => (await state(page)).prediction, {
                 timeout: 1500, intervals: [50],
