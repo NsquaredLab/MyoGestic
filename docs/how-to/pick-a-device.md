@@ -33,7 +33,7 @@ the numbered procedure — which button to hold, which network to join — and
 [Connect OTB devices](connect-otb-devices.md) has the detail behind it.
 
 The dot in the panel header is the connection state — grey until you connect,
-green once samples are arriving, red if the attempt failed. Hover it for the
+green once connected, red if the attempt failed. Hover it for the
 reason. The action area shows connection progress or live geometry; a failed
 attempt leaves its error below Connect.
 
@@ -89,6 +89,10 @@ from myogestic.sources import SyntheticSource
 stream = Stream("emg", source=SyntheticSource(n_channels=8), window_ms=1000)
 stream.reconnect()
 ```
+
+The default carrier is sine. Pass `SyntheticSource(n_channels=8, waveform="emg")`
+for band-limited stochastic EMG-like signals. The picker's built-in synthetic
+entry uses the default sine carrier.
 
 ## Knobs you can turn while it streams
 
@@ -205,8 +209,9 @@ be worth configuring statically, so the flag is yours to set.
 
 Ring-buffer memory scales with rate × channels, and the dropdowns put the
 extremes one click apart. A `Stream` allocates roughly
-`3 × fs × buffer_s × channels × 4` bytes, so the Quattrocento's top setting
-(384 ch @ 10240 Hz) needs ~470 MB at the default 10 s buffer and ~2.8 GB at 60 s.
+`4 × fs × buffer_s × channels × 4` bytes for float32 samples, plus timestamps
+and display workspaces. The Quattrocento's top setting (384 ch @ 10240 Hz)
+needs at least ~630 MB at the default 10 s buffer and ~3.8 GB at 60 s.
 
 The default is 10 s. Raise `buffer_ms` for a specific recording, not by habit.
 
