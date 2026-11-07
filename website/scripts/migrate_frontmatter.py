@@ -10,7 +10,7 @@ SLUGS = {"images/README.md": "images", "reference/otb/README.md": "reference/otb
 
 def migrate(path: Path, relative: str) -> bool:
     """Migrate a page without changing its body, existing metadata or code blocks."""
-    source = path.read_text()
+    source = path.read_text(encoding="utf-8")
     frontmatter = ""
     body = source
     if source.startswith("---\n"):

@@ -29,7 +29,7 @@ def public(path: str) -> bool:
 
 def directives(path: Path) -> list[dict]:
     """Read standalone directives and their indented YAML configuration."""
-    lines = path.read_text().splitlines()
+    lines = path.read_text(encoding="utf-8").splitlines()
     result = []
     fence = None
     index = 0
@@ -148,7 +148,7 @@ def build_api() -> dict:
     # Keep the frozen inventory's actual destinations, including undocumented
     # constants and any ancestors needed to reach them through a directive.
     legacy_targets = set()
-    for line in (ROOT / "website/tests/legacy-symbols.txt").read_text().splitlines():
+    for line in (ROOT / "website/tests/legacy-symbols.txt").read_text(encoding="utf-8").splitlines():
         name, _, uri = line.split("\t")
         target = uri.split("#")[1].replace("$", name)
         parts = target.split(".")
@@ -234,7 +234,7 @@ def main() -> None:
     """Write deterministic, build-local JSON from the checked-out source."""
     data = build_api()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    OUTPUT.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Generated {len(data['symbols'])} API symbols and {len(data['inventory'])} references in {OUTPUT}")
 
 
