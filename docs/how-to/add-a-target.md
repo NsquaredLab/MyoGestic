@@ -1,10 +1,10 @@
 ---
 title: "Drive your own device"
 ---
-Anything MyoGestic moves — a prosthesis on a serial port, a motor controller, a cursor, a
-robot arm — is a **target**: a plain object with three methods that you hand to a
-[`ControlBus`][myogestic.controls.ControlBus]. Nothing registers, nothing subclasses,
-nothing is discovered by name.
+A target drives a prosthesis, motor controller, cursor or robot arm. Implement
+its three methods and pass the object to a
+[`ControlBus`][myogestic.controls.ControlBus]. The target is a plain object.
+It needs no registration, subclassing or discovery by name.
 
 ## Run it first
 
@@ -15,7 +15,7 @@ needs no hardware:
 uv run python examples/synthetic/my_device.py
 ```
 
-## What you should see
+## Expected output
 
 ```
 a frame, as @pipeline.predict would push it:
@@ -30,11 +30,10 @@ teardown, which rests every control first:
   stopped
 ```
 
-Three things happened without you writing them. `5.0` arrived at your device as `1.0`, because
-it declared `hi=1.0`. A `NaN` arrived as `0.0` rather than as full deflection. And every
-control was returned to rest *before* teardown, so the device does not keep its last grip.
-That is [`ControlBus`][myogestic.controls.ControlBus], and it is the reason a target is three
-methods rather than thirty.
+[`ControlBus`][myogestic.controls.ControlBus] clamps `5.0` to `1.0` using the declared `hi=1.0`
+and replaces `NaN` with `0.0`. It returns every control to rest before teardown
+so the device releases its last grip. The bus supplies these checks, keeping
+clamping, invalid-value handling and resting out of the three target methods.
 
 ## Change these three things
 
@@ -42,9 +41,9 @@ Copy `my_device.py` next to your own code and edit the three marked lines:
 
 | | what | where |
 |---|---|---|
-| **1** | **Name your controls.** Two or more dotted lowercase segments; the first is your namespace. Name a *direction*, so `+1` means something: `grip.close`, not `grip.motor`. | `ADDRESSES` |
-| **2** | **Drive your hardware.** Replace the `print` with your call: `self._port.write(...)`, `self._motors.set(...)`, an MQTT publish, anything. | in `send` |
-| **3** | **Release your hardware.** Close the port, disconnect, power down. | in `stop` |
+| 1 | Name your controls. Use two or more dotted lowercase segments; the first is your namespace. Name the direction of `+1`, as in `grip.close`; `grip.motor` names a component. | `ADDRESSES` |
+| 2 | Drive your hardware. Replace the `print` with a call to `self._port.write(...)`, `self._motors.set(...)` or an MQTT publish. | in `send` |
+| 3 | Release your hardware. Close the port, disconnect, power down. | in `stop` |
 
 Nothing else has to change. If your device only moves one way, declare `lo=0.0` in
 `capabilities` and MyoGestic will refuse a map that asks for the other direction.
@@ -75,10 +74,10 @@ class Target(Protocol):
     def capabilities(self) -> Sequence | None: ...  # optional
 ```
 
-`bind` runs when the bus is constructed, on the caller's thread, and **may raise**. Refuse a configuration you cannot
+`bind` runs when the bus is constructed, on the caller's thread, and may raise. Refuse a configuration you cannot
 drive there, before sending any frames. `send` runs on the thread calling the bus
-(predict ticks, UI selections or teardown) and **must not raise**; every continuous value it gets is already finite and inside its declared range,
-because [`ControlBus`][myogestic.controls.ControlBus] sanitised the frame before fanning it
+(predict ticks, UI selections or teardown) and must not raise; every continuous value it gets is already finite and inside its declared range,
+because [`ControlBus`][myogestic.controls.ControlBus] sanitized the frame before fanning it
 out.
 
 The two optional members are what the bus asks for by name:
@@ -88,14 +87,14 @@ The two optional members are what the bus asks for by name:
 | `claims` | "assume it drives everything" | the aliases it drives, so the bus can catch a control nothing drives |
 | `capabilities()` | "the caller already knows my vocabulary" | what addresses you export, so a map can be resolved against you |
 
-**A route's `weight` is yours to apply, and before your own range.** The bus delivers the
-un-weighted value; compute `min(hi, max(lo, weight * value))`, as `RemoteTarget` does.
+Apply a route's `weight` before clamping to your own range. The bus delivers the
+unweighted value; compute `min(hi, max(lo, weight * value))`, as `RemoteTarget` does.
 Ignoring `weight` silently discards every gain in the map, including the `weight = -1.0` that
 inverts an axis.
 
 ## A complete target
 
-The whole of a target that moves a cursor.
+This target moves a cursor.
 
 <!--docs:run-->
 ```python
@@ -153,8 +152,7 @@ class CursorTarget:
 
 ## Driving it
 
-Same three lines as any other target. `connect_controls` asks each target what it exports,
-resolves the map against the answers, and builds the bus:
+`connect_controls` resolves the map against each target's exported controls and builds the bus:
 
 <!--docs:run-->
 ```python
@@ -195,17 +193,18 @@ link.stop()  # rests every target and clears the bus
 Targets are user-owned. In an app, register `link.stop()` with
 `app.cleanup_hooks` so normal shutdown rests and closes them too.
 
-Call `ensure()` from anywhere that can afford to block: a UI handler, a training thread. Never
-from `@pipeline.predict`, which has its own thread and a deadline - read `link.bus` there and
-no-op while it is `None`.
+Call `ensure()` from a UI handler or training thread that can wait for it.
+Never call it from `@pipeline.predict`; it can block.
+In `@pipeline.predict`, read `link.bus` and skip output while it is `None`
+to keep the predict thread within its deadline.
 
 If a UI loop should reconnect automatically, wrap the link in
 [`ControlLinkConnector`][myogestic.controls.ControlLinkConnector] and call its non-blocking
 `poll()` from that loop. Resolution is atomic across all targets in one link; use separate maps
 and links when one output should keep working while another is unavailable.
 
-If your target's vocabulary is fixed and you have the capabilities in hand already, build
-the bus directly instead; `connect_controls` is only the lazy-resolve convenience:
+For a fixed vocabulary with known capabilities, build the bus directly.
+`connect_controls` is a convenience for lazy resolution.
 
 ```python
 from myogestic.controls import ControlBus, resolve
@@ -216,7 +215,7 @@ bus = ControlBus(controls, targets=[cursor], hz=32)
 
 ## Addresses are yours to name
 
-A control map's right-hand side is an **address**, and its first segment namespaces it:
+A control map's right-hand side is an address, and its first segment namespaces it:
 `vhi.prediction.index`, `keyboard.tap.function.f1`, `cursor.x`. Pick a segment nobody else uses
 and the same map can drive your device and a Virtual Hand at once, with one `ControlBus` and
 one list of targets:
@@ -225,13 +224,12 @@ one list of targets:
 bus = ControlBus(controls, targets=[cursor, vhi_target], hz=32)
 ```
 
-The bus checks that *someone* claims every alias, so an address no target drives is caught at
-bind. Uncaught, it would look like a control that works and holds still.
+The bus checks at bind that a target claims every alias, catching addresses that no target drives.
+Without that check, an undriven control could appear to work while the device stays still.
 
-## A real one: a servo hand
+## A servo hand target
 
-A cursor has two controls and no mechanism. `examples/synthetic/servo_hand.py` is a real
-one - six servos on a serial port, runnable with no hardware:
+`examples/synthetic/servo_hand.py` drives six servos on a serial port and can run without hardware:
 
 ```bash
 uv run python examples/synthetic/servo_hand.py
@@ -241,19 +239,18 @@ uv run python examples/synthetic/servo_hand.py
 --8 < --"examples/synthetic/servo_hand.py"
 ```
 
-Three things in it carry the weight: `hand.thumb` drives **two** servos, so the coupling stays
-out of the map; `frame` iterates `SERVOS` by name, so the wire order is the device's; and
-`stop` rests before it closes.
+`hand.thumb` couples two servos in the target, keeping that coupling out of the map.
+`frame` iterates `SERVOS` by name to preserve the device's wire order. `stop` returns the hand to rest before closing.
 
-## What the standard asks of you
+## Control value convention
 
-A control value is **signed and normalised**: `[-1, 1]`, `0` at rest, and `+1` means the
+A control value is signed and normalized to `[-1, 1]`, with `0` at rest. `+1` means the
 direction the name denotes. `cursor.x` at `+1` should move right if you called it *right*.
 A one-way control declares `lo=0.0` instead.
 
-Getting a sign backwards is the one mistake that survives every test you are likely to write -
+Check the sign by watching the device move.
 [Concepts › Controls](../concepts/controls.md#the-one-convention-a-device-may-not-redefine)
-has the reason. Check it against something outside the loop: a person looking at the device.
+explains why tests alone can miss a sign error.
 
 ## See also
 

@@ -261,12 +261,15 @@ test('links and package version match the integrated site', async ({ page }) => 
         ['API', '/MyoGestic/api/'],
         ['Changelog', 'https://github.com/NsquaredLab/MyoGestic/blob/main/CHANGELOG.md'],
     ]) await expect(nav.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', href);
-    await expect(page.getByRole('link', { name: 'Open the Playground', exact: true })).toHaveAttribute('href', '/MyoGestic/playground/');
+    // The hero and the Playground section both offer it under the same name.
+    const playgroundLinks = page.getByRole('link', { name: 'Open the Playground', exact: true });
+    await expect(playgroundLinks).toHaveCount(2);
+    for (const link of await playgroundLinks.all()) await expect(link).toHaveAttribute('href', '/MyoGestic/playground/');
     await expect(page.getByRole('link', { name: 'Get started', exact: true })).toHaveAttribute('href', '/MyoGestic/getting-started/');
     await expect(page.getByRole('link', { name: 'Search ⌘K in the docs' })).toHaveAttribute('href', '/MyoGestic/getting-started/');
     const version = readFileSync('../pyproject.toml', 'utf8').match(/^version\s*=\s*"([^"]+)"/m)![1];
     await expect(nav.getByRole('link', { name: /GitHub/ })).toHaveText(`GitHub · ${version}`);
-    await expect(page.getByText('Behind this page: 64 channels of synthetic EMG, drawn live')).toBeVisible();
+    await expect(page.getByText('The background shows 64 channels of synthetic EMG.')).toBeVisible();
 });
 
 test('install and BibTeX buttons copy their exact content and announce success', async ({ page, context }) => {
@@ -279,6 +282,19 @@ test('install and BibTeX buttons copy their exact content and announce success',
     const bibtex = readFileSync('../README.md', 'utf8').match(/```bibtex\n([\s\S]*?)\n```/)![1];
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(bibtex);
     await expect(page.locator('[data-cite-status]')).toHaveText('Copied');
+});
+
+test('protocol cards copy their exact run command and link to real guides', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto(home);
+    const button = page.getByRole('button', { name: 'Copy the myocontrol.py command' });
+    await button.click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+        .toBe('uv run --extra examples --extra grpc python examples/start_here/myocontrol.py');
+    await expect(button).toHaveText('Copied');
+    await expect(page.getByRole('link', { name: 'Read the guide →' })).toHaveCount(3);
+    await expect(page.getByRole('link', { name: 'Quattrocento', exact: true }))
+        .toHaveAttribute('href', '/MyoGestic/how-to/connect-otb-devices/#quattrocento-ethernet');
 });
 
 test('search shortcut follows the documented docs fallback', async ({ page }) => {

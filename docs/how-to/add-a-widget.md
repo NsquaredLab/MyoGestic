@@ -1,7 +1,8 @@
 ---
 title: "Add a custom widget"
 ---
-A widget is a class with a `.ui()` method. You construct it once, then call `.ui(...)` inside `@app.ui` each frame. There's no list to register with, no base class to subclass, no decorator.
+A widget is a class with a `.ui()` method. Construct it once, then call `.ui(...)` inside `@app.ui` each frame.
+There is no registration list, base class or decorator.
 
 ## The simplest widget
 
@@ -16,7 +17,7 @@ class HelloWidget:
             ctx.status_message = "reset clicked"
 ```
 
-Use it — build once, render each frame:
+Build it once and render it each frame:
 
 ```python
 hello = HelloWidget()
@@ -29,11 +30,9 @@ def ui(ctx):
     viewer.ui(ctx)
 ```
 
-That's the whole pattern.
-
 ## A widget that reads streams
 
-Configuration (the stream name) goes to `__init__`; the live `ctx` is passed to `.ui()` each frame:
+Pass the stream name to `__init__` and the live `ctx` to `.ui()` each frame:
 
 ```python
 import numpy as np
@@ -65,9 +64,9 @@ class ChannelRmsBar:
 
 `bar = ChannelRmsBar("emg")` once, then `bar.ui(ctx)` inside `@app.ui`, and you have a live RMS bar chart.
 
-## When you need state
+## Persistent state
 
-Persistent UI state — selected channels, scroll offset, popup open/closed — lives as instance attributes. Because you construct the widget once and keep the instance, the state survives across frames without any work on your part:
+Store persistent UI state as instance attributes. Keeping the widget instance preserves selected channels, scroll offset and popup state across frames:
 
 ```python
 class ChannelPicker:
@@ -86,10 +85,10 @@ class ChannelPicker:
                 self._visible = self._visible | {ch} if on else self._visible - {ch}
 ```
 
-Two independent `ChannelPicker("emg")` and `ChannelPicker("imu")` instances keep separate state automatically — they're separate objects.
+`ChannelPicker("emg")` and `ChannelPicker("imu")` keep separate state.
 
 !!! tip "Sharing state across widgets"
-    A few caches are deliberately shared — e.g. the stream discovery/scan cache is shared by `SignalViewer`, `RawSignalViewer`, and `StreamPanel` so a scan started in one shows up in the others. Those stay in a module-level dict keyed by stream name. Reach for that only when widgets genuinely need to coordinate; instance attributes are the default.
+    `SignalViewer`, `RawSignalViewer` and `StreamPanel` share a discovery cache keyed by stream name, so a scan in one appears in the others. Use a module-level dict for shared state and instance attributes for other state.
 
 ## Splitting a widget across files
 
@@ -114,11 +113,11 @@ from myogestic.widgets.my_widget import MyWidget
 __all__ = [..., "MyWidget"]
 ```
 
-Now `from myogestic.widgets import MyWidget` works.
+`from myogestic.widgets import MyWidget` imports the widget.
 
 ## Reading from `Pipeline` predictions
 
-For widgets that visualise model output, hold the `pipeline` in the constructor (it's a stable object) and read its live `predictions` in `.ui()`:
+For widgets that visualize model output, store the stable `pipeline` object in the constructor and read its live `predictions` in `.ui()`:
 
 ```python
 class SimplePrediction:
@@ -136,14 +135,14 @@ class SimplePrediction:
         imgui.text(f"Class: {pred.get('class')}")
 ```
 
-Read scalar fields directly. If you need a coherent snapshot of multiple fields (rare), `dict(self._pipeline.predictions)` copies cheaply.
+Read scalar fields directly. Use `dict(self._pipeline.predictions)` for a coherent snapshot of multiple fields.
 
 ## Common mistakes
 
-See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
+See [Troubleshooting](../troubleshooting.md) for errors by symptom.
 
-- **Constructing the widget inside `@app.ui`.** `MyWidget().ui(ctx)` in the frame loop rebuilds it every frame and resets its state. Build it once, outside the render function.
-- **Holding a removed `Stream`.** Apps can add or remove streams while running. Re-read `ctx.streams.get(name)` each frame in `.ui(ctx)` if your widget must follow those changes.
-- **Computing in the widget.** Heavy compute (FFT, convolution, model evaluation) belongs on the predict thread. Cache results on `ctx` or your own object; `.ui()` just reads the cached value.
-- **Calling `imgui.set_next_window_size(...)` inside a `Grid` cell.** The grid manages sizes; per-window calls fight it. If you need a non-grid window, render outside the grid and use `popout_panel` or `imgui.begin/end` directly.
-- **Using mutable defaults in the constructor.** Standard Python pitfall: `def __init__(self, names=[])` shares the default list across instances. Use `names: list[str] | None = None` and `if names is None: names = []` inside.
+- Constructing the widget inside `@app.ui`. `MyWidget().ui(ctx)` in the frame loop rebuilds it every frame and resets its state. Build it once, outside the render function.
+- Holding a removed `Stream`. Apps can add or remove streams while running. Re-read `ctx.streams.get(name)` each frame in `.ui(ctx)` if your widget must follow those changes.
+- Computing in the widget. Run FFT, convolution and model evaluation on the predict thread. Cache results on `ctx` or your own object for `.ui()` to read.
+- Calling `imgui.set_next_window_size(...)` inside a `Grid` cell. The grid manages sizes; per-window calls fight it. If you need a non-grid window, render outside the grid and use `popout_panel` or `imgui.begin/end` directly.
+- Using mutable defaults in the constructor. `def __init__(self, names=[])` shares the default list across instances. Use `names: list[str] | None = None` and `if names is None: names = []` inside.

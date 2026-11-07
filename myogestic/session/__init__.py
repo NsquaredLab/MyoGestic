@@ -1,7 +1,7 @@
 """Public session API.
 
-The implementation is split across small private modules so this file stays
-easy to scan while preserving the original import path.
+Small private modules implement the session lifecycle and storage helpers.
+This public module keeps the original import path and is easy to scan.
 """
 
 from myogestic.session._core import (
@@ -15,7 +15,7 @@ from myogestic.session._core import (
     participant_dir,
     recorded_time,
 )
-from myogestic.session._io import open_session_store
+from myogestic.session._io import open_session_store, recover_session
 from myogestic.session._windows import (
     SessionSplit,
     iter_aligned_windows,
@@ -36,6 +36,7 @@ __all__ = [
     "participant_dir",
     "recorded_time",
     "open_session_store",
+    "recover_session",
     "iter_labeled_windows",
     "iter_aligned_windows",
     "iter_target_windows",

@@ -264,6 +264,8 @@ def train(data: TrainingData) -> L.LightningModule:
     """
     log = pipeline.train_log
     log.clear()
+    if not data.classes:
+        raise ValueError("No classes selected — select at least one class before training.")
     log.append(f"Training from {len(data.paths)} sessions...")
 
     # Unreadable sessions come back rather than being logged inside the helper, so the
@@ -297,7 +299,7 @@ def train(data: TrainingData) -> L.LightningModule:
         "emg",
         WINDOW_MS,
         HOP_MS,
-        classes=data.classes if data.classes else None,
+        classes=data.classes,
     ):
         target = np.ones(N_DOF, dtype=np.float32) if ci == 1 else np.zeros(N_DOF, dtype=np.float32)
         X_list.append(sliding_rms(emg_window))

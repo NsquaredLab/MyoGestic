@@ -38,10 +38,11 @@ log = logging.getLogger(__name__)
 if _ZARR_V3 and find_spec("zarrs") is not None:
     zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 
-#: ``meta.json`` schema version. Bump whenever the on-disk shape of a per-stream
-#: entry changes. Readers must stay tolerant of older, unversioned meta.json files
+#: ``meta.json`` schema version. Bump whenever its on-disk shape changes.
+#: Version 4 introduces the optional ``finished`` flag; older files remain readable.
+#: Readers must stay tolerant of older, unversioned meta.json files
 #: (see `open_session_store`), so this is informational rather than enforced.
-_META_SCHEMA_VERSION = 3
+_META_SCHEMA_VERSION = 4
 
 #: Value of ``meta.json``'s ``pose_convention``, stamped on every session this build
 #: writes. Signed and normalised, ``+1`` in the direction the control's address names —
@@ -93,8 +94,8 @@ def _robust_rmtree(path: Path, *, retries: int = 5, delay_s: float = 0.1) -> Non
     """``shutil.rmtree`` that tolerates Windows file-handle lag.
 
     On POSIX the first ``rmtree`` of a zarr folder always succeeds (open files can
-    be unlinked). On Windows a just-written chunk - or an antivirus scan - can
-    briefly hold a handle, so deletion raises ``PermissionError`` (WinError 32).
+    be unlinked). On Windows a recently written chunk or antivirus scan can
+    briefly hold a handle, causing ``PermissionError`` with WinError 32.
     Force a GC to drop any lingering zarr handles, clear the read-only bit
     Windows sets on locked files, and retry a few times before giving up.
     """
@@ -121,20 +122,18 @@ def _install_windows_zarr_atomic_write_retry(*, retries: int = 10, delay_s: floa
     over the destination (``zarr.storage._local._atomic_write``). On POSIX that
     rename never fails; on Windows the underlying ``MoveFileEx`` raises
     ``PermissionError`` (WinError 5 / 32) whenever another handle to the file is
-    still open at that instant - an antivirus scan of the just-written chunk, the
-    search indexer, or the OS not having released the handle yet. A high-rate
-    multi-stream recording hits it reliably: every [`Session.append`][] grows the
-    arrays, each trailing-chunk rewrite is another rename, and losing the race
-    once crashes the whole recording.
+    still open, for example during antivirus scanning, search indexing or an OS
+    delay in releasing the handle. High-rate multi-stream recording repeatedly
+    grows arrays through [`Session.append`][] and renames trailing chunks. A
+    single lost rename race crashes the recording.
 
-    The retry has to live at the rename itself: [`Session.append`][] ->
-    ``zarr.Array.append`` cannot be retried safely because it resizes (persists
-    the new shape) *before* writing the chunks, so a retry after a partial
-    failure would write at the wrong offset and corrupt the array.
+    Retry the rename itself. Retrying ``zarr.Array.append`` is unsafe because
+    it persists the resized shape before writing chunks; a partial failure
+    would leave the retry writing at the wrong offset and corrupt the array.
 
-    The proper fix belongs upstream in zarr; this wraps ``_atomic_write`` with a
-    bounded back-off until then. Windows-only, and a guarded no-op if zarr's
-    internals move, so it can never break import.
+    The fix belongs upstream in zarr. This Windows-only wrapper applies bounded
+    back-off to ``_atomic_write`` in the meantime. If zarr's internals change,
+    the guard skips the patch so it cannot break import.
     """
     if sys.platform != "win32":
         return
@@ -177,7 +176,7 @@ _install_windows_zarr_atomic_write_retry()
 
 @dataclass
 class LabelEvent:
-    """One entry in a session's label track: "at LSL time T, the user picked class N".
+    """A class selection at an LSL timestamp in the session's label track.
 
     Recorded whenever the user clicks a class button in
     [`RecordingControls`][myogestic.widgets.RecordingControls]. The label track is a
@@ -240,10 +239,9 @@ ARCHIVE_SUFFIX = ".mg.zip"
 def _slug(name: str) -> str:
     """Filename-safe form of a user-typed session name, or ``""`` if nothing survives.
 
-    The result is concatenated into a path, so this is a **whitelist**: anything
-    outside ASCII alphanumerics, ``-`` and ``_`` becomes a dash. That rules out
-    path separators, ``..`` and non-portable characters by construction rather
-    than by remembering to check for each of them.
+    The result is concatenated into a path. Use a whitelist of ASCII
+    alphanumerics, ``-`` and ``_``; replace everything else with dashes. This
+    excludes path separators, ``..`` and non-portable characters.
     """
     kept = "".join(c if c.isascii() and (c.isalnum() or c in "-_") else "-" for c in name)
     return "-".join(filter(None, kept.split("-")))[:_SLUG_MAX].strip("-_")
@@ -255,7 +253,7 @@ STAMP_FORMAT = "%Y%m%d-%H%M"
 
 
 def _code(name: str, width: int, position: int) -> str:
-    """``width`` letters of the first word, then one per further word: Rest → R, Re.
+    """Use ``width`` letters of the first word, then one per further word. Rest → R, Re.
 
     A number stays whole (Pose 10 → P10). A name with no ASCII letter or digit is
     called by its position: C3.
@@ -270,7 +268,7 @@ def _code(name: str, width: int, position: int) -> str:
 def class_codes(
     class_names: Sequence[str], pinned: Mapping[str, str] | None = None
 ) -> dict[str, str]:
-    """Give every class a short code for file names: Rest → R, Three-Finger-Pinch → Tfp.
+    """Build short class codes for file names. Rest → R, Three-Finger-Pinch → Tfp.
 
     A code is the first letter of the first word, plus the first letter of each
     further word (a number stays whole). Where two codes would match, ignoring
@@ -278,7 +276,7 @@ def class_codes(
     Ring become Re and Ri. Codes are worked out over the whole list, so a class
     keeps its code in every take of an app. Classes alike to the last letter
     (``Rest`` and ``rest``) get their position appended, ``Rest1`` and ``Rest2``:
-    pin a code to choose better.
+    pin a code to choose an alternative.
 
     Parameters
     ----------
@@ -395,7 +393,7 @@ def model_path(root: str | Path, participant: str, model: str) -> Path:
     root
         Data root, usually ``"data"``.
     participant
-        Pseudonymised ID; empty puts the model in ``root/models``.
+        Pseudonymized ID; empty puts the model in ``root/models``.
     model
         The model's type, such as ``"spar-mlp"``, lowercased into the name.
 
@@ -416,8 +414,8 @@ def model_path(root: str | Path, participant: str, model: str) -> Path:
 
 
 #: Each packed folder (resolved) to the archive it became, for this process. The
-#: archive's name no longer starts with its folder's, so this is how a folder path
-#: still finds its take, and how the take list hides a folder whose removal failed.
+#: archive can have a different name from its folder. This map lets a folder path
+#: find its take and lets the take list hide a folder whose removal failed.
 PACKED_FOLDERS: dict[Path, Path] = {}
 
 
@@ -437,7 +435,7 @@ def participant_dir(root: str | Path, participant: str = "", kind: str = "record
     root
         Data root, usually ``"data"``.
     participant
-        Pseudonymised ID, reduced to a safe single path segment.
+        Pseudonymized ID, reduced to a safe single path segment.
     kind
         ``"recordings"``, ``"predictions"`` or ``"models"``. ``""`` drops the
         kind level, for tools that keep their own layout.
@@ -471,7 +469,7 @@ def labelled_path(
     base_path
         Data root, usually ``"data"``.
     participant
-        Pseudonymised ID, reduced to a safe single path segment. An empty
+        Pseudonymized ID, reduced to a safe single path segment. An empty
         slug drops the participant level and the filename prefix.
     suffix
         Optional filename suffix, appended after an underscore, such as
@@ -579,13 +577,14 @@ def recorded_time(folder: str | Path) -> RecordedTime:
 
 
 class Session:
-    """One recording session on disk: per-stream Zarr arrays + a label track.
+    """One on-disk recording with per-stream Zarr arrays and a label track.
 
-    Created when the user clicks **Record**, finalised when they click **Stop**.
+    Created when the user clicks Record, finalized when they click Stop.
     While active, every acquisition thread with a registered stream appends to the
     session's Zarr stores; UI label clicks emit [`LabelEvent`][] entries onto the
-    label track. Closing writes ``meta.json`` and ``labels.json`` alongside the
-    Zarr folders, and optionally packs the tree into a portable ``.mg.zip``.
+    label track. Metadata is checkpointed at creation and stream declaration with
+    ``finished=False``. `save_meta` updates it at stop, and `pack_to_zip` packs the
+    tree into a portable ``.mg.zip``.
 
     Layout on disk (one folder per recording, named with the start minute,
     packed on stop to ``<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip``, see
@@ -608,7 +607,7 @@ class Session:
         Data root; the session creates a timestamp-named subdirectory in
         ``base_path/ID/kind``. Default ``"data"`` (created if missing).
     participant
-        Pseudonymised ID. A safe slug labels the folder and ``meta.json`` and
+        Pseudonymized ID. A safe slug labels the folder and ``meta.json`` and
         nests the recording under ``base_path/ID/kind``. Empty by default,
         which puts the recording directly in ``base_path/kind``.
     kind
@@ -672,11 +671,17 @@ class Session:
         # use and buffered (see EVENT_CHUNK_ROWS). One lock covers declaration, buffering,
         # flush and freeze, because the predict thread, the UI thread and the finalise
         # thread all reach these.
-        self._event_lock = threading.Lock()
+        self._event_lock = threading.RLock()
         self._event_buffers: dict[str, _EventBuffer] = {}
         self._event_streams: list[str] = []
         #: Set by freeze(): no row is accepted and no stream declared after it.
         self._finalising = False
+        self.save_meta("", finished=False)
+
+    def _checkpoint_meta(self) -> None:
+        """Persist a declaration, never an acquisition chunk or event-buffer flush."""
+        with self._event_lock:
+            self.save_meta(**self._meta_options, finished=False)
 
     def init_stream(
         self, stream_name: str, info: StreamInfo, *, chunk_rows: int | None = None
@@ -686,6 +691,13 @@ class Session:
         ``chunk_rows`` sizes the zarr chunk; the default is one second of samples. Event
         streams pass `EVENT_CHUNK_ROWS` because their rate is nominal.
         """
+        with self._event_lock:
+            self._init_stream(stream_name, info, chunk_rows=chunk_rows)
+
+    def _init_stream(
+        self, stream_name: str, info: StreamInfo, *, chunk_rows: int | None = None
+    ) -> None:
+        """Declare arrays and checkpoint together under the event/metadata lock."""
         rows = max(1, int(info.fs) if chunk_rows is None else int(chunk_rows))
         codecs = _SIGNAL_CODECS if chunk_rows is None else _EVENT_CODECS
         self._streams_info[stream_name] = info
@@ -705,6 +717,7 @@ class Session:
             dtype=np.float64,
             **codecs,
         )
+        self._checkpoint_meta()
 
     def append(self, stream_name: str, data: np.ndarray, timestamps: np.ndarray) -> None:
         """Called from acquire loop when recording. data: (n_samples, n_channels)."""
@@ -741,8 +754,8 @@ class Session:
         """Append one timestamped row to an event stream, declaring it on first use.
 
         ``values`` is flattened and cast to ``dtype``; its width is fixed by the first
-        call, and a later row of another width raises ``ValueError`` so a producer
-        whose shape changed learns it once instead of writing a ragged array. ``fs``
+        call. A later row with another width raises ``ValueError`` to prevent
+        ragged arrays. ``fs``
         is the *nominal* rate the declaration carries, so `ReplaySource` can pace the
         stream; the rows are irregular and ``meta.json`` lists the stream under
         ``event_streams`` to say so.
@@ -753,12 +766,11 @@ class Session:
         Parameters
         ----------
         dtype
-            Dtype for this stream, fixed by whichever call declares ``name`` first — a
-            later call's ``dtype`` is ignored and its row is coerced to the dtype
-            already on file, so a caller cannot change it after the fact. Default
-            ``float32``, right for signals and features. Pass ``float64`` for a value
-            that is itself a clock — an LSL timestamp, ``local_clock()`` — float32 has
-            about 7 significant digits, so a seconds-since-boot reading loses
+            Dtype fixed by the first declaration of ``name``. Later calls ignore
+            their ``dtype`` argument and coerce rows to the stored dtype.
+            Callers cannot change a declared stream's dtype. Defaults to ``float32``
+            for signals and features. Use ``float64`` for clocks such as LSL timestamps or
+            ``local_clock()``. Float32 has about 7 significant digits and loses
             millisecond precision after roughly a day of uptime.
         """
         row = np.asarray(values, dtype=dtype).ravel()
@@ -785,6 +797,7 @@ class Session:
                     chunk_rows=EVENT_CHUNK_ROWS,
                 )
                 self._event_streams.append(name)
+                self._checkpoint_meta()
                 buf = self._event_buffers[name] = _EventBuffer()
             else:
                 # Already declared: the stream's dtype won, not this call's — coerce
@@ -867,6 +880,8 @@ class Session:
         control_space: Mapping[str, object] | None = None,
         control_spaces: Mapping[str, Mapping[str, object]] | None = None,
         class_codes: Mapping[str, str] | None = None,
+        *,
+        finished: bool = True,
     ) -> None:
         """Write meta.json + labels.json to the session folder.
 
@@ -876,12 +891,11 @@ class Session:
             Identifier for the producing app.
         class_names
             Optional human-readable names for label class indices. Persisting them
-            keeps old sessions self-describing: readers can render labels without
-            an external lookup.
+            lets readers render saved labels without an external lookup.
         control_space
             Optional control configuration this recording was made under, as produced
-            by ``ControlMap.as_control_space()``. Records what each number meant — the alias it
-            came from and the target control it drove. Carries a ``format`` tag; read
+            by ``ControlMap.as_control_space()``. Records each value's alias
+            and target control. Carries a ``format`` tag; read
             it back with `myogestic.controls.read_control_space`, which refuses a
             pre-alias control space by name instead of reinterpreting it.
         control_spaces
@@ -892,10 +906,44 @@ class Session:
             Codes the app pins for some classes, usually ``ctx.class_codes``. The
             rest are worked out by `class_codes`; the whole map is saved as
             ``meta.json``'s ``class_codes`` and names the archive.
+        finished
+            Whether the take stopped normally. Start and declaration checkpoints
+            pass ``False``; finalization uses the default ``True``. Recovery keeps
+            an unfinished take marked ``False`` even after it is packed.
         """
+        with self._event_lock:
+            self._save_meta(
+                app_name, class_names, control_space, control_spaces, class_codes, finished=finished
+            )
+
+    def _save_meta(
+        self,
+        app_name: str,
+        class_names: list[str] | None,
+        control_space: Mapping[str, object] | None,
+        control_spaces: Mapping[str, Mapping[str, object]] | None,
+        class_codes: Mapping[str, str] | None,
+        *,
+        finished: bool,
+    ) -> None:
+        """Write one atomic metadata checkpoint with declarations held stable."""
+        # Reused only when another stream is declared, so appends keep their original
+        # cost and a later event stream does not erase the app's interpretation keys.
+        self._meta_options = {
+            "app_name": app_name,
+            "class_names": class_names,
+            "control_space": control_space,
+            "control_spaces": control_spaces,
+            "class_codes": class_codes,
+        }
+        self.class_names = list(class_names or [])
+        # Packing a previously saved folder must not relabel legacy pose values
+        # as today's convention. A fresh take always carries the current tag.
+        convention = getattr(self, "_pose_convention", POSE_CONVENTION)
         meta: dict[str, object] = {
             "schema_version": _META_SCHEMA_VERSION,
-            "pose_convention": POSE_CONVENTION,
+            "finished": finished,
+            "pose_convention": convention,
             "app_name": app_name,
             "created": time.strftime("%Y-%m-%dT%H:%M:%S", self._started),  # when it started
             "streams": {
@@ -914,6 +962,8 @@ class Session:
             },
             "event_streams": list(self._event_streams),
         }
+        if convention is None:
+            meta.pop("pose_convention")
         # Use the same clock as add_label, and only the first nonempty stream:
         # multiple streams describe the same take, not extra recorded time.
         first, last = 0.0, 0.0
@@ -955,11 +1005,16 @@ class Session:
             meta["control_space"] = dict(control_space)
         if control_spaces:
             meta["control_spaces"] = {name: dict(space) for name, space in control_spaces.items()}
-        (self.path / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         labels = [
             {"timestamp": e.timestamp, "class_index": e.class_index} for e in self.label_track
         ]
-        (self.path / "labels.json").write_text(json.dumps(labels, indent=2), encoding="utf-8")
+        # A kill during a checkpoint must leave the previous JSON readable, rather
+        # than truncating the only metadata from which recovery can open the arrays.
+        for filename, value in (("labels.json", labels), ("meta.json", meta)):
+            target = self.path / filename
+            temporary = self.path / (filename + ".tmp")
+            temporary.write_text(json.dumps(value, indent=2), encoding="utf-8")
+            os.replace(temporary, target)
 
     def pack_to_zip(self) -> Path:
         """Pack the session folder into one ``<ID>_<YYYYMMDD-HHMM>_<what>.mg.zip``.
@@ -1029,9 +1084,9 @@ class Session:
     def discard(self) -> None:
         """Delete this session's folder and everything recorded into it.
 
-        For a recording the operator threw away — a false start, a bad trial.
-        Releases the Zarr handles first, exactly as `pack_to_zip` does: on
-        Windows the folder cannot be removed while any chunk file is still open.
+        Use for a discarded recording, such as a false start or bad trial.
+        Releases Zarr handles before removal, as `pack_to_zip` does. Windows
+        cannot remove the folder while any chunk file remains open.
         """
         self.freeze()
         self.stores.clear()
@@ -1092,9 +1147,9 @@ class Session:
 
         Closes the ``ZipStore`` opened by [`open_session_store`][] for a
         ``.mg.zip`` and drops the array references. Safe to call more than
-        once. On Windows an open ``ZipStore`` keeps the archive **locked**, so
-        close the session before moving or deleting the ``.mg.zip`` — use it
-        as a context manager (``with open_session_store(p) as s: ...``).
+        once. On Windows an open ``ZipStore`` keeps the archive locked, so
+        close the session before moving or deleting the ``.mg.zip``. Use
+        ``with open_session_store(p) as s: ...`` for automatic closure.
         """
         store = getattr(self, "_zip_store", None)
         if store is not None:

@@ -4,11 +4,11 @@ hide:
   - toc
 ---
 
-Visual contact-sheet of selected public widgets. Each card shows the widget rendered in isolation.
+Selected public widgets. Each card shows the widget rendered in isolation.
 
 Widgets are composable parts; a typical app combines four or five of them. See [Anatomy of an app](anatomy.md) and [Getting started](getting-started.md) for end-to-end examples that wire several widgets together.
 
-Captured by [`tools/widget_screenshot.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/tools/widget_screenshot.py) (re-run when widget styling changes):
+Capture widgets with [`tools/widget_screenshot.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/tools/widget_screenshot.py). Re-run it when widget styling changes.
 
 ```bash
 uv run python tools/widget_screenshot.py --all
@@ -37,7 +37,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![signal_viewer](images/widgets/signal_viewer.png){ .widget-thumb loading=lazy }
 
-    Renders a stream's ring buffer as a min/max envelope decimated for 60 fps. Per-channel toggles, a 50/60 Hz mains-hum notch, optional display filters (rectify, DC removal, RMS envelope), pause/rescale. State is keyed by `widget_id`, defaulting to `stream_name`.
+    Renders a stream's ring buffer as a min/max envelope decimated for 60 fps. Per-channel toggles, a 50/60 Hz mains-hum notch, optional rectification, DC removal and RMS envelope display filters, plus pause/rescale. State is keyed by `widget_id`, defaulting to `stream_name`.
 
 </div>
 
@@ -55,7 +55,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![StatusBar](images/widgets/StatusBar.png){ .widget-thumb loading=lazy }
 
-    Acquisition details, participant and session folder, with an optional fitted or saved model readout. Long values ellipsize and show their full text on hover. Place it in a bare `Px(26)` bottom row.
+    Acquisition details, participant and participant folder, with an optional fitted or saved model readout. The folder uses the same filename-safe ID as recordings. `P 001` displays `data/P-001` with the default data root. Long values ellipsize and show their full text on hover. Place it in a bare `Px(26)` bottom row.
 
 </div>
 
@@ -79,13 +79,13 @@ uv run python tools/widget_screenshot.py --all
 
     ![recording_controls](images/widgets/recording_controls.png){ .widget-thumb loading=lazy }
 
-    Gesture tiles plus a recording action row with an elapsed clock. Opt into **Timed** with `take_lengths` and `warmups`: count down without capture, record one gesture for the selected duration, then stop and save automatically. **Cancel** saves nothing during warm-up; **Stop early** keeps the captured take. The immutable `take` read supports countdown and progress overlays.
+    Gesture tiles plus a recording action row with an elapsed clock. Enable Timed with `take_lengths` and `warmups`. It counts down without capture, records one gesture for the selected duration, then stops and saves automatically. Cancel saves nothing during warm-up; Stop early keeps the captured take. The immutable `take` read supports countdown and progress overlays.
 
 -   __[SessionManager][myogestic.widgets.SessionManager]__
 
     ![session_manager](images/widgets/session_manager.png){ .widget-thumb loading=lazy }
 
-    One compact, clickable line per take (about 26 logical pixels), grouped by day with only the newest group open. The list scrolls beneath a fixed header, selection summary, and gesture chips; **All** / **None** change every take, and gesture chips include or exclude classes from training. Files loaded from outside the scanned folder appear under **Loaded**. Returns [`TrainingData`][myogestic.TrainingData] for `@pipeline.train`; `selection()` exposes selected/total counts and included gesture seconds for a Train card.
+    One clickable line per take, about 26 logical pixels high, grouped by day with only the newest group open. The list scrolls beneath a fixed header, selection summary, and gesture chips; All / None change every take, and gesture chips include or exclude classes from training. Files loaded from outside the scanned folder appear under Loaded. Returns [`TrainingData`][myogestic.TrainingData] for `@pipeline.train`; `selection()` exposes selected/total counts and included gesture seconds for a Train card.
 
 </div>
 
@@ -97,13 +97,14 @@ uv run python tools/widget_screenshot.py --all
 
     ![process_launcher](images/widgets/process_launcher.png){ .widget-thumb loading=lazy }
 
-    Launch / stop external subprocesses (synthetic generator, Virtual Hand, custom acquisition tools) from the GUI. Shows live state per entry; framework adopts children for clean exit.
+    Launch / stop external subprocesses from the GUI, such as the synthetic generator, Virtual
+    Hand or custom acquisition tools. Shows live state per entry; the framework adopts children for cleanup on exit.
 
 -   __[TargetPanel][myogestic.widgets.TargetPanel]__
 
     ![TargetPanel](images/widgets/TargetPanel.png){ .widget-thumb loading=lazy }
 
-    One row per target the app drives (the Virtual Hand, a robot hand, a game): connect to one already running, launch it only if none answers, and stop only what this card started.
+    One row per target the app drives, such as the Virtual Hand, a robot hand or a game. Connects to a running target, launches it if none answers, and stops only what this card started.
 
 </div>
 
@@ -115,7 +116,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![pipeline_panel](images/widgets/pipeline_panel.png){ .widget-thumb loading=lazy }
 
-    Model state row, a full-width **Train** action and a **Predict** toggle. Buttons disable based on `pipeline.app.ctx.state`, selected takes, pending saves, callbacks and the loaded model; captions explain how to enable them. Individual buttons: [`TrainButton`][myogestic.ml.widgets.TrainButton], [`PredictButton`][myogestic.ml.widgets.PredictButton].
+    Model state row, a full-width Train action and a Predict toggle. Buttons disable based on `pipeline.app.ctx.state`, selected takes, pending saves, callbacks and the loaded model; captions explain how to enable them. Use [`TrainButton`][myogestic.ml.widgets.TrainButton] and [`PredictButton`][myogestic.ml.widgets.PredictButton] individually.
 
 </div>
 
@@ -127,7 +128,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![FilterControl](images/widgets/FilterControl.png){ .widget-thumb loading=lazy }
 
-    Live-tunable post-prediction smoother (Identity / Gaussian / One Euro). The default compact Smoothing row shows the filter, latency and a settings popover with parameters and Reset; `compact=False` keeps the sliders visible in a full panel. Reset clears smoothing history. Pair with `output_filter(pose, timestamp=time.monotonic())` inside `@pipeline.predict`.
+    Live-tunable post-prediction smoother with Identity / Gaussian / One Euro filters. The default compact Smoothing row shows the filter, latency and a settings popover with parameters and Reset; `compact=False` keeps the sliders visible in a full panel. Reset clears smoothing history. Pair with `output_filter(pose, timestamp=time.monotonic())` inside `@pipeline.predict`.
 
 </div>
 
@@ -151,7 +152,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![app_logo](images/widgets/app_logo.png){ .widget-thumb loading=lazy }
 
-    The MyoGestic wordmark fit-to-cell with aspect preserved. Drop into a grid cell as a branding header - pairs with the square OS icon `core.py` wires into the dock / taskbar / title bar.
+    The MyoGestic wordmark fit-to-cell with aspect preserved. Place it in a grid cell as a branding header. `core.py` sets the square OS icon in the dock / taskbar / title bar.
 
 </div>
 
@@ -175,7 +176,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![VhiMovementPanel](images/widgets/VhiMovementPanel.png){ .widget-thumb loading=lazy }
 
-    Compact VHI control palette - auto-refreshes the cached control-hand state from the v2 recording aid (off-thread, throttled) and dispatches button clicks to a handler you supply — normally `bus.select(...)` on a discrete DOF. Highlights the current movement; greys out while disconnected.
+    VHI control palette. Automatically refreshes the cached control-hand state from the v2 recording aid on a throttled background thread. Dispatches clicks to your handler, normally `bus.select(...)` on a discrete DOF. Highlights the current movement; greys out while disconnected.
 
 </div>
 
@@ -196,15 +197,16 @@ uv run python tools/widget_screenshot.py --all
 
 ## Other widgets
 
-These have no captures in the gallery's screenshot registry, so they are listed here and documented in full on the [Widgets API](api/widgets.md) page.
+These widgets have no captures in the gallery screenshot registry. See the
+[Widgets API](api/widgets.md) for their full documentation.
 
 <div class="other-widgets" markdown>
 
-- **Signal & plotting**: [`RawSignalViewer`][myogestic.widgets.RawSignalViewer], [`Scatter2D`][myogestic.widgets.Scatter2D], [`Scatter3D`][myogestic.widgets.Scatter3D], [`Heatmap`][myogestic.widgets.Heatmap], [`LinePlot`][myogestic.widgets.LinePlot].
-- **Device & task control**: [`DevicePicker`][myogestic.widgets.DevicePicker], [`TrackingTask`][myogestic.widgets.TrackingTask], [`PongTask`][myogestic.widgets.PongTask], [`RecordButton`][myogestic.widgets.RecordButton].
-- **Training & inspection**: [`TemplateInspector`][myogestic.widgets.TemplateInspector], [`TrialPreview`][myogestic.widgets.TrialPreview].
-- **ML buttons**: [`TrainButton`][myogestic.ml.widgets.TrainButton], [`PredictButton`][myogestic.ml.widgets.PredictButton], [`TrainingLog`][myogestic.ml.widgets.TrainingLog], [`SaveModelButton`][myogestic.ml.widgets.SaveModelButton], [`LoadModelButton`][myogestic.ml.widgets.LoadModelButton].
-- **Status & logs**: [`StreamPanel`][myogestic.widgets.StreamPanel], [`LogPanel`][myogestic.widgets.LogPanel].
-- **Layout & branding**: [`panel_header`][myogestic.widgets.panel_header], [`popout_panel`][myogestic.widgets.popout_panel], [`Image`][myogestic.widgets.Image].
+- Signal & plotting: [`RawSignalViewer`][myogestic.widgets.RawSignalViewer], [`Scatter2D`][myogestic.widgets.Scatter2D], [`Scatter3D`][myogestic.widgets.Scatter3D], [`Heatmap`][myogestic.widgets.Heatmap], [`LinePlot`][myogestic.widgets.LinePlot].
+- Device & task control: [`DevicePicker`][myogestic.widgets.DevicePicker], [`TrackingTask`][myogestic.widgets.TrackingTask], [`PongTask`][myogestic.widgets.PongTask], [`RecordButton`][myogestic.widgets.RecordButton].
+- Training & inspection: [`TemplateInspector`][myogestic.widgets.TemplateInspector], [`TrialPreview`][myogestic.widgets.TrialPreview].
+- ML buttons: [`TrainButton`][myogestic.ml.widgets.TrainButton], [`PredictButton`][myogestic.ml.widgets.PredictButton], [`TrainingLog`][myogestic.ml.widgets.TrainingLog], [`SaveModelButton`][myogestic.ml.widgets.SaveModelButton], [`LoadModelButton`][myogestic.ml.widgets.LoadModelButton].
+- Status & logs: [`StreamPanel`][myogestic.widgets.StreamPanel], [`LogPanel`][myogestic.widgets.LogPanel].
+- Layout & branding: [`panel_header`][myogestic.widgets.panel_header], [`popout_panel`][myogestic.widgets.popout_panel], [`Image`][myogestic.widgets.Image].
 
 </div>

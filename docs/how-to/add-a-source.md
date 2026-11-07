@@ -1,7 +1,7 @@
 ---
 title: "Add a custom source"
 ---
-A `Source` is a [Protocol](https://docs.python.org/3/library/typing.html#typing.Protocol) - three methods, no inheritance. Implement them, hand the instance to `Stream(...)`, and the framework handles threading, buffering, and recording for you.
+A `Source` implements three methods of a [Protocol](https://docs.python.org/3/library/typing.html#typing.Protocol). No inheritance is required. Pass the instance to `Stream(...)` for threading and buffering, with recording handled by the framework.
 
 ## The protocol
 
@@ -18,11 +18,9 @@ class Source(Protocol):
     def disconnect(self) -> None: ...
 ```
 
-That's the whole interface.
-
 ### `connect() -> StreamInfo`
 
-Open the device / file / socket. Return a [`StreamInfo`][myogestic.StreamInfo] describing the data: `n_channels`, `fs`, optional `dtype` (defaults to `np.float32`), optional `channel_names`. Auto-discovery is the goal - the user shouldn't have to pass these manually unless the source genuinely can't self-describe.
+Open the device, file or socket. Return a [`StreamInfo`][myogestic.StreamInfo] with `n_channels`, `fs`, optional `dtype` and optional `channel_names`. `dtype` defaults to `np.float32`. Discover these values from the source where possible. Require manual values only when the source cannot describe itself.
 
 If the source can't connect, raise. `Stream.reconnect()` returns `False` and stores the error in `stream.last_error`; the connection widgets show it.
 
@@ -31,11 +29,11 @@ If the source can't connect, raise. `Stream.reconnect()` returns `False` and sto
 Called repeatedly by the acquisition thread. Return either:
 
 - `(data, ts)` where `data.shape == (n_samples, n_channels)` (sample-major) and `ts.shape == (n_samples,)` (float64 LSL clock timestamps). The framework converts to channels-first at `Stream.get_window()` for you.
-- `(None, None)` if no new data is available right now. The framework will call `read()` again. Don't block forever - return promptly so the thread can be stopped cleanly when the app exits.
+- `(None, None)` if no data is available. The framework calls `read()` again. Return promptly so the thread can stop when the app exits.
 
 ### `disconnect() -> None`
 
-Release the device. Idempotent - may be called multiple times during shutdown.
+Release the device. Make this idempotent because shutdown may call it multiple times.
 
 ## Worked example: a CSV replay source
 
@@ -102,11 +100,9 @@ if not stream.reconnect():
 app.run()
 ```
 
-That's the whole integration.
-
 ## Worked example: bridge a third-party SDK
 
-Suppose you have a vendor SDK that emits chunks via a callback. Adapter pattern:
+Use the adapter pattern with a queue for a vendor SDK that emits chunks through a callback.
 
 ```python
 import threading
@@ -173,4 +169,4 @@ for _ in range(20):
 src.disconnect()
 ```
 
-Once that loop produces sane output, the framework will work too.
+Check the sample shapes and timestamps before connecting the source to the app.

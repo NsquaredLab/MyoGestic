@@ -1,8 +1,8 @@
 ---
 title: "File names"
 ---
-Generated take names and model autosaves for a participant follow one pattern, short enough to read in
-Finder and Explorer and complete enough to tell takes apart without opening them:
+Generated take names and model autosaves share one pattern. They identify the participant
+and contents in Finder and Explorer without opening the files.
 
 ```text
 data/<ID>/recordings/   <ID>_<YYYYMMDD-HHMM>_<what>.mg.zip
@@ -26,6 +26,9 @@ stays in the name, so a file copied out of `data/` still says whose it is.
 take of the same minute with the same `<what>`, gets `-2`, `-3`, … at the end. Nothing is
 ever overwritten.
 
+`StatusBar` shows the participant folder using the same safe ID, before the kind subfolder:
+`P 001` becomes `data/P-001`. If no usable ID remains, it shows the data root.
+
 ## `<what>`
 
 | Take | `<what>` | Example |
@@ -38,18 +41,18 @@ ever overwritten.
 | Follow run | `follow-` and the gesture it followed | `…_follow-F.mg.zip` |
 | Named on Stop | the codes, then the name | `…_R+F_practice.mg.zip` |
 
-A take in `recordings/` names the gestures it holds: the classes with recorded time, in the
+A take in `recordings/` names the classes with recorded time, in the
 app's class order. An unnamed calibration take with no recorded class time omits the
 `_<what>` suffix. A take in `predictions/` is a `free` run unless its `Session.name` says
-otherwise: `FollowRun` names its take `follow-<code>` itself, and an app sets `guided` for a
+otherwise. `FollowRun` names its take `follow-<code>`, and an app sets `guided` for a
 guided run.
 
 ## Gesture codes
 
-A code is the first letter of the gesture, capitalised. A gesture of several words takes the
-first letter of each (`Three-Finger-Pinch` → `Tfp`), and a number stays whole
-(`Pose 10` → `P10`). Where two codes would be the same, ignoring case, both take more letters
-of their first word until they differ: `Rest` and `Ring` become `Re` and `Ri`.
+A code is the first letter of the gesture, capitalized. A gesture of several words takes the
+first letter of each, so `Three-Finger-Pinch` becomes `Tfp`. A number stays whole, so
+`Pose 10` becomes `P10`. If codes match when ignoring case, both take more letters of their
+first word until they differ. `Rest` and `Ring` become `Re` and `Ri`.
 
 ```python
 from myogestic.session import class_codes
@@ -61,7 +64,7 @@ print(class_codes(["Rest", "Fist", "Pinch", "Three-Finger-Pinch"]))
 ```
 
 Codes are worked out over the app's whole class list, so a gesture keeps its code in every
-take of that app. Adding a gesture later can still change one: add `Ring` to an app with
+take of that app. Adding `Ring` to an app with
 `Rest` and Rest moves from `R` to `Re`. Once an app has data, pin its codes next to its class
 list:
 
@@ -86,6 +89,6 @@ that saves models itself gets the same name from
 
 ## Older files
 
-Takes saved before this standard keep their names (`P-023_2026-11-05_15-33-30_Fist.session.zip`):
-nothing on disk is renamed, and `open_session_store` accepts any `.zip` with `meta.json` and the stream arrays that metadata declares. Code that
-looks for takes should match `*.zip`, and for models `*.joblib`, never a fixed suffix.
+`open_session_store` accepts any `.zip` with `meta.json` and its declared stream arrays,
+including `P-023_2026-11-05_15-33-30_Fist.session.zip`. Match takes with `*.zip` and models
+with `*.joblib`. Never match a fixed naming suffix. Files on disk keep their names.

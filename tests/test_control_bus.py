@@ -79,6 +79,41 @@ def test_targets_are_bound_at_construction():
     assert rec.bound is MIXED
 
 
+@pytest.mark.parametrize("catch_all_first", [False, True])
+def test_claims_less_target_covers_aliases_missing_from_explicit_claims(catch_all_first):
+    partial = Recorder()
+    partial.claims = frozenset({"a"})
+    catch_all = Recorder()
+    targets = [catch_all, partial] if catch_all_first else [partial, catch_all]
+    bus = ControlBus(MIXED, targets=targets)
+
+    delivered = bus.push({"a": 0.2, "g": 0.4, "hand.grasp": "fist"})
+
+    assert catch_all.bound is MIXED
+    assert catch_all.frames[-1][0] == delivered
+    assert set(delivered) == set(MIXED.dofs)
+
+
+def test_explicit_claims_refuse_uncovered_aliases():
+    partial = Recorder()
+    partial.claims = frozenset({"a"})
+    empty = Recorder()
+    empty.claims = frozenset()
+
+    with pytest.raises(ValueError, match="no target drives.*g.*hand.grasp"):
+        ControlBus(MIXED, targets=[partial, empty])
+
+
+def test_explicit_claims_can_cover_aliases_across_targets():
+    first, second = Recorder(), Recorder()
+    first.claims = frozenset({"a"})
+    second.claims = frozenset({"g", "hand.grasp"})
+
+    bus = ControlBus(MIXED, targets=[first, second])
+
+    assert bus.push({"g": 0.5})["g"] == 0.5
+
+
 def test_bind_may_raise_at_construction():
     class Picky:
         def bind(self, controls):
@@ -855,17 +890,19 @@ def _save_control_take(tmp_path, monkeypatch, *, operator=False):
     return app, metadata
 
 
-def test_single_link_meta_matches_pre_change_bytes(tmp_path, monkeypatch):
-    import os
+def test_single_link_meta_preserves_pre_change_fields(tmp_path, monkeypatch):
+    import json
     from pathlib import Path
 
     _, metadata = _save_control_take(tmp_path, monkeypatch)
     # Generated with the identical take helper against PR #25's 8afc8a1; the
     # class_codes block came later, with the file-name standard.
     expected = Path(__file__).parent / "fixtures" / "control_meta_8afc8a1.json"
-    # save_meta has always used native text-file newlines, including CRLF on Windows.
-    baseline = expected.read_text(encoding="utf-8").replace("\n", os.linesep).encode("utf-8")
-    assert metadata == baseline
+    # Crash recovery adds only the finished flag and its schema-version bump;
+    # the single-link stream and control-space shape still matches this fixture.
+    baseline = json.loads(expected.read_text(encoding="utf-8"))
+    baseline.update(schema_version=4, finished=True)
+    assert json.loads(metadata) == baseline
 
 
 def test_two_links_record_separate_streams_and_maps(tmp_path, monkeypatch):
@@ -876,7 +913,7 @@ def test_two_links_record_separate_streams_and_maps(tmp_path, monkeypatch):
 
     app, raw = _save_control_take(tmp_path, monkeypatch, operator=True)
     meta = json.loads(raw)
-    assert meta["schema_version"] == 3
+    assert meta["schema_version"] == 4
     assert meta["control_space"] == app.ctx.control_space.as_control_space()
     assert meta["control_spaces"] == {
         "controls.operator": app.ctx.control_spaces["controls.operator"].as_control_space()

@@ -1,7 +1,7 @@
 ---
 title: "Record and replay"
 ---
-End-to-end: capture sessions in the GUI, browse them in [`SessionManager`][myogestic.widgets.SessionManager], train on them, then replay one offline as a Source so you can debug the predict path without re-running the experiment.
+Capture sessions in the GUI and select them in [`SessionManager`][myogestic.widgets.SessionManager] for training. Replay a session offline to debug prediction without repeating the experiment.
 
 ## Live capture
 
@@ -31,14 +31,14 @@ def ui(ctx):
 
 [`RecordingControls`][myogestic.widgets.RecordingControls] renders:
 
-- **Record / Stop** buttons that call `app.start_recording()` / `app.stop_recording()` (`"data"` is the default root).
-- One **button** per class. Clicking a button writes a `LabelEvent(class_index, timestamp=local_clock())` to the active session's label track and fires your `on_gesture` callback. Use the callback to drive an external pattern (synthetic generator, robot, prompt screen).
+- Record / Stop buttons that call `app.start_recording()` / `app.stop_recording()` (`"data"` is the default root).
+- One button per class. Clicking a button writes a `LabelEvent(class_index, timestamp=local_clock())` to the active session's label track and fires your `on_gesture` callback. Use the callback to drive an external pattern (synthetic generator, robot, prompt screen).
 
 The `on_gesture` callback is yours; while recording, the label is added by `RecordingControls` itself before calling it. The selected gesture is also labelled when capture starts. You don't need to call `ctx.session.add_label()` manually.
 
 ### Timed takes
 
-Offer fixed-length takes alongside the usual **Start / stop** mode:
+Offer fixed-length takes alongside the usual Start / stop mode:
 
 ```python
 recording = RecordingControls(
@@ -53,25 +53,25 @@ recording = RecordingControls(
 )
 ```
 
-By default, the widget starts in **Start / stop** mode. Pass `timed=True` to open in
-**Timed**, which shows the take-length and warm-up choices. The keyword-only
+By default, the widget starts in Start / stop mode. Pass `timed=True` to open in
+Timed, which shows the take-length and warm-up choices. The keyword-only
 `take_length` and `warmup` arguments select the initial entries; each defaults to
 `None`, selecting the first value in `take_lengths` or `warmups`. An explicit value
 outside its sequence raises `ValueError` naming the allowed values. The example
-above opens in **Timed** at 5 s with a 2 s warm-up, as Myocontrol does.
+above opens in Timed at 5 s with a 2 s warm-up, as Myocontrol does.
 
 Empty `take_lengths` keeps start/stop only; `timed=True` without any take lengths
 raises `ValueError`. Take lengths must be finite and positive; warm-ups must be
-finite and nonnegative, with at least one choice. Zero is **Off** and starts capture
+finite and nonnegative, with at least one choice. Zero is Off and starts capture
 on the Record press.
 
 Choose a gesture before starting a labelled timed take. Warm-up records nothing.
-**Cancel** returns to idle without creating a session.
+Cancel returns to idle without creating a session.
 When capture begins, the chosen gesture is labelled once and the other tiles are
 disabled until the take ends. The action row shows elapsed / target time and a
 progress line. The first UI frame at or after the deadline calls `on_stop`, saving
 the take through the existing app callback. Timing resolution follows the frame
-rate; a delayed frame stops immediately when it resumes. **Stop early** also saves
+rate; a delayed frame stops immediately when it resumes. Stop early also saves
 the captured data and marks the confirmation `(stopped early)`. The confirmation
 lasts two seconds. Start/stop mode shows elapsed time and permits gesture changes.
 
@@ -96,10 +96,10 @@ group starts open. A take's gesture names, time, and duration stay on that line,
 name, optional take name, and streams in the tooltip. The list alone scrolls, leaving the
 header, selected count, and gesture chips visible.
 
-Use **All** / **None** to select or clear every take, including collapsed days. Gesture chips
+Use All / None to select or clear every take, including collapsed days. Gesture chips
 show totals across all listed takes; toggling one excludes that class from training and mutes
-its chips in the take rows. Exclusions survive **None** followed by **All**, and reset when you
-change participants or clear the list. The load icon adds files from elsewhere under **Loaded**;
+its chips in the take rows. Exclusions survive None followed by All, and reset when you
+change participants or clear the list. The load icon adds files from elsewhere under Loaded;
 the broom clears the list while leaving files on disk.
 
 `ui()` returns a [`TrainingData`][myogestic.TrainingData] instance ready for `@pipeline.train`.
@@ -123,7 +123,8 @@ For models that need many short trials per session, record cycle-style:
 [Stop]
 ```
 
-One Record→Stop cycle yields one session, with one labelled segment per gesture selection. `iter_labeled_windows` includes the first segment and slices each segment into as many full windows as fit. Repeated activations give you more trials, not just more overlapping windows from one hold.
+One Record→Stop cycle yields one session, with one labelled segment per gesture selection. `iter_labeled_windows` includes the first segment and slices each segment into as many full windows as fit. Repeated activations provide separate trials. Extra overlapping windows from
+one sustained hold do not add activations.
 
 ## Reading sessions programmatically
 
@@ -173,7 +174,7 @@ for window, ts, cls in iter_labeled_windows(
 - `classes`: optional set of class indices to include (handy when you want to skip "rest").
 - Drops windows that straddle a label boundary so each window has exactly one class.
 - Each iteration yields `(window, ts, class_index)` - `ts` is the matching 1-D timestamp array.
-- `window` is **channels-first** - match your feature extractor.
+- `window` is channels-first - match your feature extractor.
 
 ### Regression - [`iter_aligned_windows`][myogestic.session.iter_aligned_windows]
 
@@ -200,7 +201,7 @@ for window, targets, ts in iter_aligned_windows(
 
 ## Replay as a Source
 
-[`ReplaySource`][myogestic.sources.ReplaySource] reads from a `.mg.zip` (or folder) and re-emits the data at the original sample rate, just like a live device:
+[`ReplaySource`][myogestic.sources.ReplaySource] reads from a `.mg.zip` (or folder) and re-emits the data at the original sample rate, like a live device:
 
 ```python
 from myogestic import App, Stream
@@ -223,19 +224,18 @@ if not app.ctx.streams["emg"].reconnect():
 app.run()
 ```
 
-Your `@pipeline.predict` runs against the replayed data - same shape, same channel count, same timestamps. Useful for:
+Your `@pipeline.predict` receives replayed data with the recorded shape, channel count and timestamps. Use replay for:
 
-- **Debugging the predict path** without re-running the experiment.
-- **Comparing models** on a fixed input.
-- **Demos** without hardware.
+- Debugging the predict path without re-running the experiment.
+- Comparing models on a fixed input.
+- Demos without hardware.
 
 The replay loops back to the start when it reaches the end. `speed` scales the pacing against
-wall-clock time; `speed=0` halts it after the first chunk rather than stepping, since there is
-no manual-advance call.
+wall-clock time. `speed=0` halts after the first chunk; replay has no manual-advance call.
 
 ## Record a prediction run
 
-Load or train a model, press **Predict**, then press **Record**. The pill row reads `PREDICTING REC`. In Myocontrol’s Drive step, use **Record this run** while predicting. Press it again to save; predicting continues. **Stop predicting** saves an open run first, then returns to idle. Drive runs appear in Takes with a **Drive** tag and stay unticked for training until selected.
+Load or train a model, press Predict, then press Record. The pill row reads `PREDICTING REC`. In Myocontrol’s Drive step, use Record this run while predicting. Press it again to save; predicting continues. Stop predicting saves an open run first, then returns to idle. Drive runs appear in Takes with a Drive tag and stay unticked for training until selected.
 
 Stop when done; the archive holds the raw streams *and* what the model saw and did:
 
@@ -252,11 +252,11 @@ with open_session_store("data/P-014/predictions/P-014_20260913-1012_free.mg.zip"
     print(s.extras["pipeline"]["model"])  # 'model.joblib', beside the arrays
 ```
 
-The model is pickled into the session when `pipeline.save_model` is set (the ML widgets' Save button uses the same callable). Values `extract` or `predict` returned that were not recordable — text, 2-D arrays — are named in `s.extras["pipeline"]["skipped"]` with the reason. When the model running was trained in this app, `s.extras["pipeline"]["trained_on"]` lists the takes it learnt from, and `["model_file"]` names its file in `models/` if it was autosaved; a model loaded from disk or set by hand records neither.
+The model is pickled into the session when `pipeline.save_model` is set (the ML widgets' Save button uses the same callable). Unrecordable values returned by `extract` or `predict`, such as text or 2-D arrays, are named in `s.extras["pipeline"]["skipped"]` with the reason. When the model running was trained in this app, `s.extras["pipeline"]["trained_on"]` lists the takes it learnt from, and `["model_file"]` names its file in `models/` if it was autosaved; a model loaded from disk or set by hand records neither.
 
 ## Check a replay against the live run
 
-Run the same app on the recording with `ReplaySource(path, "emg")` in place of the device, press Predict, press Record, and stop before the replay loops back to the start. `ReplaySource` returns the recorded timestamps, so both sessions are in the same clock. The ticks do **not** fall on the same samples: the predict loop is paced by wall time, and an app whose feature frames are anchored to ring position shifts phase too. Compare one monotonic pass by nearest timestamp within half a tick:
+Run the same app on the recording with `ReplaySource(path, "emg")` in place of the device, press Predict, press Record, and stop before the replay loops back to the start. `ReplaySource` returns the recorded timestamps, so both sessions are in the same clock. Ticks can fall on different samples because wall time paces prediction. Feature frames anchored to ring position can also shift phase. Compare one monotonic pass by nearest timestamp within half a tick:
 
 ```python
 live = open_session_store("live.mg.zip")
@@ -269,13 +269,14 @@ close = np.abs(tr[j] - tl) < 0.5 / live.extras["pipeline"]["predict_hz"]
 print("matched", close.mean(), "max |Δpose|", np.abs(pr[j][close] - pl[close]).max())
 ```
 
-Exact matches need an `extract` whose frame grid is anchored to data timestamps rather than to the ring; that is the app's choice.
+For exact matches, anchor the `extract` frame grid to data timestamps.
+The app chooses that anchoring; a grid based on ring position does not provide it.
 
 ## Common mistakes
 
-See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
+See [Troubleshooting](../troubleshooting.md) for errors by symptom.
 
-- **Recording too short.** A labelled segment shorter than `window_ms` yields no training windows. Record repeated holds long enough for full windows, and check counts before training.
-- **`sess.class_names = [...]` after `save_meta`.** Class names persist only when passed as a kwarg to `save_meta(name, class_names=...)`. (`RecordingControls` handles this when it triggers `app.start_recording`.)
-- **Sample-major in user code.** `sess.get_continuous("emg")` returns sample-major (matches storage). `iter_labeled_windows` and `iter_aligned_windows` flip to channels-first (matches predict). Don't transpose twice by accident.
-- **Replay-then-predict-on-live.** `ReplaySource` and a real `LSLSource` can't share the stream name. Pick one per app.
+- Recording too short. A labelled segment shorter than `window_ms` yields no training windows. Record repeated holds long enough for full windows, and check counts before training.
+- `sess.class_names = [...]` after `save_meta`. Class names persist only when passed as a kwarg to `save_meta(name, class_names=...)`. (`RecordingControls` handles this when it triggers `app.start_recording`.)
+- Sample-major in user code. `sess.get_continuous("emg")` returns sample-major (matches storage). `iter_labeled_windows` and `iter_aligned_windows` flip to channels-first (matches predict). Don't transpose twice by accident.
+- Replay-then-predict-on-live. `ReplaySource` and a real `LSLSource` can't share the stream name. Pick one per app.

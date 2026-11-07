@@ -56,7 +56,7 @@ def test_control_space_round_trips(tmp_path):
         tmp_path, names=["my_index", "fist"], control_space=CONTROL_MAP.as_control_space()
     )
     meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
-    assert meta["schema_version"] == 3
+    assert meta["schema_version"] == 4
     rebuilt = read_control_space(meta["control_space"])
     assert rebuilt.as_control_space() == CONTROL_MAP.as_control_space()
 

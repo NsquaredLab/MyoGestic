@@ -69,6 +69,8 @@ from myogestic.widgets.panels.recording import RecordingControls
 
 CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
+WINDOW_MS = 200
+HOP_MS = 100
 
 vhi = virtual_hand()
 recording_aid = vhi.recording_client()
@@ -122,7 +124,7 @@ vhi_control = vhi.control_client()
 
 app = App("EMG Regression")
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG1"), window_ms=1000, buffer_ms=60000),
+    Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000),
     Stream(
         "vhi_control",
         source=LSLSource(vhi.control_stream_name or "VHI_Control"),
@@ -159,10 +161,6 @@ def extract(windows) -> np.ndarray:
     return extract_features(windows["emg"])
 
 
-WINDOW_MS = 200
-HOP_MS = 100
-
-
 @pipeline.train
 def train(data: TrainingData):
     """Train CatBoost regressor: EMG features → one column per continuous alias.
@@ -172,6 +170,8 @@ def train(data: TrainingData):
     """
     log = pipeline.train_log
     log.clear()
+    if not data.classes:
+        raise ValueError("No classes selected — select at least one class before training.")
 
     aliases = DOF_NAMES
     n_dof = len(aliases)
@@ -210,7 +210,7 @@ def train(data: TrainingData):
         "emg",
         WINDOW_MS,
         HOP_MS,
-        classes=data.classes if data.classes else None,
+        classes=data.classes,
     ):
         # +1 is flexion under the control standard: a Fist target is all 1s, Rest all 0s.
         kin = np.ones(n_dof, dtype=np.float64) if ci == 1 else np.zeros(n_dof, dtype=np.float64)

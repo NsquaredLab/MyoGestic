@@ -1,9 +1,9 @@
 ---
 title: "Run headless (no GUI)"
 ---
-[`App.run(mode="headless")`][myogestic.App.run] starts the same acquisition / predict / output threads as the GUI mode but skips Dear ImGui. Useful for unattended overnight recordings, scripted experiments on remote machines, integration tests, or any case where a window would just be in the way.
+[`App.run(mode="headless")`][myogestic.App.run] starts the same acquisition, predict and output threads as GUI mode, without Dear ImGui. Use it for unattended recordings, remote experiments or integration tests.
 
-In headless mode, **there's no `@app.ui` callback**, so the user can't click Record. You drive the recording state machine yourself - typically from a script-level main, a thread, or an `app.before_run_hooks` hook.
+Drive recording from a script-level main, a thread or an `app.before_run_hooks` hook. Headless mode skips `@app.ui`.
 
 ## A minimum unattended recorder
 
@@ -98,7 +98,7 @@ threading.Thread(target=run_protocol, daemon=True).start()
 app.run(mode="headless")
 ```
 
-The protocol thread writes [`LabelEvent`][myogestic.session.LabelEvent]s directly to the session via `app.ctx.session.add_label(class_idx)`. That's exactly what the [`RecordingControls`][myogestic.widgets.RecordingControls] widget does in GUI mode - the label track is just a list of timestamped events.
+The protocol thread writes [`LabelEvent`][myogestic.session.LabelEvent]s directly to the session via `app.ctx.session.add_label(class_idx)`. [`RecordingControls`][myogestic.widgets.RecordingControls] does the same in GUI mode. The label track is a list of timestamped events.
 
 ## A signal-handled, graceful-exit recorder
 
@@ -136,11 +136,11 @@ app.run(mode="headless")
 ```
 
 The signal raises `KeyboardInterrupt` on the main thread. The headless loop returns,
-then [`App.run`][myogestic.App.run] runs cleanup hooks and finalises an open take inline.
+then [`App.run`][myogestic.App.run] runs cleanup hooks and finalizes an open take inline.
 
 ## Predicting headless
 
-You can run a [`Pipeline`][myogestic.ml.Pipeline] in headless too - load a pre-trained model and let the predict thread drive an output:
+Load a pre-trained model in a headless [`Pipeline`][myogestic.ml.Pipeline] and let the predict thread drive an output:
 
 ```python
 import numpy as np
@@ -182,11 +182,11 @@ Useful when you want a pre-trained model to publish telemetry to a downstream LS
 
 ## Common mistakes
 
-See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
+See [Troubleshooting](../troubleshooting.md) for errors by symptom.
 
-- **No streams connected.** `app.start_recording()` checks `Stream.info` to decide what to record. Call `Stream.reconnect()` and check its result before recording; a sleep alone never connects a stream.
-- **Calling `app.start_recording()` from before `app.run()`.** The streams' acquisition threads start inside `app.run`. Call recording from a thread that's launched *before* `app.run` but does its work after a small sleep, or from a `before_run_hook`.
-- **Exiting before `.mg.zip` finalises.** Use `app.stop_recording(wait=True)` to finish inline. Normal `App.run` cleanup also finalises an open take and waits up to 30 seconds for earlier saves; `os._exit` bypasses that cleanup.
-- **Using `time.sleep` inside `@pipeline.predict`.** Same as in GUI mode - it blocks the predict thread. The framework already paces ticks at `predict_hz`.
+- No streams connected. `app.start_recording()` checks `Stream.info` to decide what to record. Call `Stream.reconnect()` and check its result before recording; a sleep alone never connects a stream.
+- Calling `app.start_recording()` from before `app.run()`. The streams' acquisition threads start inside `app.run`. Call recording from a thread that's launched *before* `app.run` but does its work after a small sleep, or from a `before_run_hook`.
+- Exiting before `.mg.zip` finalizes. Use `app.stop_recording(wait=True)` to finish inline. Normal `App.run` cleanup also finalizes an open take and waits up to 30 seconds for earlier saves; `os._exit` bypasses that cleanup.
+- Using `time.sleep` inside `@pipeline.predict`. Same as in GUI mode - it blocks the predict thread. The framework already paces ticks at `predict_hz`.
 
 See also: [Record and replay](record-and-replay.md), [Recording concept page](../concepts/recording.md).
