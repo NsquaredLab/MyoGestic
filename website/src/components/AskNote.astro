@@ -1,0 +1,10 @@
+---
+// Context7 Ask note: read by agents that take the page as text, hidden from people and screen readers.
+import { ASK_INDEX, ASK_SEARCH } from '../context7-ask.mjs';
+---
+
+<blockquote data-context7-ask="true" aria-hidden="true" class="sr-only">
+  <h2>Search</h2>
+  <p>{ASK_INDEX}</p>
+  <p>{ASK_SEARCH}</p>
+</blockquote>
