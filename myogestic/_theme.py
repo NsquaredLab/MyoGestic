@@ -170,7 +170,11 @@ def apply_theme() -> None:
 
 def _unscaled_params() -> hello_imgui.FontLoadingParams:
     params = hello_imgui.FontLoadingParams()
-    params.adjust_size_to_dpi = False
+    # imgui-bundle 1.92.900 dropped this switch: hello_imgui no longer scales fonts
+    # as it loads them, it sets `style.font_scale_dpi` once at setup instead, and
+    # `apply_live_scale` resets the whole style before the first frame.
+    if hasattr(params, "adjust_size_to_dpi"):
+        params.adjust_size_to_dpi = False
     return params
 
 
@@ -290,6 +294,10 @@ def apply_live_scale(setup_style) -> None:
         for name, value in borders.items():
             setattr(style, name, value)
     style.font_scale_main = scale
+    # `scale` already carries the OS display scale. imgui-bundle 1.92.900+ scales
+    # high-DPI fonts through `font_scale_dpi` instead, so keep that at 1, or text
+    # would be scaled twice.
+    style.font_scale_dpi = 1.0
 
 
 def reset_live_scale() -> None:

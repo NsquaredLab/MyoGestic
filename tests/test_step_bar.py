@@ -95,7 +95,7 @@ def test_compact_active_label_fits_its_budget(imgui_frame, monkeypatch, scale, d
     config.merge_mode = True
     imgui.get_io().fonts.add_font_from_file_ttf(
         hello_imgui.asset_file_full_path("fonts/Font_Awesome_6_Free-Solid-900.otf"),
-        13,
+        0,  # the default font's size; imgui 1.93 refuses an explicit one onto it
         config,
     )
     monkeypatch.setattr(_scale, "_current", scale)

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import runpy
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -112,10 +113,18 @@ def test_example_draws_a_frame(path, monkeypatch, implot_frame):
     if not draws:
         pytest.skip(f"{path.name} registers no UI callback")
 
+    # The headless frame has no renderer to load a texture into (imgui-bundle 1.93
+    # segfaults trying); layout only needs the image's size.
+    from imgui_bundle import hello_imgui, imgui
+
+    monkeypatch.setattr(
+        hello_imgui,
+        "image_and_size_from_asset",
+        lambda name: SimpleNamespace(texture_id=1, size=imgui.ImVec2(64, 64)),
+    )
+
     panel_demo = path.parent.name == "panels"
     if panel_demo:
-        from imgui_bundle import imgui
-
         from myogestic import _scale, _theme
 
         monkeypatch.setattr(_scale, "_current", 2.0)

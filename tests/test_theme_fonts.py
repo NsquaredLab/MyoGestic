@@ -42,13 +42,13 @@ def test_load_fonts_uses_bundled_plex_on_every_platform(monkeypatch, system):
     else:
         assert Path(path).resolve() == bundled
     assert size == 14.0
-    assert not params.adjust_size_to_dpi
+    assert not getattr(params, "adjust_size_to_dpi", False)  # gone in imgui-bundle 1.92.900
     assert not params.merge_to_last_font
     assert io.font_default is font
     icons = next(call for call in calls if "Font_Awesome_6" in call[0])
     assert icons[1] == 14.0
     assert icons[2].merge_to_last_font
-    assert not icons[2].adjust_size_to_dpi
+    assert not getattr(icons[2], "adjust_size_to_dpi", False)
     # Re-entry must not append another font / duplicate the merged atlas.
     _theme.load_fonts()
     assert len(calls) == 4
